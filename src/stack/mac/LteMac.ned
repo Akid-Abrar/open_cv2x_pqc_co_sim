@@ -392,8 +392,8 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
 		// Packet size on break 
 		// Maximum capacity on grant break
 
-		@signal[generatedGrants];
-		@statistic[generatedGrants](title="Number of generated Grants"; source="generatedGrants"; record=sum,vector);
+		@signal[grantStartTime];
+		@statistic[grantStartTime](title="Grant StartTime"; source="grantStartTime"; record=sum,vector);
 		@signal[grantBreak];
         @statistic[grantBreak](title="Total Number of Grant breaks"; source="grantBreak"; record=sum,vector);
         @signal[grantBreakTiming];
@@ -410,45 +410,15 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
         @statistic[selectedMCS](title="MCS selected for transmission"; source="selectedMCS"; record=mean,vector);
         @signal[selectedNumSubchannels];
         @statistic[selectedNumSubchannels](title="SelectedNumSubchannels"; source="selectedNumSubchannels"; record=mean,vector);
+        @signal[selectedSubchannelIndex];
+        @statistic[selectedSubchannelIndex](title="SelectedSubchannelIndex"; source="selectedSubchannelIndex"; record=mean,vector);
         @signal[maximumCapacity];
         @statistic[maximumCapacity](title="Maximum capacity of grant"; source="maximumCapacity"; record=mean,vector);
         @signal[grantRequests];
         @statistic[grantRequests](title="Total number of requested grants"; source="grantRequests"; record=sum, vector);
-    	    
-	    //# AMC params ... ever so slightly hacked in
-	    
-//	    // AMC Mode:  "auto", "piloted", "multi", "das"
-//        string amcMode = default("AUTO");
-//        
-//        //Min disance used to pair two MuMimo UE
-//        int muMimoMinDistance =default(50);
-//        
-//        // resource allocation type ("distributed" or "localized")
-//        string rbAllocationType = default("distributed");
-//
-//        // summary feedback confidence function lower bound
-//        double summaryLowerBound @unit(s) = default(5ms);
-//
-//        // summary feedback confidence function upper bound
-//        double summaryUpperBound @unit(s) = default(20ms);
-//
-//        // FeedBack Historical Base capacity in DL (number of stored feedback samples per UE) 
-//        int fbhbCapacityDl = default(5);
-//
-//        // FeedBack Historical Base capacity in UL (number of stored feedback samples per UE)
-//        int fbhbCapacityUl = default(5);
-//
-//        // FeedBack Historical Base capacity in D2D (number of stored feedback samples per UE)
-//        int fbhbCapacityD2D = default(5);
-//        
-//        // wideband PMI generation parameter (0.0 means "use the mean value" )        
-//        double pmiWeight = default(0.0);
-//
-//        // wideband CQI generation parameter (0.0 means "use the mean value" )
-//        double cqiWeight = default(0.0);
-//
-//        // AMC k CQI: used in DAS AMC mode
-//        int kCqi = default(0);
+
+        @signal[macNodeID];
+        @statistic[macNodeID](title="Reports Mac NodeID to allow for trans to nodeID"; source="macNodeID"; record=vector);
 }
 
 //

@@ -29,6 +29,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int numSubchannels_;
     int subchannelSize_ ;
     int selectionWindowStartingSubframe_;
+    int thresholdRSSI_;
 
     bool transmitting_;
 
@@ -46,18 +47,17 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     std::vector<std::vector<double>> sciRsrpVectors_;
     std::vector<std::vector<double>> sciRssiVectors_;
     std::vector<LteAirFrame*> sciFrames_;
-    std::vector<cPacket*> decodedScis_;
-    std::vector<int> cbrHistory_;
+    std::vector<cPacket*> scis_;
 
     simsignal_t cbr;
-    simsignal_t scisReceived;
-    simsignal_t scisDecoded;
-    simsignal_t scisNotDecoded;
-    simsignal_t scisSent;
-    simsignal_t tbsSent;
-    simsignal_t tbsReceived;
-    simsignal_t tbsDecoded;
-    simsignal_t tbsFailedDueToNoSCI;
+    simsignal_t sciReceived;
+    simsignal_t sciDecoded;
+    simsignal_t sciNotDecoded;
+    simsignal_t sciSent;
+    simsignal_t tbSent;
+    simsignal_t tbReceived;
+    simsignal_t tbDecoded;
+    simsignal_t tbFailedDueToNoSCI;
     simsignal_t tbFailedButSCIReceived;
     simsignal_t tbAndSCINotReceived;
     simsignal_t sciFailedHalfDuplex;
@@ -65,20 +65,24 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t threshold;
     simsignal_t txRxDistanceSCI;
     simsignal_t txRxDistanceTB;
+    simsignal_t subchannelReceived;
+    simsignal_t subchannelsUsed;
+    simsignal_t senderID;
+    simsignal_t subchannelSent;
+    simsignal_t subchannelsUsedToSend;
 
-    int scisReceived_;
-    int scisDecoded_;
-    int scisNotDecoded_;
-    int tbsReceived_;
-    int tbsDecoded_;
-    int tbsFailedDueToNoSCI_;
+    int sciReceived_;
+    int sciDecoded_;
+    int sciNotDecoded_;
+    int tbReceived_;
+    int tbDecoded_;
+    int tbFailedDueToNoSCI_;
     int tbFailedButSCIReceived_;
     int tbAndSCINotReceived_;
     int sciFailedHalfDuplex_;
     int tbFailedHalfDuplex_;
-
-    double currentCBR_;
-    int cbrIndex_;
+    int subchannelReceived_;
+    int subchannelsUsed_;
 
     RbMap availableRBs_;
 
@@ -106,7 +110,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     virtual void updateSubframe();
 
-    virtual std::vector<std::tuple<int, int, int>> selectBestRSSIs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs);
+    virtual std::vector<std::tuple<double, int, int>> selectBestRSSIs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs);
 
     virtual std::tuple<int,int> decodeRivValue(SidelinkControlInformation* sci, UserControlInfo* sciInfo);
 

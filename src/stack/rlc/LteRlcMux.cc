@@ -23,35 +23,43 @@ void LteRlcMux::rlc2mac(cPacket *pkt)
     send(pkt,macSap_[OUT]);
 }
 
-    /*
-     * Lower layer handler
-     */
+/*
+ * Lower layer handler
+ */
 
 void LteRlcMux::mac2rlc(cPacket *pkt)
 {
-    LteControlInfo* lteInfo = check_and_cast<LteControlInfo*>(pkt->getControlInfo());
-    switch (lteInfo->getRlcType())
+    if (strcmp(pkt->getName(), "CBR") == 0)
     {
-        case TM:
-        EV << "LteRlcMux : Sending packet " << pkt->getName() << " to port TM_Sap$o\n";
-        send(pkt,tmSap_[OUT]);
-        break;
-        case UM:
         EV << "LteRlcMux : Sending packet " << pkt->getName() << " to port UM_Sap$o\n";
-        send(pkt,umSap_[OUT]);
-        break;
-        case AM:
-        EV << "LteRlcMux : Sending packet " << pkt->getName() << " to port AM_Sap$o\n";
-        send(pkt,amSap_[OUT]);
-        break;
-        default:
-        throw cRuntimeError("LteRlcMux: wrong traffic type %d", lteInfo->getRlcType());
+        send(pkt, umSap_[OUT]);
+    }
+    else
+    {
+        LteControlInfo* lteInfo = check_and_cast<LteControlInfo*>(pkt->getControlInfo());
+        switch (lteInfo->getRlcType())
+        {
+            case TM:
+            EV << "LteRlcMux : Sending packet " << pkt->getName() << " to port TM_Sap$o\n";
+            send(pkt,tmSap_[OUT]);
+            break;
+            case UM:
+            EV << "LteRlcMux : Sending packet " << pkt->getName() << " to port UM_Sap$o\n";
+            send(pkt,umSap_[OUT]);
+            break;
+            case AM:
+            EV << "LteRlcMux : Sending packet " << pkt->getName() << " to port AM_Sap$o\n";
+            send(pkt,amSap_[OUT]);
+            break;
+            default:
+            throw cRuntimeError("LteRlcMux: wrong traffic type %d", lteInfo->getRlcType());
+        }
     }
 }
-            /*
-             * Main functions
-             */
 
+/*
+ * Main functions
+ */
 void LteRlcMux::initialize()
 {
     macSap_[IN] = gate("MAC_to_RLC");

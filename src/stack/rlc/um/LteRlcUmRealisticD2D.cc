@@ -46,6 +46,13 @@ void LteRlcUmRealisticD2D::handleLowerMessage(cPacket *pkt)
             delete switchPkt;
         }
     }
+    else if (strcmp(pkt->getName(), "CBR") == 0)
+    {
+        EV << NOW << " LteRlcUmRealisticD2D::handleLowerMessage - Received packet " << pkt->getName() << " from lower layer\n";
+        // forward packet to PDCP
+        EV << "LteRlcUmRealisticD2D::handleLowerMessage - Sending packet " << pkt->getName() << " to port UM_Sap_up$o\n";
+        send(pkt, up_[OUT]);
+    }
     else
         LteRlcUmRealistic::handleLowerMessage(pkt);
 }

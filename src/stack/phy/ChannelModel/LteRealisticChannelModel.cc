@@ -1312,7 +1312,7 @@ std::vector<double> LteRealisticChannelModel::getSINR_D2D(LteAirFrame *frame, Us
     return snrVector;
 }
 
-std::vector<double> LteRealisticChannelModel::getRSSI(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, Coord destCoord,MacNodeId enbId)
+std::vector<double> LteRealisticChannelModel::getRSSI(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, Coord destCoord, MacNodeId enbId)
 {
     AttenuationVector::iterator it;
     // Get Tx power
@@ -1487,8 +1487,7 @@ std::vector<double> LteRealisticChannelModel::getRSSI(LteAirFrame *frame, UserCo
                << dBmToLinear(rssiVector[i]) << "] - sinr[" << rssiVector[i]-den << "]\n";
 
             // compute final RSSI.
-            rssiVector[i] += den;
-            rssiVector[i] = rssiVector[i] * 2;
+            rssiVector[i] += den * 2;
         }
     }
         // compute rssi with no incellD2D interference
@@ -1662,25 +1661,26 @@ std::vector<double> LteRealisticChannelModel::getRSSI(LteAirFrame *frame, UserCo
     //===================== SINR COMPUTATION ========================
     if( enableD2DInCellInterference_ && dir==D2D  )
     {
-        // compute and linearize total noise
-        double totN = dBmToLinear(thermalNoise_ + noiseFigure);
+        double thermalDBm = thermalNoise_ + 10 * log10(180000); // Thermal noise broken down by RE
+        double thermalLinear = pow(10, (thermalDBm - 30 + noiseFigure)/10);
+
+        // total noise linear
+        double totN = thermalLinear;
 
         // denominator expressed in dBm as (N+extCell+inCell)
         double den;
-        EV << "LteRealisticChannelModel::getSINR - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir)  << endl;
+        EV << "LteRealisticChannelModel::getRSSI - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir)  << endl;
 
         // Add interference for each band
         for (unsigned int i = 0; i < band_; i++)
         {
-            //               (      mW            +  mW  +        mW            )
-            den = linearToDBm(extCellInterference + totN + inCellInterference[i]);
+            //   (      mW            +  mW  +        mW            )
+            den = extCellInterference + totN + inCellInterference[i];
+            double rsrpPerReLinear = dBmToLinear(rssiVector[i]);
+            double linearRSSI = 2 * (den + rsrpPerReLinear);
+            double rssi = linearToDBm(linearRSSI);
 
-            EV << "\t ext[" << extCellInterference << "] - in[" << inCellInterference[i] << "] - recvPwr["
-               << dBmToLinear(rssiVector[i]) << "] - sinr[" << rssiVector[i]-den << "]\n";
-
-            // compute final RSSI.
-            rssiVector[i] += den;
-            rssiVector[i] = rssiVector[i] * 2;
+            rssiVector[i] = rssi;
         }
     }
         // compute rssi with no incellD2D interference
@@ -1689,8 +1689,7 @@ std::vector<double> LteRealisticChannelModel::getRSSI(LteAirFrame *frame, UserCo
         for (unsigned int i = 0; i < band_; i++)
         {
             // compute final RSSI
-            rssiVector[i] +=  (noiseFigure + thermalNoise_);
-            rssiVector[i] = rssiVector[i] * 2;
+            rssiVector[i] -=  (noiseFigure + thermalNoise_);
 
             EV << "LteRealisticChannelModel::getRSSI - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir) << " - rssi[" << rssiVector[i] << "]\n";
         }

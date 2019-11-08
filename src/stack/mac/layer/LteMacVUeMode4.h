@@ -21,7 +21,6 @@
 
 #include "stack/mac/layer/LteMacUeRealisticD2D.h"
 #include "corenetwork/deployer/LteDeployer.h"
-#include <random>
 
 //class LteMode4SchedulingGrant;
 
@@ -71,15 +70,14 @@ protected:
    std::vector<std::map<std::string, int>> cbrLevels_;
    std::vector<double> validResourceReservationIntervals_;
 
-   std::random_device rand_device_;
-   std::mt19937 generator_;
-
    McsTable dlMcsTable_;
    McsTable ulMcsTable_;
    McsTable d2dMcsTable_;
    double mcsScaleDl_;
    double mcsScaleUl_;
    double mcsScaleD2D_;
+
+   bool expiredGrant_;
 
    // if true, use the preconfigured TX params for transmission, else use that signaled by the eNB
    bool usePreconfiguredTxParams_;
@@ -88,7 +86,7 @@ protected:
 
    UeInfo* ueInfo_;
 
-   simsignal_t generatedGrants;
+   simsignal_t grantStartTime;
    simsignal_t grantBreak;
    simsignal_t grantBreakTiming;
    simsignal_t grantBreakSize;
@@ -97,9 +95,10 @@ protected:
    simsignal_t missedTransmission;
    simsignal_t selectedMCS;
    simsignal_t selectedNumSubchannels;
+   simsignal_t selectedSubchannelIndex;
    simsignal_t maximumCapacity;
    simsignal_t grantRequests;
-
+   simsignal_t macNodeID;
 
 //   // Lte AMC module
 //   LteAmc *amc_;
