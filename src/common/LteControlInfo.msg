@@ -135,6 +135,10 @@ class UserControlInfo extends LteControlInfo {
     // blocks granted on all Remotes, all Bands
     unsigned int totalGrantedBlocks;
 
+    int subchannelNumber;
+    int subchannelLength;
+    simtime_t grantStartTime;
+
     //#
     //# Follows a list of elements only present in
     //# the customized class (see LteControlInfo.h):

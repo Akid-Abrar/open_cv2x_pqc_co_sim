@@ -942,7 +942,7 @@ SidelinkControlInformation* LtePhyVUeMode4::createSCIMessage()
     }
     else
     {
-        // RIV calculation for less than half size
+        // RIV calculation for more than half size
         riv = ((numSubchannels_ * (numSubchannels_ - sciGrant_->getNumSubchannels() + 1)) + (numSubchannels_ - 1 - sciGrant_->getStartingSubchannel()));
     }
 
@@ -1069,35 +1069,45 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         {
             result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0);
 
-            scisReceived_ += 1;
+            sciReceived_ += 1;
+
+            SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation*>(pkt);
+            std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);
+            int subchannelIndex = std::get<0>(indexAndLength);
+            int lengthInSubchannels = std::get<1>(indexAndLength);
+
+            subchannelReceived_ = subchannelIndex;
+            subchannelsUsed_ = lengthInSubchannels;
+            emit(senderID, lteInfo->getSourceId());
 
             if (result) {
-                SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation *>(pkt);
-                std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);
-                int subchannelIndex = std::get<0>(indexAndLength);
-                int lengthInSubchannels = std::get<1>(indexAndLength);
 
-                currentCBR_ += lengthInSubchannels;
-
-                std::vector<Subchannel *>::iterator kt;
-                std::vector < Subchannel * > currentSubframe = sensingWindow_.back();
-                for (kt = currentSubframe.begin() + subchannelIndex;
-                     kt != currentSubframe.begin() + subchannelIndex + lengthInSubchannels; kt++) {
-                    // Record the SCI in the subchannel.
-                    (*kt)->setSCI(sci->dup());
+                std::vector <Subchannel *> currentSubframe = sensingWindow_[sensingWindowFront_];
+                for (int i = subchannelIndex; i < subchannelIndex + lengthInSubchannels; i++) {
+                    Subchannel* currentSubchannel = currentSubframe[i];
+                    // Record the SCI info in the subchannel.
+                    currentSubchannel->setPriority(sci->getPriority());
+                    currentSubchannel->setResourceReservationInterval(sci->getResourceReservationInterval());
+                    currentSubchannel->setFrequencyResourceLocation(sci->getFrequencyResourceLocation());
+                    currentSubchannel->setTimeGapRetrans(sci->getTimeGapRetrans());
+                    currentSubchannel->setMcs(sci->getMcs());
+                    currentSubchannel->setRetransmissionIndex(sci->getRetransmissionIndex());
+                    currentSubchannel->setSciSubchannelIndex(subchannelIndex);
+                    currentSubchannel->setSciLength(lengthInSubchannels);
+                    currentSubchannel->setReserved(true);
                 }
                 lteInfo->setDeciderResult(true);
                 pkt->setControlInfo(lteInfo);
-                decodedScis_.push_back(pkt);
-                scisDecoded_ += 1;
+                scis_.push_back(pkt);
+                sciDecoded_ += 1;
             }
             else
             {
-                scisNotDecoded_ += 1;
-                delete lteInfo;
-                delete pkt;
+                lteInfo->setDeciderResult(false);
+                pkt->setControlInfo(lteInfo);
+                scis_.push_back(pkt);
+                sciNotDecoded_ += 1;
             }
-
         }
         else
         {
@@ -1114,57 +1124,61 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
         if(!transmitting_){
 
-            tbsReceived_ += 1;
+            tbReceived_ += 1;
 
             // Have a TB want to make sure we have the SCI for it.
             bool foundCorrespondingSci = false;
+            bool sciDecodedSuccessfully = false;
             SidelinkControlInformation *correspondingSCI;
             UserControlInfo *sciInfo;
             std::vector<cPacket *>::iterator it;
-            for (it = decodedScis_.begin(); it != decodedScis_.end(); it++) {
-                sciInfo = check_and_cast<UserControlInfo *>((*it)->removeControlInfo());
+            for (it = scis_.begin(); it != scis_.end(); it++) {
+                sciInfo = check_and_cast<UserControlInfo*>((*it)->removeControlInfo());
                 // if the SCI and TB have same source then we have the right SCI
                 if (sciInfo->getSourceId() == lteInfo->getSourceId()) {
                     //Successfully received the SCI
                     foundCorrespondingSci = true;
 
-                    correspondingSCI = check_and_cast<SidelinkControlInformation *>(*it);
+                    correspondingSCI = check_and_cast<SidelinkControlInformation*>(*it);
 
-                    //RELAY and NORMAL
-                    if (lteInfo->getDirection() == D2D_MULTI)
-                        result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, correspondingSCI->getMcs());
-                    else
-                        result = channelModel_->error(frame, lteInfo);
-
+                    if (sciInfo->getDeciderResult()){
+                        //RELAY and NORMAL
+                        sciDecodedSuccessfully = true;
+                        if (lteInfo->getDirection() == D2D_MULTI)
+                            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, correspondingSCI->getMcs());
+                        else
+                            result = channelModel_->error(frame, lteInfo);
+                    }
                     // Remove the SCI
-                    decodedScis_.erase(it);
+                    scis_.erase(it);
                     break;
                 } else {
                     (*it)->setControlInfo(sciInfo);
                 }
             }
-            if (!foundCorrespondingSci) {
-                tbsFailedDueToNoSCI_ += 1;
+            if (!foundCorrespondingSci || !sciDecodedSuccessfully) {
+                tbFailedDueToNoSCI_ += 1;
             } else if (!result) {
                 tbFailedButSCIReceived_ += 1;
             } else {
-                tbsDecoded_ += 1;
+                tbDecoded_ += 1;
+            }
+            if (foundCorrespondingSci) {
                 // Now need to find the associated Subchannels, record the RSRP and RSSI for the message and go from there.
                 // Need to again do the RIV steps
                 std::tuple<int, int> indexAndLength = decodeRivValue(correspondingSCI, sciInfo);
                 int subchannelIndex = std::get<0>(indexAndLength);
                 int lengthInSubchannels = std::get<1>(indexAndLength);
 
-                std::vector<Subchannel *>::iterator kt;
                 std::vector <Subchannel *> currentSubframe = sensingWindow_[sensingWindowFront_];
-                for (kt = currentSubframe.begin() + subchannelIndex;
-                     kt != currentSubframe.begin() + subchannelIndex + lengthInSubchannels; kt++) {
+                for (int i = subchannelIndex; i < subchannelIndex + lengthInSubchannels; i++) {
+                    Subchannel* currentSubchannel = currentSubframe[i];
                     std::vector<Band>::iterator lt;
-                    std::vector <Band> allocatedBands = (*kt)->getOccupiedBands();
+                    std::vector <Band> allocatedBands = currentSubchannel->getOccupiedBands();
                     for (lt = allocatedBands.begin(); lt != allocatedBands.end(); lt++) {
                         // Record RSRP and RSSI for this band
-                        (*kt)->addRsrpValue(rsrpVector[(*lt)], (*lt));
-                        (*kt)->addRssiValue(rssiVector[(*lt)], (*lt));
+                        currentSubchannel->addRsrpValue(rsrpVector[(*lt)], (*lt));
+                        currentSubchannel->addRssiValue(rssiVector[(*lt)], (*lt));
                     }
                 }
                 // Need to delete the message now
@@ -1216,15 +1230,15 @@ std::tuple<int,int> LtePhyVUeMode4::decodeRivValue(SidelinkControlInformation* s
     while (it != rbMap.end() && bandNotFound )
     {
         for (jt = it->second.begin(); jt != it->second.end(); ++jt)
-       {
-           Band band = jt->first;
-           if (jt->second == 1) // this Rb is not allocated
-           {
-               startingBand = band;
-               bandNotFound= false;
-               break;
-           }
-       }
+        {
+            Band band = jt->first;
+            if (jt->second == 1) // this Rb is not allocated
+            {
+                startingBand = band;
+                bandNotFound= false;
+                break;
+            }
+        }
     }
 
     // Get RIV first as this is common
@@ -1269,18 +1283,42 @@ std::tuple<int,int> LtePhyVUeMode4::decodeRivValue(SidelinkControlInformation* s
 
 void LtePhyVUeMode4::updateCBR()
 {
-    double cbr = 0;
-    for (int i=0; i < cbrHistory_.size();i++)
-    {
-        cbr += cbrHistory_[i];
+    double cbrValue = 0.0;
+
+    int cbrIndex = sensingWindowFront_ - 1;
+    int cbrCount = 0;
+    int totalSubchannels = 0;
+
+    if (sensingWindow_.size() > 99){
+        cbrCount = 99;
+    } else{
+        cbrCount = sensingWindow_.size();
     }
 
-    cbr = std::round(cbr);
+    while (cbrCount != 0){
+        if (cbrIndex == -1){
+            cbrIndex = sensingWindow_.size() - 1;
+        }
+        std::vector<Subchannel *>::iterator it;
+        std::vector <Subchannel *> currentSubframe = sensingWindow_[cbrIndex];
+        for (it = currentSubframe.begin(); it != currentSubframe.end(); it++) {
+            cbrCount --;
+            if ((*it)->getSensed()) {
+                totalSubchannels++;
+                if ((*it)->getAverageRSSI() > thresholdRSSI_) {
+                    cbrValue++;
+                }
+            }
+        }
+        cbrIndex --;
+    }
 
-    emit(cbr, cbr);
+    cbrValue = cbrValue / totalSubchannels;
+
+    emit(cbr, cbrValue);
 
     Cbr* cbrPkt = new Cbr("CBR");
-    cbrPkt->setCbr(cbr);
+    cbrPkt->setCbr(cbrValue);
     send(cbrPkt, upperGateOut_);
 }
 
@@ -1303,12 +1341,12 @@ void LtePhyVUeMode4::updateSubframe()
 
     std::vector<Subchannel*> subframe = sensingWindow_[sensingWindowFront_];
 
-    if (subframe.at(0)->getSubframeTime() <= NOW - SimTime(10*pStep_, SIMTIME_MS))
+    if (subframe.at(0)->getSubframeTime() <= NOW - SimTime(10*pStep_, SIMTIME_MS) - TTI)
     {
         std::vector<Subchannel*>::iterator it;
         for (it=subframe.begin(); it!=subframe.end(); it++)
         {
-            (*it)->reset(NOW);
+            (*it)->reset(NOW - TTI);
         }
     }
 
@@ -1321,15 +1359,7 @@ void LtePhyVUeMode4::initialiseSensingWindow()
 {
     EV << NOW << " LtePhyVUeMode4::initialiseSensingWindow - creating subframes to be added to sensingWindow..." << endl;
 
-    Band band = 0;
-
-    if (!adjacencyPSCCHPSSCH_)
-    {
-        // This assumes the bands only every have 1 Rb (which is fine as that appears to be the case)
-        band = numSubchannels_*2;
-    }
-
-    simtime_t subframeTime = NOW;
+    simtime_t subframeTime = NOW - TTI;
 
     // Reserve the full size of the sensing window (might improve efficiency).
     sensingWindow_.reserve(10*pStep_);
@@ -1338,6 +1368,13 @@ void LtePhyVUeMode4::initialiseSensingWindow()
     {
         std::vector<Subchannel*> subframe;
         subframe.reserve(numSubchannels_);
+        Band band = 0;
+
+        if (!adjacencyPSCCHPSSCH_)
+        {
+            // This assumes the bands only every have 1 Rb (which is fine as that appears to be the case)
+            band = numSubchannels_*2;
+        }
         for (int i = 0; i < numSubchannels_; i++) {
             Subchannel *currentSubchannel = new Subchannel(subchannelSize_, subframeTime);
             // Need to determine the RSRP and RSSI that corresponds to background noise
@@ -1349,8 +1386,8 @@ void LtePhyVUeMode4::initialiseSensingWindow()
             // Ensure the subchannel is allocated the correct number of RBs
             while (overallCapacity < subchannelSize_ && band < getBinder()->getNumBands()) {
                 // This acts like there are multiple RBs per band which is not allowed.
-                overallCapacity += allocator_->getAllocatedBlocks(MAIN_PLANE, MACRO, band);
                 occupiedBands.push_back(band);
+                ++overallCapacity;
                 ++band;
             }
             currentSubchannel->setOccupiedBands(occupiedBands);
@@ -1358,7 +1395,6 @@ void LtePhyVUeMode4::initialiseSensingWindow()
         }
         sensingWindow_.push_back(subframe);
         subframeTime += TTI;
-
     }
     // Send self message to trigger another subframes creation and insertion. Need one for every TTI
     cMessage* updateSubframe = new cMessage("updateSubframe");
@@ -1366,15 +1402,14 @@ void LtePhyVUeMode4::initialiseSensingWindow()
     scheduleAt(NOW + TTI, updateSubframe);
 }
 
-int LtePhyVUeMode4::translateIndex(int index) {
-    int transIndex;
-    if (index > sensingWindowFront_) {
-        transIndex = ((10*pStep_) - index) + sensingWindowFront_;
+int LtePhyVUeMode4::translateIndex(int fallBack) {
+    if (fallBack > sensingWindowFront_){
+        int max = 10 * pStep_;
+        int fromMax = fallBack - sensingWindowFront_;
+        return max - fromMax;
+    } else{
+        return sensingWindowFront_ - fallBack;
     }
-    else{
-        transIndex = sensingWindowFront_ - index;
-    }
-    return transIndex;
 }
 
 void LtePhyVUeMode4::finish()
@@ -1408,6 +1443,4 @@ void LtePhyVUeMode4::finish()
         }
     }
     sensingWindow_.clear();
-
-    delete allocator_;
 }

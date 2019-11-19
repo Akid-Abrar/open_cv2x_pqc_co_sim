@@ -244,6 +244,13 @@ void LtePdcpRrcUeD2D::handleMessage(cMessage* msg)
 
         delete pkt;
     }
+    else if (strcmp(pkt->getName(), "CBR") == 0)
+    {
+        EV << "LtePdcp : Sending packet " << pkt->getName() << " on port DataOut\n";
+        // Send message
+        send(pkt, dataOut_);
+        emit(sentPacketToUpperLayer, pkt);
+    }
     else
     {
         LtePdcpRrcBase::handleMessage(msg);

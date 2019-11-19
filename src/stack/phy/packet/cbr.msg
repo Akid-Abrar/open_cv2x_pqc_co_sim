@@ -17,5 +17,5 @@
 // TODO generated message class
 //
 packet Cbr {
-    int cbr;
+    double cbr;
 }
