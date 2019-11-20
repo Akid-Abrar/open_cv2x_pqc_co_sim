@@ -416,7 +416,9 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
         @signal[maximumCapacity];
         @statistic[maximumCapacity](title="Maximum capacity of grant"; source="maximumCapacity"; record=mean,vector);
         @signal[grantRequests];
-        @statistic[grantRequests](title="Total number of requested grants"; source="grantRequests"; record=sum, vector);
+        @statistic[grantRequests](title="Total number of requested grants"; source="grantRequests"; record=sum,vector);
+        @signal[packetDropDCC];
+        @statistic[packetDropDCC](title="Packet drop due to DCC mechanism"; source="packetDropDCC"; record=sum,vector);
 
         @signal[macNodeID];
         @statistic[macNodeID](title="Reports Mac NodeID to allow for trans to nodeID"; source="macNodeID"; record=vector);

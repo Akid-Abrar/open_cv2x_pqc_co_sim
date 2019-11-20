@@ -103,6 +103,7 @@ protected:
    simsignal_t selectedSubchannelIndex;
    simsignal_t maximumCapacity;
    simsignal_t grantRequests;
+   simsignal_t packetDropDCC;
    simsignal_t macNodeID;
 
 //   // Lte AMC module

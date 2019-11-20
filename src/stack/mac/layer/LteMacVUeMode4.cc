@@ -86,6 +86,7 @@ void LteMacVUeMode4::initialize(int stage)
         selectedNumSubchannels  = registerSignal("selectedNumSubchannels");
         maximumCapacity         = registerSignal("maximumCapacity");
         grantRequests           = registerSignal("grantRequests");
+        packetDropDCC           = registerSignal("packetDropDCC");
         macNodeID               = registerSignal("macNodeID");
     }
     else if (stage == inet::INITSTAGE_NETWORK_LAYER_3)
@@ -1016,6 +1017,7 @@ void LteMacVUeMode4::flushHarqBuffers()
     {
         std::unordered_map<std::string,double> cbrMap = cbrPSSCHTxConfigList_.at(currentCbrIndex_);
         std::unordered_map<std::string,double>::const_iterator got;
+
         if (packetDropping_) {
             double crLimit;
             got = cbrMap.find("cr-Limit");
@@ -1028,6 +1030,7 @@ void LteMacVUeMode4::flushHarqBuffers()
                 // Need to drop the unit currently selected
                 UnitList ul = it2->second->firstAvailable();
                 it2->second->forceDropProcess(ul.first);
+                emit(packetDropDCC, 1);
             }
         }
 
