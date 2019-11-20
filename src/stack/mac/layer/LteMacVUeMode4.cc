@@ -584,12 +584,13 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
             // determine previous transmissions -> Need to account for if we have already done a drop. Must maintain a
             // history of past transmissions i.e. subchannels used and subframe in which they occur. delete entries older
             // than 1000.
-            std::unordered_map<double, int>::const_iterator it;
-            for (it = previousTransmissions_.begin(); it!=previousTransmissions_.end(); it++){
+            std::unordered_map<double, int>::const_iterator it = previousTransmissions_.begin();
+            while (it != previousTransmissions_.end()){
                 if (it->first < NOW.dbl() - 1){
-                    previousTransmissions_.erase(it);
+                    it = previousTransmissions_.erase(it);
                 } else if (it->first > NOW.dbl() - (0.1 * a)) {
                     subchannelsUsed += it->second;
+                    it++;
                 }
             }
             // calculate cr
