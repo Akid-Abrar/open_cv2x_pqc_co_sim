@@ -58,8 +58,9 @@ protected:
    int defaultCbrIndex_;
    int currentCbrIndex_;
    double channelOccupancyRatio_;
-   bool useCBR_;
    double cbr_;
+   bool useCBR_;
+   bool packetDropping_;
    int missedTransmissions_;
 
    double remainingTime_;

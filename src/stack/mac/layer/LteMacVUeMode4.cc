@@ -64,6 +64,7 @@ void LteMacVUeMode4::initialize(int stage)
         usePreconfiguredTxParams_ = par("usePreconfiguredTxParams");
         reselectAfter_ = par("reselectAfter");
         useCBR_ = par("useCBR");
+        packetDropping_ = par("packetDropping");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -1013,18 +1014,21 @@ void LteMacVUeMode4::flushHarqBuffers()
     HarqTxBuffers::iterator it2;
     for(it2 = harqTxBuffers_.begin(); it2 != harqTxBuffers_.end(); it2++)
     {
-        double crLimit;
         std::unordered_map<std::string,double> cbrMap = cbrPSSCHTxConfigList_.at(currentCbrIndex_);
-        std::unordered_map<std::string,double>::const_iterator got = cbrMap.find("cr-Limit");
-        if (got == cbrMap.end())
-            crLimit=1;
-        else
-            crLimit = got->second;
+        std::unordered_map<std::string,double>::const_iterator got;
+        if (packetDropping_) {
+            double crLimit;
+            got = cbrMap.find("cr-Limit");
+            if (got == cbrMap.end())
+                crLimit = 1;
+            else
+                crLimit = got->second;
 
-        if (channelOccupancyRatio_ > crLimit){
-            // Need to drop the unit currently selected
-            UnitList ul = it2->second->firstAvailable();
-            it2->second->forceDropProcess(ul.first);
+            if (channelOccupancyRatio_ > crLimit) {
+                // Need to drop the unit currently selected
+                UnitList ul = it2->second->firstAvailable();
+                it2->second->forceDropProcess(ul.first);
+            }
         }
 
         if (it2->second->isSelected())

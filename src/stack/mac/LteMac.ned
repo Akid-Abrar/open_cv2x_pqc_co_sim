@@ -379,6 +379,7 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
 	    int reselectAfter = default(1);
 	    double probResourceKeep = default(0.4);
 	    bool useCBR = default(false);
+	    bool packetDropping = default(false);
 	    
 	    bool usePreconfiguredTxParams = default(false);
 	    
