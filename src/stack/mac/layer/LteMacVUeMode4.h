@@ -57,9 +57,9 @@ protected:
    int reselectAfter_;
    int defaultCbrIndex_;
    int currentCbrIndex_;
-   double crLimit_;
+   double channelOccupancyRatio_;
    bool useCBR_;
-   int cbr_;
+   double cbr_;
    int missedTransmissions_;
 
    double remainingTime_;

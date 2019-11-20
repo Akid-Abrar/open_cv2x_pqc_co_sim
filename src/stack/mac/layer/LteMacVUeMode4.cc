@@ -572,7 +572,7 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
                 } else {
                     b = expirationCounter_;
                 }
-                subchannelsUsed += b / periodCounter_;
+                subchannelsUsed += b / schedulingGrant_->getPeriod();
             } else {
                 b = 0;
             }
@@ -591,7 +591,7 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
                 }
             }
             // calculate cr
-            crLimit_ = subchannelsUsed /(numSubchannels_ * 1000.0);
+            channelOccupancyRatio_ = subchannelsUsed /(numSubchannels_ * 1000.0);
 
             // message from PHY_to_MAC gate (from lower layer)
             emit(receivedPacketFromLowerLayer, pkt);
@@ -1013,6 +1013,20 @@ void LteMacVUeMode4::flushHarqBuffers()
     HarqTxBuffers::iterator it2;
     for(it2 = harqTxBuffers_.begin(); it2 != harqTxBuffers_.end(); it2++)
     {
+        double crLimit;
+        std::unordered_map<std::string,double> cbrMap = cbrPSSCHTxConfigList_.at(currentCbrIndex_);
+        std::unordered_map<std::string,double>::const_iterator got = cbrMap.find("cr-Limit");
+        if (got == cbrMap.end())
+            crLimit=1;
+        else
+            crLimit = got->second;
+
+        if (channelOccupancyRatio_ > crLimit){
+            // Need to drop the unit currently selected
+            UnitList ul = it2->second->firstAvailable();
+            it2->second->forceDropProcess(ul.first);
+        }
+
         if (it2->second->isSelected())
         {
             LteHarqProcessTx* selectedProcess = it2->second->getSelectedProcess();
@@ -1023,9 +1037,8 @@ void LteMacVUeMode4::flushHarqBuffers()
                 {
                     int cbrMinMCS;
                     int cbrMaxMCS;
-                    std::unordered_map<std::string,double> cbrMap = cbrPSSCHTxConfigList_.at(currentCbrIndex_);
 
-                    std::unordered_map<std::string,double>::const_iterator got = cbrMap.find("minMCS-PSSCH");
+                    got = cbrMap.find("minMCS-PSSCH");
                     if ( got == cbrMap.end() )
                         cbrMinMCS = minMCSPSSCH_;
                     else
