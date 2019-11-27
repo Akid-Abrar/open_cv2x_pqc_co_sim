@@ -651,7 +651,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                 if (subchannelReserved) {
                     subchannelReserved = false;
 
-                    int highestThreshold;
+                    int highestThreshold = 0;
                     bool thresholdBreach = false;
                     int pRsvpRx;
 
@@ -675,7 +675,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                                 thresholdDbm = thresholdDbm + (3 * thresholdIncreaseFactor);
                                 ++thresholdIncreaseFactor;
                             }
-                            if (!highestThreshold || thresholdIncreaseFactor > highestThreshold) {
+                            if (thresholdIncreaseFactor > highestThreshold) {
                                 highestThreshold = thresholdIncreaseFactor;
                                 pRsvpRx = receivedRri;
                             }
