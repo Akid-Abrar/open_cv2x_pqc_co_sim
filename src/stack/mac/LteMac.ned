@@ -17,6 +17,7 @@ moduleinterface LteMac {
     parameters:
         @display("i=block/mac");
         bool ipBased;
+        string interfaceTableModule;
    
     gates:
         input RLC_to_MAC;    // RLC to MAC
@@ -158,6 +159,8 @@ simple LteMacNonIPBase like LteMac {
         @display("i=block/mac");
         
         bool ipBased = default(false);
+        
+        string interfaceTableModule = default("");
 
         //# Mac Queues
         int queueSize @unit(B) = default(2MiB);              // MAC Buffers queue size
