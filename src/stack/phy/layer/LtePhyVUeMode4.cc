@@ -1295,14 +1295,13 @@ void LtePhyVUeMode4::updateCBR()
         cbrCount = sensingWindow_.size();
     }
 
-    while (cbrCount != 0){
+    while (cbrCount > 0){
         if (cbrIndex == -1){
             cbrIndex = sensingWindow_.size() - 1;
         }
         std::vector<Subchannel *>::iterator it;
         std::vector <Subchannel *> currentSubframe = sensingWindow_[cbrIndex];
         for (it = currentSubframe.begin(); it != currentSubframe.end(); it++) {
-            cbrCount --;
             if ((*it)->getSensed()) {
                 totalSubchannels++;
                 if ((*it)->getAverageRSSI() > thresholdRSSI_) {
@@ -1311,6 +1310,7 @@ void LtePhyVUeMode4::updateCBR()
             }
         }
         cbrIndex --;
+        cbrCount --;
     }
 
     cbrValue = cbrValue / totalSubchannels;
