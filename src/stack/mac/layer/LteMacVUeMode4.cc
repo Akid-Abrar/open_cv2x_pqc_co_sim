@@ -937,43 +937,47 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     mode4Grant -> setMaximumLatency(maximumLatency);
     mode4Grant -> setPossibleRRIs(validResourceReservationIntervals_);
 
-    int cbrMinSubchannelNum;
-    int cbrMaxSubchannelNum;
-    std::unordered_map<std::string,double> cbrMap = cbrPSSCHTxConfigList_.at(currentCbrIndex_);
+    int minSubchannelNumberPSSCH = minSubchannelNumberPSSCH_;
+    int maxSubchannelNumberPSSCH = maxSubchannelNumberPSSCH_;
 
-    std::unordered_map<std::string,double>::const_iterator got = cbrMap.find("allowedRetxNumberPSSCH");
-    if ( got == cbrMap.end() )
-        allowedRetxNumberPSSCH_ = allowedRetxNumberPSSCH_;
-    else
-        allowedRetxNumberPSSCH_ = min((int)got->second, allowedRetxNumberPSSCH_);
-
-    got = cbrMap.find("minSubchannel-NumberPSSCH");
-    if ( got == cbrMap.end() )
-        cbrMinSubchannelNum = minSubchannelNumberPSSCH_;
-    else
-        cbrMinSubchannelNum = (int)got->second;
-
-    got = cbrMap.find("maxSubchannel-NumberPSSCH");
-    if ( got == cbrMap.end() )
-        cbrMaxSubchannelNum = maxSubchannelNumberPSSCH_;
-    else
-        cbrMaxSubchannelNum = (int)got->second;
-
-    /**
-     * Need to pick the number of subchannels for this reservation
-     */
-    int minSubchannelNumberPSSCH;
-    int maxSubchannelNumberPSSCH;
-    if (maxSubchannelNumberPSSCH_ < cbrMinSubchannelNum || cbrMaxSubchannelNum < minSubchannelNumberPSSCH_)
+    if (useCBR_)
     {
-        // No overlap therefore I will use the cbr values (this is left to the UE, the opposite approach is also entirely valid).
-        minSubchannelNumberPSSCH = cbrMinSubchannelNum;
-        maxSubchannelNumberPSSCH = cbrMaxSubchannelNum;
-    }
-    else
-    {
-        minSubchannelNumberPSSCH = max(minSubchannelNumberPSSCH_, cbrMinSubchannelNum);
-        maxSubchannelNumberPSSCH = min(maxSubchannelNumberPSSCH_, cbrMaxSubchannelNum);
+        int cbrMinSubchannelNum;
+        int cbrMaxSubchannelNum;
+        std::unordered_map<std::string,double> cbrMap = cbrPSSCHTxConfigList_.at(currentCbrIndex_);
+
+        std::unordered_map<std::string,double>::const_iterator got = cbrMap.find("allowedRetxNumberPSSCH");
+        if ( got == cbrMap.end() )
+            allowedRetxNumberPSSCH_ = allowedRetxNumberPSSCH_;
+        else
+            allowedRetxNumberPSSCH_ = min((int)got->second, allowedRetxNumberPSSCH_);
+
+        got = cbrMap.find("minSubchannel-NumberPSSCH");
+        if ( got == cbrMap.end() )
+            cbrMinSubchannelNum = minSubchannelNumberPSSCH_;
+        else
+            cbrMinSubchannelNum = (int)got->second;
+
+        got = cbrMap.find("maxSubchannel-NumberPSSCH");
+        if ( got == cbrMap.end() )
+            cbrMaxSubchannelNum = maxSubchannelNumberPSSCH_;
+        else
+            cbrMaxSubchannelNum = (int)got->second;
+
+        /**
+         * Need to pick the number of subchannels for this reservation
+         */
+        if (maxSubchannelNumberPSSCH_ < cbrMinSubchannelNum || cbrMaxSubchannelNum < minSubchannelNumberPSSCH_)
+        {
+            // No overlap therefore I will use the cbr values (this is left to the UE, the opposite approach is also entirely valid).
+            minSubchannelNumberPSSCH = cbrMinSubchannelNum;
+            maxSubchannelNumberPSSCH = cbrMaxSubchannelNum;
+        }
+        else
+        {
+            minSubchannelNumberPSSCH = max(minSubchannelNumberPSSCH_, cbrMinSubchannelNum);
+            maxSubchannelNumberPSSCH = min(maxSubchannelNumberPSSCH_, cbrMaxSubchannelNum);
+        }
     }
     // Selecting the number of subchannel at random as there is no explanation as to the logic behind selecting the resources in the range unlike when selecting MCS.
     int numSubchannels = intuniform(minSubchannelNumberPSSCH, maxSubchannelNumberPSSCH, 2);
@@ -1041,42 +1045,44 @@ void LteMacVUeMode4::flushHarqBuffers()
             for (int cw=0; cw<MAX_CODEWORDS; cw++)
             {
                 int pduLength = selectedProcess->getPduLength(cw);
-                if ( pduLength > 0)
+                int minMCS = minMCSPSSCH_;
+                int maxMCS = maxMCSPSSCH_;
+                if (pduLength > 0)
                 {
-                    int cbrMinMCS;
-                    int cbrMaxMCS;
+                    if (useCBR_){
+                        int cbrMinMCS;
+                        int cbrMaxMCS;
 
-                    got = cbrMap.find("minMCS-PSSCH");
-                    if ( got == cbrMap.end() )
-                        cbrMinMCS = minMCSPSSCH_;
-                    else
-                        cbrMinMCS = (int)got->second;
+                        got = cbrMap.find("minMCS-PSSCH");
+                        if ( got == cbrMap.end() )
+                            cbrMinMCS = minMCSPSSCH_;
+                        else
+                            cbrMinMCS = (int)got->second;
 
-                    got = cbrMap.find("maxMCS-PSSCH");
-                    if ( got == cbrMap.end() )
-                        cbrMaxMCS = maxMCSPSSCH_;
-                    else
-                        cbrMaxMCS = (int)got->second;
+                        got = cbrMap.find("maxMCS-PSSCH");
+                        if ( got == cbrMap.end() )
+                            cbrMaxMCS = maxMCSPSSCH_;
+                        else
+                            cbrMaxMCS = (int)got->second;
 
-                    int minMCS;
-                    int maxMCS;
-                    if (maxMCSPSSCH_ < cbrMinMCS || cbrMaxMCS < minMCSPSSCH_)
-                    {
-                        // No overlap therefore I will use the cbr values (this is left to the UE).
-                        minMCS = cbrMinMCS;
-                        maxMCS = cbrMaxMCS;
-                    }
-                    else
-                    {
-                        minMCS = max(minMCSPSSCH_, cbrMinMCS);
-                        maxMCS = min(maxMCSPSSCH_, cbrMaxMCS);
+                        if (maxMCSPSSCH_ < cbrMinMCS || cbrMaxMCS < minMCSPSSCH_)
+                        {
+                            // No overlap therefore I will use the cbr values (this is left to the UE).
+                            minMCS = cbrMinMCS;
+                            maxMCS = cbrMaxMCS;
+                        }
+                        else
+                        {
+                            minMCS = max(minMCSPSSCH_, cbrMinMCS);
+                            maxMCS = min(maxMCSPSSCH_, cbrMaxMCS);
+                        }
                     }
 
                     bool foundValidMCS = false;
                     int totalGrantedBlocks = mode4Grant->getTotalGrantedBlocks();
 
                     int mcsCapacity = 0;
-                    for (int mcs=minMCS; mcs < maxMCS; mcs++)
+                    for (int mcs=minMCS; mcs <= maxMCS; mcs++)
                     {
                         LteMod mod = _QPSK;
                         if (maxMCSPSSCH_ > 9 && maxMCSPSSCH_ < 17)
