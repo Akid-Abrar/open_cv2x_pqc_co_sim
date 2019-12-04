@@ -20,11 +20,10 @@ import lte.apps.mode4App.Mode4BaseApp;
 simple Mode4App like Mode4BaseApp
 {
     parameters:
-        int packetSize = default(10); // Size of the actual packt itself
+        int packetSize = default(10); // Size of the actual packet itself
         int priority = default(3); // Priority of the packets sent
         int duration = default(1000); // MS before packet must be dropped
         double period @unit("s") = default(0.1s);
-        double startTime @unit("s") = default(0s);
         int macNodeId = default(0);
         
         @signal[sentMsg];
