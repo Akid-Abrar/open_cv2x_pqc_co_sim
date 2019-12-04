@@ -349,6 +349,7 @@ LteRealisticChannelModel::LteRealisticChannelModel(ParameterMap& params,
 
 LteRealisticChannelModel::~LteRealisticChannelModel()
 {
+    delete nkgmf;
 }
 
 double LteRealisticChannelModel::getTxRxDistance(UserControlInfo* lteInfo)

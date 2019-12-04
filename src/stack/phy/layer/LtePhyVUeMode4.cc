@@ -788,11 +788,6 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
     SpsCandidateResources* candidateResourcesMessage = new SpsCandidateResources("CSRs");
     candidateResourcesMessage->setCSRs(optimalCSRs);
     send(candidateResourcesMessage, upperGateOut_);
-
-    // Send self message to trigger another subframes creation and insertion. Need one for every TTI
-    cMessage* deleteSelectionWindow = new cMessage("deleteSelectionWindow");
-    deleteSelectionWindow->setSchedulingPriority(0);        // Generate the subframe at start of next TTI
-    scheduleAt(NOW + TTI, deleteSelectionWindow);
 }
 
 std::vector<std::tuple<double, int, int>> LtePhyVUeMode4::selectBestRSSIs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs)

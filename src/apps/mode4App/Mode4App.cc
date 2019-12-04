@@ -70,6 +70,7 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         Cbr* cbrPkt = check_and_cast<Cbr*>(msg);
         double channel_load = cbrPkt->getCbr();
         emit(cbr_, channel_load);
+        delete cbrPkt;
     } else {
         AlertPacket* pkt = check_and_cast<AlertPacket*>(msg);
 
