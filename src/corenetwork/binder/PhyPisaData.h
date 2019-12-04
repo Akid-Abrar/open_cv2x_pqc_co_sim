@@ -115,6 +115,16 @@ class PhyPisaData
       * \brief Lookup the BLER for the given SINR
       * \param fadingChannel The channel to use
       * \param txmode The Transmission mode used
+      * \param sinr The mean sinr of the TB
+      * \return A Struct of type TbErrorStats_t containing the TB error rate and the SINR
+      */
+
+      static double GetBlerAnalytical(uint16_t mcs, double sinr);
+
+     /**
+      * \brief Lookup the BLER for the given SINR
+      * \param fadingChannel The channel to use
+      * \param txmode The Transmission mode used
       * \param mcs The MCS of the TB
       * \param sinr The mean sinr of the TB
       * \param harqHistory The HARQ information
@@ -130,6 +140,8 @@ class PhyPisaData
       * \return A Struct of type TbErrorStats_t containing the TB error rate and the SINR
       */
 //      static double GetPsbchBler (LteFadingModel fadingChannel, LteTxMode txmode, double sinr);
+
+      static double GetBlerAnayltical(uint16_t mcs, double sinr);
 
       private:
 

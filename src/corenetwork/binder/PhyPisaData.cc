@@ -2948,6 +2948,7 @@ static const double PscchAwgnSisoBlerCurveXaxis[1][3] = {
   {-6.2,1.2,0.2}
 };
 
+
 /**
  * BLER values for the physical sidelink control channel
  * One dimension version of original table of [116][33]
@@ -2955,6 +2956,20 @@ static const double PscchAwgnSisoBlerCurveXaxis[1][3] = {
  */
 static const double PscchAwgnSisoBlerCurveYaxis[38] = {
   1,0.9883,0.9784,0.9721,0.9631,0.9517,0.9325,0.9133,0.8783,0.849,0.8048,0.7565,0.6958,0.6325,0.5703,0.5049,0.4273,0.3733,0.2989,0.2437,0.1932,0.1467,0.1126,0.0785,0.0592,0.0423,0.0265,0.0186,0.011,0.0072,0.0031,0.0026,0.0011,0.0008,0.0003,0.0002,0.0001,0
+};
+
+/**
+ * Table of SINR for the physical uplink shared channel
+ * SINR range is provided for each MCS and HARQ Tx
+ * Index is defined by 4 * MCS + HARQ Tx
+ */
+static const double analyticalBlerCurveXaxis[12] = {
+  0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20+1e-6
+};
+
+static const double blerCurvesAnalytical[2][13] = {
+  {1, 0.9, 0.7, 0.4, 0.13, 0.045, 0.017, 0.007, 1e-3, 1e-3, 1e-3, 1e-4},
+  {1, 0.9, 0.7, 0.3, 0.09, 0.02, 0.002, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-4}
 };
 
 /**
@@ -3033,6 +3048,44 @@ PhyPisaData::GetBlerValue (const double (*xtable)[XTABLE_SIZE], const double (*y
         }
     }
   return bler;
+}
+
+double
+PhyPisaData::GetBlerAnalytical(uint16_t mcs, double sinr)
+{
+    double bler = 0;
+    if (sinr < analyticalBlerCurveXaxis[0])
+    {
+      bler = 1;
+    }
+    else if (sinr > analyticalBlerCurveXaxis[11])
+    {
+      bler = 1e-4;
+    }
+    else
+    {
+      int lastSinr=0;
+      int correctIndex=-1;
+      for(int i=0; i<12; i++){
+          if (sinr == analyticalBlerCurveXaxis[i]){
+              correctIndex=i;
+              break;
+          }
+          else if (sinr > analyticalBlerCurveXaxis[i]){
+              lastSinr=i;
+          }
+      }
+      if (correctIndex > 0){
+          bler = blerCurvesAnalytical[mcs][correctIndex];
+      } else {
+          double sinr1 = analyticalBlerCurveXaxis[lastSinr];
+          double sinr2 = analyticalBlerCurveXaxis[lastSinr+1];
+          double bler1 = blerCurvesAnalytical[mcs][lastSinr];
+          double bler2 = blerCurvesAnalytical[mcs][lastSinr+1];
+          bler = bler1 + (bler2 - bler1) * (sinr - sinr1) / (sinr2 - sinr1);
+      }
+    }
+    return bler;
 }
 
 double
