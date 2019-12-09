@@ -1177,8 +1177,6 @@ void LteMacVUeMode4::flushHarqBuffers()
             emit(missedTransmission, 1);
 
             LteMode4SchedulingGrant* phyGrant = mode4Grant->dup();
-            phyGrant->setSpsPriority(0);
-
 
             UserControlInfo* uinfo = new UserControlInfo();
             uinfo->setSourceId(getMacNodeId());

@@ -3054,6 +3054,12 @@ double
 PhyPisaData::GetBlerAnalytical(uint16_t mcs, double sinr)
 {
     double bler = 0;
+    // Assume MCS = 5
+    int mcsIndex = 0;
+
+    if (mcs == 7){
+      mcsIndex=1;
+    }
     if (sinr < analyticalBlerCurveXaxis[0])
     {
       bler = 1;
@@ -3076,12 +3082,12 @@ PhyPisaData::GetBlerAnalytical(uint16_t mcs, double sinr)
           }
       }
       if (correctIndex > 0){
-          bler = blerCurvesAnalytical[mcs][correctIndex];
+          bler = blerCurvesAnalytical[mcsIndex][correctIndex];
       } else {
           double sinr1 = analyticalBlerCurveXaxis[lastSinr];
           double sinr2 = analyticalBlerCurveXaxis[lastSinr+1];
-          double bler1 = blerCurvesAnalytical[mcs][lastSinr];
-          double bler2 = blerCurvesAnalytical[mcs][lastSinr+1];
+          double bler1 = blerCurvesAnalytical[mcsIndex][lastSinr];
+          double bler2 = blerCurvesAnalytical[mcsIndex][lastSinr+1];
           bler = bler1 + (bler2 - bler1) * (sinr - sinr1) / (sinr2 - sinr1);
       }
     }
