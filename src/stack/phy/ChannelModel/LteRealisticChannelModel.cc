@@ -1922,8 +1922,8 @@ double LteRealisticChannelModel::computerWinnerB1 (Coord destCoord, Coord sendCo
     // WINNER II channel model for Urban Microcell scenario (UMi) : B1
     double pl_b1 = 0.0;
     // Actual antenna heights (1.5 m for UEs)
-    double hms = destCoord.z;
-    double hbs = sendCoord.z;
+    double hms = hUe_;
+    double hbs = hUe_;
     // Effective antenna heights (0.8 m for UEs)
     double hbs1 = hbs - 1;
     double hms1 = hms - 0.7;
