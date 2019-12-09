@@ -6,7 +6,6 @@
             <parameter name="shadowing" type="bool" value="true"/>
             <!-- Pathloss scenario from ITU -->   
             <parameter name="scenario" type="string" value="WINNER"/>
-            <parameter name="model-analytical" type="bool" value="false"/>
             <!-- eNodeB height -->
             <parameter name="nodeb-height" type="double" value="25"/>
             <!-- Building height -->
