@@ -33,6 +33,8 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     bool transmitting_;
 
+    std::map<MacNodeId, simtime_t> previousTransmissionTimes_;
+
     std::vector<int> ThresPSSCHRSRPvector_;
 
     std::vector<LteAirFrame*> tbFrames_; // airframes received in the current TTI. Only one will be decoded
@@ -70,19 +72,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t senderID;
     simsignal_t subchannelSent;
     simsignal_t subchannelsUsedToSend;
-
-    int sciReceived_;
-    int sciDecoded_;
-    int sciNotDecoded_;
-    int tbReceived_;
-    int tbDecoded_;
-    int tbFailedDueToNoSCI_;
-    int tbFailedButSCIReceived_;
-    int tbAndSCINotReceived_;
-    int sciFailedHalfDuplex_;
-    int tbFailedHalfDuplex_;
-    int subchannelReceived_;
-    int subchannelsUsed_;
+    simsignal_t interPacketDelay;
 
     RbMap availableRBs_;
 

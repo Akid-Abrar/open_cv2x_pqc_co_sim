@@ -88,19 +88,6 @@ void LtePhyVUeMode4::initialize(int stage)
         subchannelSent         = registerSignal("subchannelSent");
         subchannelsUsedToSend  = registerSignal("subchannelsUsedToSend");
 
-        sciReceived_ = 0;
-        sciDecoded_ = 0;
-        sciNotDecoded_ = 0;
-        sciFailedHalfDuplex_ = 0;
-        tbReceived_ = 0;
-        tbDecoded_ = 0;
-        tbFailedDueToNoSCI_ = 0;
-        tbFailedButSCIReceived_ = 0;
-        tbAndSCINotReceived_ = 0;
-        tbFailedHalfDuplex_ = 0;
-        subchannelReceived_ = 0;
-        subchannelsUsed_ = 0;
-
         sensingWindowFront_ = 0; // Will ensure when we first update the sensing window we don't skip over the first element
     }
     else if (stage == INITSTAGE_NETWORK_LAYER_2)
@@ -157,20 +144,6 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
 
             // decode the selected frame
             decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector);
-
-            emit(sciReceived, sciReceived_);
-            emit(sciDecoded, sciDecoded_);
-            emit(sciNotDecoded, sciNotDecoded_);
-            emit(sciFailedHalfDuplex, sciFailedHalfDuplex_);
-            emit(subchannelReceived, subchannelReceived_);
-            emit(subchannelsUsed, subchannelsUsed_);
-
-            sciReceived_ = 0;
-            sciDecoded_ = 0;
-            sciNotDecoded_ = 0;
-            sciFailedHalfDuplex_ = 0;
-            subchannelReceived_ = 0;
-            subchannelsUsed_ = 0;
         }
         int countTbs = 0;
         if (tbFrames_.empty()){
@@ -206,18 +179,6 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
 
                 // decode the selected frame
                 decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector);
-
-                emit(tbReceived, tbReceived_);
-                emit(tbDecoded, tbDecoded_);
-                emit(tbFailedDueToNoSCI, tbFailedDueToNoSCI_);
-                emit(tbFailedButSCIReceived, tbFailedButSCIReceived_);
-                emit(tbFailedHalfDuplex, tbFailedHalfDuplex_);
-
-                tbReceived_ = 0;
-                tbDecoded_ = 0;
-                tbFailedDueToNoSCI_ = 0;
-                tbFailedButSCIReceived_ = 0;
-                tbFailedHalfDuplex_ = 0;
             }
             countTbs++;
         }
@@ -1064,15 +1025,15 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         {
             result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0);
 
-            sciReceived_ += 1;
+            emit(sciReceived, 1);
 
             SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation*>(pkt);
             std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);
             int subchannelIndex = std::get<0>(indexAndLength);
             int lengthInSubchannels = std::get<1>(indexAndLength);
 
-            subchannelReceived_ = subchannelIndex;
-            subchannelsUsed_ = lengthInSubchannels;
+            emit(subchannelReceived, subchannelIndex);
+            emit(subchannelsUsed, lengthInSubchannels);
             emit(senderID, lteInfo->getSourceId());
 
             if (result) {
@@ -1094,19 +1055,19 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 lteInfo->setDeciderResult(true);
                 pkt->setControlInfo(lteInfo);
                 scis_.push_back(pkt);
-                sciDecoded_ += 1;
+                emit(sciDecoded, 1);
             }
             else
             {
                 lteInfo->setDeciderResult(false);
                 pkt->setControlInfo(lteInfo);
                 scis_.push_back(pkt);
-                sciNotDecoded_ += 1;
+                emit(sciNotDecoded, 1);
             }
         }
         else
         {
-            sciFailedHalfDuplex_ += 1;
+            emit(sciFailedHalfDuplex, 1);
             delete lteInfo;
             delete pkt;
         }
@@ -1119,7 +1080,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
         if(!transmitting_){
 
-            tbReceived_ += 1;
+            emit(tbReceived, 1);
 
             // Have a TB want to make sure we have the SCI for it.
             bool foundCorrespondingSci = false;
@@ -1152,11 +1113,17 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 }
             }
             if (!foundCorrespondingSci || !sciDecodedSuccessfully) {
-                tbFailedDueToNoSCI_ += 1;
+                emit(tbFailedDueToNoSCI, 1);
             } else if (!result) {
-                tbFailedButSCIReceived_ += 1;
+                emit(tbFailedButSCIReceived, 1);
             } else {
-                tbDecoded_ += 1;
+                emit(tbDecoded, 1);
+                std::map<MacNodeId, simtime_t>::iterator jt = previousTransmissionTimes_.find(lteInfo->getSourceId());
+                if ( jt != previousTransmissionTimes_.end() ) {
+                    simtime_t elapsed_time = NOW - jt->second;
+                    emit(interPacketDelay, elapsed_time);
+                }
+                previousTransmissionTimes_[lteInfo->getSourceId()] = NOW;
             }
             if (foundCorrespondingSci) {
                 // Now need to find the associated Subchannels, record the RSRP and RSSI for the message and go from there.
@@ -1182,7 +1149,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
             }
         }
         else{
-            tbFailedHalfDuplex_ += 1;
+            emit(tbFailedHalfDuplex, 1);
         }
 
         delete frame;
