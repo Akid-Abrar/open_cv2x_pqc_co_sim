@@ -87,6 +87,9 @@ void LtePhyVUeMode4::initialize(int stage)
         senderID               = registerSignal("senderID");
         subchannelSent         = registerSignal("subchannelSent");
         subchannelsUsedToSend  = registerSignal("subchannelsUsedToSend");
+        interPacketDelay       = registerSignal("interPacketDelay");
+        posX                   = registerSignal("posX");
+        posY                   = registerSignal("posY");
 
         sensingWindowFront_ = 0; // Will ensure when we first update the sensing window we don't skip over the first element
     }
@@ -1020,6 +1023,9 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     {
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceSCI, pkt_dist);
+        emit(posX, getCoord().x);
+        emit(posY, getCoord().y);
+
 
         if (!transmitting_)
         {
@@ -1077,6 +1083,8 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     {
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceTB, pkt_dist);
+        emit(posX, getCoord().x);
+        emit(posY, getCoord().y);
 
         if(!transmitting_){
 

@@ -144,6 +144,13 @@ simple LtePhyVUeMode4 extends LtePhyUeD2D {
         @statistic[subchannelReceived](title="Initial Subchannel on which packet is received"; source="subchannelReceived"; record=mean,vector);
         @signal[subchannelsUsed];
         @statistic[subchannelsUsed](title="Number of Subchannels used for the received packet"; source="subchannelsUsed"; record=mean, vector);
+
+        @signal[interPacketDelay];
+        @statistic[interPacketDelay](title="Delay between packet receptions from a node"; source="interPacketDelay"; record=mean,vector);
+        @signal[posX];
+        @statistic[posX](title="X position of node (at reception time)"; source="posX"; record=mean, vector);
+        @signal[posY];
+        @statistic[posY](title="Y position of node (at reception time)"; source="posY"; record=mean, vector);
 }
 
 // 

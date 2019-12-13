@@ -73,6 +73,8 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t subchannelSent;
     simsignal_t subchannelsUsedToSend;
     simsignal_t interPacketDelay;
+    simsignal_t posX;
+    simsignal_t posY;
 
     RbMap availableRBs_;
 
