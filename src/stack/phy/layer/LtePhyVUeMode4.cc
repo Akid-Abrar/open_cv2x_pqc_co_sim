@@ -1165,6 +1165,12 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 tbFailedButSCIReceived_ += 1;
             } else {
                 tbDecoded_ += 1;
+                std::map<MacNodeId, simtime_t>::iterator jt = previousTransmissionTimes_.find(lteInfo->getSourceId());
+                if ( jt != previousTransmissionTimes_.end() ) {
+                    simtime_t elapsed_time = NOW - jt->second;
+                    emit(interPacketDelay, elapsed_time);
+                }
+                previousTransmissionTimes_[lteInfo->getSourceId()] = NOW;
             }
             if (foundCorrespondingSci) {
                 // Now need to find the associated Subchannels, record the RSRP and RSSI for the message and go from there.

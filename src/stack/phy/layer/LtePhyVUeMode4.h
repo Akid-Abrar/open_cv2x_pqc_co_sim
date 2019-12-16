@@ -76,6 +76,19 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t posX;
     simsignal_t posY;
 
+    int sciReceived_;
+    int sciDecoded_;
+    int sciNotDecoded_;
+    int sciFailedHalfDuplex_;
+    int tbReceived_;
+    int tbDecoded_;
+    int tbFailedDueToNoSCI_;
+    int tbFailedButSCIReceived_;
+    int tbAndSCINotReceived_;
+    int tbFailedHalfDuplex_;
+    int subchannelReceived_;
+    int subchannelsUsed_;
+
     RbMap availableRBs_;
 
     LteAllocationModule* allocator_;
