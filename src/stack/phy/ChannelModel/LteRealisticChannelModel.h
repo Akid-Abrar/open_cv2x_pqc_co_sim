@@ -22,6 +22,9 @@ class LteBinder;
 class LteRealisticChannelModel : public LteChannelModel
 {
   private:
+    // Determines if this is an analytical model or not
+    bool analytical_;
+
     // Carrier Frequency
     double carrierFrequency_;
 

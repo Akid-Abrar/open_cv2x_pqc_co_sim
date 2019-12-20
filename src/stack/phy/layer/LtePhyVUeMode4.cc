@@ -87,6 +87,9 @@ void LtePhyVUeMode4::initialize(int stage)
         senderID               = registerSignal("senderID");
         subchannelSent         = registerSignal("subchannelSent");
         subchannelsUsedToSend  = registerSignal("subchannelsUsedToSend");
+        interPacketDelay       = registerSignal("interPacketDelay");
+        posX                   = registerSignal("posX");
+        posY                   = registerSignal("posY");
 
         sciReceived_ = 0;
         sciDecoded_ = 0;
@@ -788,11 +791,6 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
     SpsCandidateResources* candidateResourcesMessage = new SpsCandidateResources("CSRs");
     candidateResourcesMessage->setCSRs(optimalCSRs);
     send(candidateResourcesMessage, upperGateOut_);
-
-    // Send self message to trigger another subframes creation and insertion. Need one for every TTI
-    cMessage* deleteSelectionWindow = new cMessage("deleteSelectionWindow");
-    deleteSelectionWindow->setSchedulingPriority(0);        // Generate the subframe at start of next TTI
-    scheduleAt(NOW + TTI, deleteSelectionWindow);
 }
 
 std::vector<std::tuple<double, int, int>> LtePhyVUeMode4::selectBestRSSIs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs)
@@ -1064,6 +1062,9 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     {
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceSCI, pkt_dist);
+        emit(posX, getCoord().x);
+        emit(posY, getCoord().y);
+
 
         if (!transmitting_)
         {
@@ -1121,6 +1122,8 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     {
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceTB, pkt_dist);
+        emit(posX, getCoord().x);
+        emit(posY, getCoord().y);
 
         if(!transmitting_){
 
@@ -1162,6 +1165,12 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 tbFailedButSCIReceived_ += 1;
             } else {
                 tbDecoded_ += 1;
+                std::map<MacNodeId, simtime_t>::iterator jt = previousTransmissionTimes_.find(lteInfo->getSourceId());
+                if ( jt != previousTransmissionTimes_.end() ) {
+                    simtime_t elapsed_time = NOW - jt->second;
+                    emit(interPacketDelay, elapsed_time);
+                }
+                previousTransmissionTimes_[lteInfo->getSourceId()] = NOW;
             }
             if (foundCorrespondingSci) {
                 // Now need to find the associated Subchannels, record the RSRP and RSSI for the message and go from there.
@@ -1295,14 +1304,13 @@ void LtePhyVUeMode4::updateCBR()
         cbrCount = sensingWindow_.size();
     }
 
-    while (cbrCount != 0){
+    while (cbrCount > 0){
         if (cbrIndex == -1){
             cbrIndex = sensingWindow_.size() - 1;
         }
         std::vector<Subchannel *>::iterator it;
         std::vector <Subchannel *> currentSubframe = sensingWindow_[cbrIndex];
         for (it = currentSubframe.begin(); it != currentSubframe.end(); it++) {
-            cbrCount --;
             if ((*it)->getSensed()) {
                 totalSubchannels++;
                 if ((*it)->getAverageRSSI() > thresholdRSSI_) {
@@ -1311,6 +1319,7 @@ void LtePhyVUeMode4::updateCBR()
             }
         }
         cbrIndex --;
+        cbrCount --;
     }
 
     cbrValue = cbrValue / totalSubchannels;

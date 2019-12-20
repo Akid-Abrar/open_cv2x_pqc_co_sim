@@ -37,6 +37,15 @@ LteRealisticChannelModel::LteRealisticChannelModel(ParameterMap& params,
     else
         //DEFAULT
         scenario_ = URBAN_MACROCELL;
+
+    it = params.find("model-analytical");
+    if (it != params.end())
+    {
+        analytical_ = true;
+    }
+    else
+        analytical_ = false;
+
     // get nodeb-height-coefficient from config
     it = params.find("nodeb-height");
     if (it != params.end()) // parameter alpha has been specified in config.xml
@@ -340,6 +349,7 @@ LteRealisticChannelModel::LteRealisticChannelModel(ParameterMap& params,
 
 LteRealisticChannelModel::~LteRealisticChannelModel()
 {
+    delete nkgmf;
 }
 
 double LteRealisticChannelModel::getTxRxDistance(UserControlInfo* lteInfo)
@@ -1912,8 +1922,8 @@ double LteRealisticChannelModel::computerWinnerB1 (Coord destCoord, Coord sendCo
     // WINNER II channel model for Urban Microcell scenario (UMi) : B1
     double pl_b1 = 0.0;
     // Actual antenna heights (1.5 m for UEs)
-    double hms = destCoord.z;
-    double hbs = sendCoord.z;
+    double hms = hUe_;
+    double hbs = hUe_;
     // Effective antenna heights (0.8 m for UEs)
     double hbs1 = hbs - 1;
     double hms1 = hms - 0.7;
@@ -2381,7 +2391,10 @@ bool LteRealisticChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlIn
                     }
                     else
                     {
-                        bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, snr);
+                        if (analytical_)
+                           bler = binder_->phyPisaData.GetBlerAnalytical(mcs, snr);
+                        else
+                           bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, snr);
                     }
 
             EV << "\t bler computation: [itxMode=" << itxmode << "] - [mcs=" << mcs

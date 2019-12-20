@@ -54,20 +54,13 @@ void Mode4App::initialize(int stage)
         priority_ = par("priority");
         duration_ = par("duration");
 
-        // calculating traffic starting time
-        simtime_t startTime = par("startTime");
-
         sentMsg_ = registerSignal("sentMsg");
         delay_ = registerSignal("delay");
         rcvdMsg_ = registerSignal("rcvdMsg");
         cbr_ = registerSignal("cbr");
 
-        // TODO maybe un-necesessary
-        // this conversion is made in order to obtain ms-aligned start time, even in case of random generated ones
-        simtime_t offset = (round(SIMTIME_DBL(startTime)*1000)/1000)+simTime();
-
-        scheduleAt(offset,selfSender_);
-        EV << "\t starting traffic in " << offset << " seconds " << endl;
+        double delay = 0.001 * intuniform(0, 1000, 0);
+        scheduleAt((simTime() + delay).trunc(SIMTIME_MS), selfSender_);
     }
 }
 
@@ -77,6 +70,7 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         Cbr* cbrPkt = check_and_cast<Cbr*>(msg);
         double channel_load = cbrPkt->getCbr();
         emit(cbr_, channel_load);
+        delete cbrPkt;
     } else {
         AlertPacket* pkt = check_and_cast<AlertPacket*>(msg);
 
