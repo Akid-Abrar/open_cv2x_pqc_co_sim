@@ -10,6 +10,7 @@
 
 #include <omnetpp.h>
 #include "corenetwork/binder/PhyPisaData.h"
+#include "common/LteCommon.h"
 
 double blerCurvesNew[3][15][49]={
         {
@@ -3016,23 +3017,23 @@ double
 PhyPisaData::GetBlerValue (const double (*xtable)[XTABLE_SIZE], const double (*ytable), const uint16_t ysize, uint16_t mcs, uint8_t harq, double sinr)
 {
 //  NS_LOG_FUNCTION (mcs << (uint16_t) harq << sinr);
-  double sinrDb = 10 * std::log10 (sinr);
+  double sinrLin = dBToLinear(sinr);
   int16_t rIndex = GetRowIndex (mcs, harq);
   double bler = 1;
 
 //  NS_LOG_DEBUG ("sinrDb=" << sinrDb << " min=" << xtable[rIndex][0] << " max=" << xtable[rIndex][1]);
-  if (sinrDb < xtable[rIndex][0])
+  if (sinr < xtable[rIndex][0])
     {
       bler = 1;
     }
-  else if (sinrDb  > xtable[rIndex][1])
+  else if (sinr  > xtable[rIndex][1])
     {
       bler = 0;
     }
   else
     {
-      int16_t index1 = std::floor ((sinrDb - xtable[rIndex][0]) / xtable[rIndex][2]);
-      int16_t index2 = std::ceil ((sinrDb - xtable[rIndex][0]) / xtable[rIndex][2]);
+      int16_t index1 = std::floor ((sinr - xtable[rIndex][0]) / xtable[rIndex][2]);
+      int16_t index2 = std::ceil ((sinr - xtable[rIndex][0]) / xtable[rIndex][2]);
       if (index1 != index2)
         {
           //interpolate
@@ -3040,7 +3041,7 @@ PhyPisaData::GetBlerValue (const double (*xtable)[XTABLE_SIZE], const double (*y
           double sinr2 = std::pow (10, (xtable[rIndex][0] + index2 * xtable[rIndex][2]) / 10);
           double bler1 = ytable[rIndex * ysize + index1];
           double bler2 = ytable[rIndex * ysize + index2];
-          bler = bler1 + (bler2 - bler1) * (sinr - sinr1) / (sinr2 - sinr1);
+          bler = bler1 + (bler2 - bler1) * (sinrLin - sinr1) / (sinr2 - sinr1);
         }
       else
         {
@@ -3215,7 +3216,7 @@ PhyPisaData::GetPsschBler (LteFadingModel fadingChannel, LteTxMode txmode, uint1
           ysize = PUSCH_AWGN_SIZE;
           break;
         default:
-            throw new cRuntimeError("Transmit mode %i not supported in AWGN channel", txmode );
+            throw new cRuntimeError("Transmit mode %i not supported in AWGN channel", txmode);
         }
       break;
     default:
@@ -3223,14 +3224,7 @@ PhyPisaData::GetPsschBler (LteFadingModel fadingChannel, LteTxMode txmode, uint1
     }
 
   TbErrorStats_t tbStat;
-//  if (harqHistory.size () == 0)
-//    {
-  tbStat = GetBler (xtable, ytable, ysize, mcs, 0, 0,  sinr);
-//    }
-//  else
-//    {
-//      tbStat = GetBler (xtable, ytable, ysize, mcs, harqHistory.size (), harqHistory[harqHistory.size () - 1].m_sinr,  sinr);
-//    }
+  tbStat = GetBler (xtable, ytable, ysize, mcs, 0, 0, sinr);
 
   return tbStat.tbler;
 }

@@ -2378,7 +2378,7 @@ bool LteRealisticChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlIn
             if (it->first != lteInfo->getCw()) continue;
 
             //Get the Bler
-            int snr = snrV[jt->first];//XXX because jt->first is a Band (=unsigned short)
+            double snr = snrV[jt->first];//XXX because jt->first is a Band (=unsigned short)
             if (snr < 1)   // XXX it was < 0
                 return false;
             else if (snr > binder_->phyPisaData.maxSnr())
