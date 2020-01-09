@@ -277,6 +277,13 @@ void LteMacVUeMode4::parseCbrTxConfig(cXMLElement* xmlConfig)
         }
         else
             cbrMap.insert({"allowedRetxNumberPSSCH",  par("allowedRetxNumberPSSCH")});
+        it = cbrParams.find("allowedRRI");
+        if (it != cbrParams.end())
+        {
+            cbrMap.insert({"allowedRRI",  it->second});
+        }
+        else
+            cbrMap.insert({"allowedRRI",  resourceReservationInterval_});
         it = cbrParams.find("cr-Limit");
         if (it != cbrParams.end())
         {
@@ -786,7 +793,6 @@ void LteMacVUeMode4::handleSelfMessage()
 
             if (!sent)
             {
-                // no data to send, but if bsrTriggered is set, send a BSR
                 macPduMake();
             }
 
@@ -939,6 +945,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
 
     int minSubchannelNumberPSSCH = minSubchannelNumberPSSCH_;
     int maxSubchannelNumberPSSCH = maxSubchannelNumberPSSCH_;
+    int resourceReservationInterval = resourceReservationInterval_;
 
     if (useCBR_)
     {
@@ -963,6 +970,15 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
             cbrMaxSubchannelNum = maxSubchannelNumberPSSCH_;
         else
             cbrMaxSubchannelNum = (int)got->second;
+        // May be the case that allowing this is not the solution, may cause unfairness as some may select high
+        // rris and not be allowed into lower ones even if they possibly could (not allowing you to go below your
+        // original RRI as this probably does impact on the reservation system. Really you should always be in multiples
+        // of the original RRI but this works fine for 100ms as all are multiples of it. Something to consider.
+//        got = cbrMap.find("allowedRRI");
+//        if ( got == cbrMap.end() )
+//            resourceReservationInterval = resourceReservationInterval_;
+//        else
+//            resourceReservationInterval = (int)got->second;
 
         /**
          * Need to pick the number of subchannels for this reservation
@@ -989,7 +1005,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     int resourceReselectionCounter = intuniform(5, 15, 3);
 
     mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
-    mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval_);
+    mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
 
     LteMode4SchedulingGrant* phyGrant = mode4Grant->dup();
 
@@ -1064,6 +1080,27 @@ void LteMacVUeMode4::flushHarqBuffers()
                             cbrMaxMCS = maxMCSPSSCH_;
                         else
                             cbrMaxMCS = (int)got->second;
+                        got = cbrMap.find("allowedRRI");
+                        if ( got != cbrMap.end() ) {
+                            int rri = (int) got->second;
+                            mode4Grant->setPeriod(rri * 100);
+                            periodCounter_ = rri * 100;
+
+                            if (periodCounter_ > expirationCounter_) {
+                                // Gotten to the point of the final transmission must determine if we reselect or not.
+                                double randomReReserve = dblrand(1);
+                                if (randomReReserve > probResourceKeep_) {
+                                    int expiration = intuniform(5, 15, 3);
+                                    mode4Grant->setResourceReselectionCounter(expiration);
+                                    mode4Grant->setFirstTransmission(true);
+                                    expirationCounter_ = expiration * resourceReservationInterval_;
+                                } else {
+                                    emit(grantBreak, 1);
+                                    mode4Grant->setExpiration(0);
+                                    expiredGrant_ = true;
+                                }
+                            }
+                        }
 
                         if (maxMCSPSSCH_ < cbrMinMCS || cbrMaxMCS < minMCSPSSCH_)
                         {

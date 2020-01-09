@@ -1063,7 +1063,6 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceSCI, pkt_dist);
         emit(posX, getCoord().x);
-        emit(posY, getCoord().y);
 
 
         if (!transmitting_)
@@ -1123,7 +1122,6 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceTB, pkt_dist);
         emit(posX, getCoord().x);
-        emit(posY, getCoord().y);
 
         if(!transmitting_){
 
