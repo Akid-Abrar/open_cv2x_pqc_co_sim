@@ -61,6 +61,7 @@ protected:
    double cbr_;
    bool useCBR_;
    bool packetDropping_;
+   bool rriLookup_;
    int missedTransmissions_;
 
    double remainingTime_;
@@ -134,6 +135,8 @@ protected:
      * Reads MAC parameters for ue and performs initialization.
      */
     virtual void initialize(int stage);
+
+    virtual double calculateChannelOccupancyRatio(int period);
 
     /**
      * Analyze gate of incoming packet

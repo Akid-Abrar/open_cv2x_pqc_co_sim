@@ -65,6 +65,7 @@ void LteMacVUeMode4::initialize(int stage)
         reselectAfter_ = par("reselectAfter");
         useCBR_ = par("useCBR");
         packetDropping_ = par("packetDropping");
+        rriLookup_ = par("rriLookup");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -317,7 +318,8 @@ void LteMacVUeMode4::parseRriConfig(cXMLElement* xmlConfig)
         ParameterMap::iterator it = rriParams.find("rri");
         if (it != rriParams.end())
         {
-            validResourceReservationIntervals_.push_back(it->second);
+            int rri = it->second;
+            validResourceReservationIntervals_.push_back(rri);
         }
     }
 }
@@ -569,39 +571,11 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
                     }
                 }
             }
-
-            int b;
-            int a;
-            int subchannelsUsed = 0;
-            // CR limit calculation
-            // determine b
+            int period = 0;
             if (schedulingGrant_ != NULL){
-                if (expirationCounter_ > 499){
-                    b = 499;
-                } else {
-                    b = expirationCounter_;
-                }
-                subchannelsUsed += b / schedulingGrant_->getPeriod();
-            } else {
-                b = 0;
+                period = schedulingGrant_->getPeriod();
             }
-            // determine a
-            a = 999 - b;
-
-            // determine previous transmissions -> Need to account for if we have already done a drop. Must maintain a
-            // history of past transmissions i.e. subchannels used and subframe in which they occur. delete entries older
-            // than 1000.
-            std::unordered_map<double, int>::const_iterator it = previousTransmissions_.begin();
-            while (it != previousTransmissions_.end()){
-                if (it->first < NOW.dbl() - 1){
-                    it = previousTransmissions_.erase(it);
-                } else if (it->first > NOW.dbl() - (0.1 * a)) {
-                    subchannelsUsed += it->second;
-                    it++;
-                }
-            }
-            // calculate cr
-            channelOccupancyRatio_ = subchannelsUsed /(numSubchannels_ * 1000.0);
+            channelOccupancyRatio_ = calculateChannelOccupancyRatio(period);
 
             // message from PHY_to_MAC gate (from lower layer)
             emit(receivedPacketFromLowerLayer, pkt);
@@ -651,6 +625,46 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
     LteMacUeRealisticD2D::handleMessage(msg);
 }
 
+double LteMacVUeMode4::calculateChannelOccupancyRatio(int period){
+
+    LteMode4SchedulingGrant *mode4Grant;
+    if (schedulingGrant_ != NULL) {
+        mode4Grant = check_and_cast<LteMode4SchedulingGrant *>(schedulingGrant_);
+    }
+
+    int b;
+    int a;
+    int subchannelsUsed = 0;
+    // CR limit calculation
+    // determine b
+    if (schedulingGrant_ != NULL){
+        if (expirationCounter_ > 499){
+            b = 499;
+        } else {
+            b = expirationCounter_;
+        }
+        subchannelsUsed += (b / period) * mode4Grant->getNumSubchannels();
+    } else {
+        b = 0;
+    }
+    // determine a
+    a = 999 - b;
+
+    // determine previous transmissions -> Need to account for if we have already done a drop. Must maintain a
+    // history of past transmissions i.e. subchannels used and subframe in which they occur. delete entries older
+    // than 1000.
+    std::unordered_map<double, int>::const_iterator it = previousTransmissions_.begin();
+    while (it != previousTransmissions_.end()){
+        if (it->first < NOW.dbl() - 1){
+            it = previousTransmissions_.erase(it);
+        } else if (it->first > NOW.dbl() - (0.1 * a)) {
+            subchannelsUsed += it->second;
+            it++;
+        }
+    }
+    // calculate cr
+    return subchannelsUsed /(numSubchannels_ * 1000.0);
+}
 
 
 void LteMacVUeMode4::handleSelfMessage()
@@ -1080,27 +1094,47 @@ void LteMacVUeMode4::flushHarqBuffers()
                             cbrMaxMCS = maxMCSPSSCH_;
                         else
                             cbrMaxMCS = (int)got->second;
-                        got = cbrMap.find("allowedRRI");
-                        if ( got != cbrMap.end() ) {
-                            int rri = (int) got->second;
 
-                            if (rri * 100 != mode4Grant->getPeriod()) {
-                                mode4Grant->setPeriod(rri * 100);
-                                periodCounter_ = rri * 100;
+                        int rri = mode4Grant->getPeriod()/100;
+                        if (rriLookup_) {
+                            // RRI Adaptation based on lookup table similar to DCC
+                            got = cbrMap.find("allowedRRI");
+                            if (got != cbrMap.end()) {
+                                rri = (int) got->second;
+                            }
+                        }
+                        else {
+                            got = cbrMap.find("cr-Limit");
+                            if (channelOccupancyRatio_ > got->second) {
+                                // Calculate an RRI which ensures the channelOccupancyRatio reduces to the point that
+                                // it remains within the cr-limit
+                                double newOccupancyRatio = channelOccupancyRatio_;
 
-                                if (periodCounter_ > expirationCounter_) {
-                                    // Gotten to the point of the final transmission must determine if we reselect or not.
-                                    double randomReReserve = dblrand(1);
-                                    if (randomReReserve > probResourceKeep_) {
-                                        int expiration = intuniform(5, 15, 3);
-                                        mode4Grant->setResourceReselectionCounter(expiration);
-                                        mode4Grant->setFirstTransmission(true);
-                                        expirationCounter_ = expiration * resourceReservationInterval_;
-                                    } else {
-                                        emit(grantBreak, 1);
-                                        mode4Grant->setExpiration(0);
-                                        expiredGrant_ = true;
-                                    }
+                                int i = 0;
+                                while (newOccupancyRatio > got->second && i < validResourceReservationIntervals_.size()){
+                                    rri = (int) validResourceReservationIntervals_.at(i) * 100;
+                                    newOccupancyRatio = calculateChannelOccupancyRatio(rri);
+                                    i++;
+                                }
+                            }
+                        }
+
+                        if (rri != mode4Grant->getPeriod()) {
+                            mode4Grant->setPeriod(rri * 100);
+                            periodCounter_ = rri * 100;
+
+                            if (periodCounter_ > expirationCounter_) {
+                                // Gotten to the point of the final transmission must determine if we reselect or not.
+                                double randomReReserve = dblrand(1);
+                                if (randomReReserve > probResourceKeep_) {
+                                    int expiration = intuniform(5, 15, 3);
+                                    mode4Grant->setResourceReselectionCounter(expiration);
+                                    mode4Grant->setFirstTransmission(true);
+                                    expirationCounter_ = expiration * resourceReservationInterval_;
+                                } else {
+                                    emit(grantBreak, 1);
+                                    mode4Grant->setExpiration(0);
+                                    expiredGrant_ = true;
                                 }
                             }
                         }
