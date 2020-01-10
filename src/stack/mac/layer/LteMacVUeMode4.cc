@@ -1060,7 +1060,7 @@ void LteMacVUeMode4::flushHarqBuffers()
             LteHarqProcessTx* selectedProcess = it2->second->getSelectedProcess();
             for (int cw=0; cw<MAX_CODEWORDS; cw++)
             {
-                int pduLength = selectedProcess->getPduLength(cw);
+                int pduLength = selectedProcess->getPduLength(cw) * 8 ;
                 int minMCS = minMCSPSSCH_;
                 int maxMCS = maxMCSPSSCH_;
                 if (pduLength > 0)
@@ -1083,21 +1083,24 @@ void LteMacVUeMode4::flushHarqBuffers()
                         got = cbrMap.find("allowedRRI");
                         if ( got != cbrMap.end() ) {
                             int rri = (int) got->second;
-                            mode4Grant->setPeriod(rri * 100);
-                            periodCounter_ = rri * 100;
 
-                            if (periodCounter_ > expirationCounter_) {
-                                // Gotten to the point of the final transmission must determine if we reselect or not.
-                                double randomReReserve = dblrand(1);
-                                if (randomReReserve > probResourceKeep_) {
-                                    int expiration = intuniform(5, 15, 3);
-                                    mode4Grant->setResourceReselectionCounter(expiration);
-                                    mode4Grant->setFirstTransmission(true);
-                                    expirationCounter_ = expiration * resourceReservationInterval_;
-                                } else {
-                                    emit(grantBreak, 1);
-                                    mode4Grant->setExpiration(0);
-                                    expiredGrant_ = true;
+                            if (rri * 100 != mode4Grant->getPeriod()) {
+                                mode4Grant->setPeriod(rri * 100);
+                                periodCounter_ = rri * 100;
+
+                                if (periodCounter_ > expirationCounter_) {
+                                    // Gotten to the point of the final transmission must determine if we reselect or not.
+                                    double randomReReserve = dblrand(1);
+                                    if (randomReReserve > probResourceKeep_) {
+                                        int expiration = intuniform(5, 15, 3);
+                                        mode4Grant->setResourceReselectionCounter(expiration);
+                                        mode4Grant->setFirstTransmission(true);
+                                        expirationCounter_ = expiration * resourceReservationInterval_;
+                                    } else {
+                                        emit(grantBreak, 1);
+                                        mode4Grant->setExpiration(0);
+                                        expiredGrant_ = true;
+                                    }
                                 }
                             }
                         }
