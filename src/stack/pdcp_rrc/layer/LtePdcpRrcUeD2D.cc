@@ -27,6 +27,8 @@ void LtePdcpRrcUeD2D::fromDataIn(cPacket *pkt)
     LtePdcpEntity* entity;
     MacNodeId destId;
 
+    pkt->setBitLength(784);
+
 //    if (three_hundred == 0)
 //    {
 //        pkt->setBitLength(2400);
@@ -34,7 +36,6 @@ void LtePdcpRrcUeD2D::fromDataIn(cPacket *pkt)
 //    }
 //    else
 //    {
-//        pkt->setBitLength(1520);
 //        three_hundred -= 1;
 //    }
 
