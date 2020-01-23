@@ -62,6 +62,7 @@ protected:
    bool useCBR_;
    bool packetDropping_;
    bool rriLookup_;
+   bool crLimit_;
    int missedTransmissions_;
 
    double remainingTime_;

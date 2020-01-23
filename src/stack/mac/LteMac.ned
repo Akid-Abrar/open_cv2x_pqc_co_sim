@@ -384,6 +384,7 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
 	    bool useCBR = default(false);
 	    bool packetDropping = default(false);
 	    bool rriLookup = default(false);
+	    bool crLimit = default(false);
 	    
 	    bool usePreconfiguredTxParams = default(false);
 	    

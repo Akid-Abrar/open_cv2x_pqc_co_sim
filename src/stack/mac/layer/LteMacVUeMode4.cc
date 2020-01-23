@@ -66,6 +66,7 @@ void LteMacVUeMode4::initialize(int stage)
         useCBR_ = par("useCBR");
         packetDropping_ = par("packetDropping");
         rriLookup_ = par("rriLookup");
+        crLimit_ = par("crLimit");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -1103,7 +1104,7 @@ void LteMacVUeMode4::flushHarqBuffers()
                                 rri = (int) got->second;
                             }
                         }
-                        else {
+                        else if (crLimit_) {
                             got = cbrMap.find("cr-Limit");
                             if (channelOccupancyRatio_ > got->second) {
                                 // Calculate an RRI which ensures the channelOccupancyRatio reduces to the point that
