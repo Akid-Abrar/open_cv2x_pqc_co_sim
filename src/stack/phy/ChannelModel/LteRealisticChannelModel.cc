@@ -1711,6 +1711,133 @@ std::vector<double> LteRealisticChannelModel::getRSSI(LteAirFrame *frame, UserCo
     return rssiVector;
 }
 
+std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::getRSSI_SINR(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector)
+{
+    std::vector<double> rssiVector = rsrpVector;
+    std::vector<double> snrVector = rsrpVector;
+
+    MacNodeId sourceId = lteInfo_1->getSourceId();
+    Coord sourceCoord = lteInfo_1->getCoord();
+
+    // Get the direction
+    Direction dir = (Direction) lteInfo_1->getDirection();
+    dir = D2D;
+
+    double noiseFigure = 0.0;
+    double extCellInterference = 0.0;
+    if( dir == UL || dir==DL)
+    {
+        //consistency check
+        throw cRuntimeError("Direction should neither be UL or DL");
+    }
+    else
+    {
+        //In D2D case the noise figure is the ueNoiseFigure_
+        noiseFigure = ueNoiseFigure_;
+    }
+
+    EV << "------------ GET SINR D2D----------------" << endl;
+
+    /*
+     * The RSSI will be calculated as follows
+     *
+     * RSSI = 2 (Pwr + N + I)
+     *
+     * N = thermalNoise_ + noiseFigure (measured in dBm)
+     * I = extCellInterference + inCellInterference (measured in mW)
+     *
+     * ==================================================================
+     *
+     * The SINR will be calculated as follows
+     *
+     *              Pwr
+     * SINR = ---------
+     *           N  +  I
+     *
+     * N = thermalNoise_ + noiseFigure (measured in dBm)
+     * I = extCellInterference + inCellInterference (measured in mW)
+     */
+    //============ IN CELL D2D INTERFERENCE COMPUTATION =================
+    /*
+     * In calculating a D2D CQI the Interference from others D2D UEs discriminates between calculating a CQI
+     * following direction D2D_Tx--->D2D_Rx or D2D_Tx<---D2D_Rx (This happens due to the different positions of the
+     * interfering UEs relative to the position of the UE for whom we are calculating the CQI). We need that the CQI
+     * for the D2D_Tx is the same of the D2D_Rx(This is an help for the simulator because when the eNodeB allocates
+     * resources to a D2D_Tx it must refer to quality channel of the D2D_Rx).
+     * To do so here we must check if the ueId is the ID of the D2D_Tx:if it
+     * is so we swap the ueId with the one of his Peer(D2D_Rx). We do the same for the coord.
+     */
+    //vector containing the sum of inCell interference for each band
+    std::vector<double> inCellInterference; // Linear value (mW)
+    // prepare data structure
+    inCellInterference.resize(band_, 0);
+    if (enableD2DInCellInterference_ && dir == D2D)
+    {
+        computeInCellD2DInterference(enbId, sourceId, sourceCoord, destId, destCoord, (lteInfo_1->getFrameType() == FEEDBACKPKT), &inCellInterference,dir);
+    }
+
+    //===================== SINR COMPUTATION ========================
+    if( enableD2DInCellInterference_ && dir==D2D  )
+    {
+        double thermalDBm = thermalNoise_ + 10 * log10(180000); // Thermal noise broken down by RE
+        double thermalLinear = pow(10, (thermalDBm - 30 + noiseFigure)/10);
+
+        // total noise linear
+        double totNRssi = thermalLinear;
+
+        // denominator expressed in dBm as (N+extCell+inCell)
+        double denRssi;
+        EV << "LteRealisticChannelModel::getRSSI - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir)  << endl;
+
+        // compute and linearize total noise
+        double totNSinr = dBmToLinear(thermalNoise_ + noiseFigure);
+
+        // denominator expressed in dBm as (N+extCell+inCell)
+        double denSinr;
+        EV << "LteRealisticChannelModel::getSINR - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir)  << endl;
+
+        // Add interference for each band
+        for (unsigned int i = 0; i < band_; i++)
+        {
+            //        (      mW           +    mW    +        mW            )
+            denRssi = extCellInterference + totNRssi + inCellInterference[i];
+            double rsrpPerReLinear = dBmToLinear(rssiVector[i]);
+            double linearRSSI = 2 * (denRssi + rsrpPerReLinear);
+            double rssi = linearToDBm(linearRSSI);
+
+            rssiVector[i] = rssi;
+
+            //                   (      mW            +    mW    +        mW            )
+            denSinr = linearToDBm(extCellInterference + totNSinr + inCellInterference[i]);
+
+            EV << "\t ext[" << extCellInterference << "] - in[" << inCellInterference[i] << "] - recvPwr["
+               << dBmToLinear(snrVector[i]) << "] - sinr[" << snrVector[i]-denSinr << "]\n";
+
+            // compute final SINR. Subtraction in dB is equivalent to linear division
+            snrVector[i] -= denSinr;
+        }
+    }
+        // compute rssi with no incellD2D interference
+    else
+    {
+        for (unsigned int i = 0; i < band_; i++)
+        {
+            // compute final RSSI
+            rssiVector[i] -=  (noiseFigure + thermalNoise_);
+
+            // compute final SINR
+            snrVector[i] -=  (noiseFigure + thermalNoise_);
+
+            EV << "LteRealisticChannelModel::getRSSI - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir) << " - rssi[" << rssiVector[i] << "]\n";
+        }
+    }
+
+    //sender is a UE
+    updatePositionHistory(sourceId, sourceCoord);
+
+    return std::make_tuple(rssiVector, snrVector);
+}
+
 std::vector<double> LteRealisticChannelModel::getSIR(LteAirFrame *frame,
         UserControlInfo* lteInfo)
 {
@@ -2396,6 +2523,144 @@ bool LteRealisticChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlIn
                         else
                            bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, snr);
                     }
+
+            EV << "\t bler computation: [itxMode=" << itxmode << "] - [mcs=" << mcs
+               << "] - [snr=" << snr << "]" << endl;
+
+            double success = 1 - bler;
+            //compute the success probability according to the number of RB used
+            double successPacket = pow(success, (double)jt->second);
+
+            // compute the success probability according to the number of LB used
+            finalSuccess *= successPacket;
+
+            EV << " LteRealisticChannelModel::error direction " << dirToA(dir)
+               << " node " << id << " remote unit " << dasToA((*it).first)
+               << " Band " << (*jt).first << " SNR " << snr << " MCS " << mcs
+               << " BLER " << bler << " success probability " << successPacket
+               << " total success probability " << finalSuccess << endl;
+        }
+    }
+    // Compute total error probability
+    double per = 1 - finalSuccess;
+    // Harq Reduction
+    double totalPer = per * pow(harqReduction_, nTx - 1);
+
+    double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
+
+    EV << " LteRealisticChannelModel::error direction " << dirToA(dir)
+       << " node " << id << " total ERROR probability  " << per
+       << " per with H-ARQ error reduction " << totalPer
+       << " - MCS[" << mcs << "]- random error extracted[" << er << "]" << endl;
+    if (er <= totalPer)
+    {
+        EV << "This is NOT your lucky day (" << er << " < " << totalPer << ") -> do not receive." << endl;
+
+        // Signal too weak, we can't receive it
+        return false;
+    }
+    // Signal is strong enough, receive this Signal
+    EV << "This is your lucky day (" << er << " > " << totalPer << ") -> Receive AirFrame." << endl;
+
+    return true;
+}
+
+bool LteRealisticChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo, std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs)
+{
+    EV << "LteRealisticChannelModel::error_Mode4_D2D" << endl;
+
+    //get codeword
+    unsigned char cw = lteInfo->getCw();
+    //get number of codeword
+    //int size = lteInfo->getUserTxParams()->readCqiVector().size();
+    // Only one codeword
+    int size = 1;
+
+    //get position associated to the packet
+    Coord coord = lteInfo->getCoord();
+
+    //if total number of codeword is equal to 1 the cw index should be only 0
+    if (size == 1)
+        cw = 0;
+
+    EV << "LteRealisticChannelModel:: MCS: "<< mcs << endl;
+
+    MacNodeId id;
+    Direction dir = (Direction) lteInfo->getDirection();
+
+    // Get MacNodeId of UE
+    if (dir == DL)
+        id = lteInfo->getDestId();
+    else // UL or D2D
+        id = lteInfo->getSourceId();
+
+    EV<<NOW<< "LteRealisticChannelModel::FROM: "<< id << endl;
+    // Get Number of RTX
+    unsigned char nTx = lteInfo->getTxNumber();
+
+    //consistency check
+    if (nTx == 0)
+        throw cRuntimeError("Transmissions counter should not be 0");
+
+    //Get txmode
+    TxMode txmode = (TxMode) lteInfo->getTxMode();
+
+    // If rank is 1 and we used SMUX to transmit we have to corrupt this packet
+    if (txmode == CL_SPATIAL_MULTIPLEXING
+        || txmode == OL_SPATIAL_MULTIPLEXING)
+    {
+        //compare lambda min (smaller eingenvalues of channel matrix) with the threshold used to compute the rank
+        if (binder_->phyPisaData.getLambda(id, 1) < lambdaMinTh_)
+            return false;
+    }
+
+    //Get the resource Block id used to transmit this packet
+    RbMap rbmap = lteInfo->getGrantedBlocks();
+
+    //Get txmode
+    unsigned int itxmode = txModeToIndex[txmode];
+
+    double bler = 0;
+    std::vector<double> totalbler;
+    double finalSuccess = 1;
+    RbMap::iterator it;
+    std::map<Band, unsigned int>::iterator jt;
+
+    //for each Remote unit used to transmit the packet
+    for (it = rbmap.begin(); it != rbmap.end(); ++it)
+    {
+        //for each logical band used to transmit the packet
+        for (jt = it->second.begin(); jt != it->second.end(); ++jt)
+        {
+            //this Rb is not allocated
+            if (jt->second == 0) continue;
+
+            //check the antenna used in Das
+            if ((lteInfo->getTxMode() == CL_SPATIAL_MULTIPLEXING
+                 || lteInfo->getTxMode() == OL_SPATIAL_MULTIPLEXING)
+                && rbmap.size() > 1)
+                //we consider only the snr associated to the LB used
+                if (it->first != lteInfo->getCw()) continue;
+
+            //Get the Bler
+            double snr = sinrVector[jt->first];//XXX because jt->first is a Band (=unsigned short)
+            if (snr < 1)   // XXX it was < 0
+                return false;
+            else if (snr > binder_->phyPisaData.maxSnr())
+                bler = 0;
+            else
+            if (lteInfo->getFrameType() == SCIPKT)
+            {
+                // TODO: Make this slightly tidier.
+                bler = binder_->phyPisaData.GetPscchBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, snr);
+            }
+            else
+            {
+                if (analytical_)
+                    bler = binder_->phyPisaData.GetBlerAnalytical(mcs, snr);
+                else
+                    bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, snr);
+            }
 
             EV << "\t bler computation: [itxMode=" << itxmode << "] - [mcs=" << mcs
                << "] - [snr=" << snr << "]" << endl;
