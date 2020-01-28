@@ -27,17 +27,6 @@ void LtePdcpRrcUeD2D::fromDataIn(cPacket *pkt)
     LtePdcpEntity* entity;
     MacNodeId destId;
 
-//    if (three_hundred == 0)
-//    {
-//        pkt->setBitLength(2400);
-//        three_hundred = 4;
-//    }
-//    else
-//    {
-//        pkt->setBitLength(1520);
-//        three_hundred -= 1;
-//    }
-
     setTrafficInformation(pkt, lteInfo);
 
     if (ipBased_)
