@@ -98,6 +98,11 @@ UmRxEntity* LteRlcUmRealistic::getRxBuffer(LteControlInfo* lteInfo)
 
 void LteRlcUmRealistic::handleUpperMessage(cPacket *pkt)
 {
+
+    // Fix the size of the packets ensures we don't have issues with packet size varying extensively
+    if (packetSize_ > 0)
+        pkt->setByteLength(packetSize_ - RLC_HEADER_UM - MAC_HEADER);
+
     EV << "LteRlcUmRealistic::handleUpperMessage - Received packet " << pkt->getName() << " from upper layer, size " << pkt->getByteLength() << "\n";
 
     LteControlInfo* lteInfo = check_and_cast<LteControlInfo*>(pkt->removeControlInfo());

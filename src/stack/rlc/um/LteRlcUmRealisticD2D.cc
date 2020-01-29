@@ -66,6 +66,8 @@ void LteRlcUmRealisticD2D::initialize(int stage)
         std::string macType = getParentModule()->getParentModule()->par("LteMacType").stdstringValue();
         std::string pdcpType = getParentModule()->getParentModule()->par("LtePdcpRrcType").stdstringValue();
 
+        packetSize_ = par("packetSize");
+
         if (nodeType.compare("ENODEB") == 0)
         {
             nodeType_ = ENODEB;
