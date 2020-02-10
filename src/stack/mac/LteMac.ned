@@ -383,6 +383,7 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
 	    double probResourceKeep = default(0.4);
 	    bool useCBR = default(false);
 	    bool packetDropping = default(false);
+	    bool adjacencyPSCCHPSSCH = default(true);
 	    
 	    bool usePreconfiguredTxParams = default(false);
 	    

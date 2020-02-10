@@ -65,6 +65,7 @@ void LteMacVUeMode4::initialize(int stage)
         reselectAfter_ = par("reselectAfter");
         useCBR_ = par("useCBR");
         packetDropping_ = par("packetDropping");
+        adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -872,13 +873,37 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     // Determine the RBs on which we will send our message
     RbMap grantedBlocks;
     int totalGrantedBlocks = 0;
-    for (int i=initiailSubchannel;i<finalSubchannel;i++)
-    {
-        std::vector<Band> allocatedBands;
-        for (Band b = i * subchannelSize_; b < (i * subchannelSize_) + subchannelSize_ ; b++)
+    if (adjacencyPSCCHPSSCH_){
+        // Adjacent mode just provide the allocated bands
+
+        for (int i=initiailSubchannel;i<finalSubchannel;i++)
         {
-            grantedBlocks[MACRO][b] = 1;
-            ++totalGrantedBlocks;
+            int initialBand = i * subchannelSize_;
+            for (Band b = initialBand; b < initialBand + subchannelSize_ ; b++)
+            {
+                grantedBlocks[MACRO][b] = 1;
+                ++totalGrantedBlocks;
+            }
+        }
+    } else {
+        // Start at subchannel numsubchannels.
+        // Remove 1 subchannel from each grant.
+        for (int i=initiailSubchannel;i<finalSubchannel;i++)
+        {
+            // Account for the two blocks taken for the SCI
+            totalGrantedBlocks += 2;
+            int initialBand;
+            if (i == initiailSubchannel){
+                // If first subchannel to use need to make sure to add the number of subchannels for the SCI messages
+                initialBand = (i * subchannelSize_) + numSubchannels_;
+            } else {
+                initialBand = i * subchannelSize_;
+            }
+            for (Band b = initialBand; b < initialBand + subchannelSize_ - 1 ; b++)
+            {
+                grantedBlocks[MACRO][b] = 1;
+                ++totalGrantedBlocks;
+            }
         }
     }
 

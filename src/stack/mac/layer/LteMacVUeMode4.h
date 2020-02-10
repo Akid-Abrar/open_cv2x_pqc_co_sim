@@ -61,6 +61,7 @@ protected:
    double cbr_;
    bool useCBR_;
    bool packetDropping_;
+   bool adjacencyPSCCHPSSCH_;
    int missedTransmissions_;
 
    double remainingTime_;

@@ -383,6 +383,8 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
     RbMap sciRbs;
     if (adjacencyPSCCHPSSCH_)
     {
+        // Adjacent mode
+
         // Setup so SCI gets 2 RBs from the grantedBlocks.
         RbMap::iterator it;
         std::map<Band, unsigned int>::iterator jt;
@@ -421,25 +423,14 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
     }
     else
     {
-        // Setup so SCI gets 2 RBs from the grantedBlocks.
-        RbMap::iterator it;
-        std::map<Band, unsigned int>::iterator jt;
-        int allocatedRbs = 0;
-        //for each Remote unit used to transmit the packet
-        for (it = rbMap.begin(); it != rbMap.end(); ++it) {
-            if (allocatedRbs == 2) {
-                break;
-            }
-            //for each logical band used to transmit the packet
-            for (jt = it->second.begin(); jt != it->second.end(); ++jt) {
-                if (allocatedRbs == 2) {
-                    // Have all the blocks allocated to the SCI so can move on.
-                    break;
-                }
-                // sciRbs[remote][band] = assigned Rb
-                sciRbs[it->first][jt->first] = 1;
-                ++allocatedRbs;
-            }
+        // Non-Adjacent mode
+
+        // Take 2 rbs from the inital RBs available to nodes.
+        int startingRB = sciGrant_->getStartingSubchannel() * 2;
+
+        for (Band b = startingRB; b <= startingRB + 1 ; b++)
+        {
+            sciRbs[MACRO][b] = 1;
         }
     }
 
