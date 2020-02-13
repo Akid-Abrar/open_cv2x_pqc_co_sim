@@ -184,6 +184,8 @@ void LteRlcUm::initialize()
     down_[IN] = gate("UM_Sap_down$i");
     down_[OUT] = gate("UM_Sap_down$o");
 
+    packetSize_ = par("packetSize");
+
     WATCH_MAP(txBuffers_);
     WATCH_MAP(rxBuffers_);
 }

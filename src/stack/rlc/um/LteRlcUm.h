@@ -89,6 +89,8 @@ class LteRlcUm : public cSimpleModule
 
   protected:
 
+    int packetSize_;
+
     cGate* up_[2];
     cGate* down_[2];
 
