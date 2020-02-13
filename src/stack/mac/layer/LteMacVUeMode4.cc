@@ -1069,7 +1069,7 @@ void LteMacVUeMode4::flushHarqBuffers()
             LteHarqProcessTx* selectedProcess = it2->second->getSelectedProcess();
             for (int cw=0; cw<MAX_CODEWORDS; cw++)
             {
-                int pduLength = selectedProcess->getPduLength(cw);
+                int pduLength = selectedProcess->getPduLength(cw) * 8;
                 int minMCS = minMCSPSSCH_;
                 int maxMCS = maxMCSPSSCH_;
                 if (pduLength > 0)
