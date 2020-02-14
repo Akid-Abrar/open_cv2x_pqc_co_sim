@@ -888,22 +888,18 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     } else {
         // Start at subchannel numsubchannels.
         // Remove 1 subchannel from each grant.
-        for (int i=initiailSubchannel;i<finalSubchannel;i++)
-        {
-            // Account for the two blocks taken for the SCI
-            totalGrantedBlocks += 2;
-            int initialBand;
-            if (i == initiailSubchannel){
-                // If first subchannel to use need to make sure to add the number of subchannels for the SCI messages
-                initialBand = (i * subchannelSize_) + numSubchannels_;
-            } else {
-                initialBand = i * subchannelSize_;
-            }
-            for (Band b = initialBand; b < initialBand + subchannelSize_ - 1 ; b++)
-            {
-                grantedBlocks[MACRO][b] = 1;
-                ++totalGrantedBlocks;
-            }
+        // Account for the two blocks taken for the SCI
+        totalGrantedBlocks += 2;
+        int initialBand;
+        if (initiailSubchannel == 0){
+            // If first subchannel to use need to make sure to add the number of subchannels for the SCI messages
+            initialBand = numSubchannels_ * 2;
+        } else {
+            initialBand = (numSubchannels_ * 2) + (initiailSubchannel * (subchannelSize_ - 2));
+        }
+        for (Band b = initialBand; b < (initialBand + subchannelSize_ - 2) * mode4Grant->getNumSubchannels() ; b++) {
+            grantedBlocks[MACRO][b] = 1;
+            ++totalGrantedBlocks;
         }
     }
 
