@@ -1063,7 +1063,6 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceSCI, pkt_dist);
         emit(posX, getCoord().x);
-        emit(posY, getCoord().y);
 
 
         if (!transmitting_)
@@ -1123,7 +1122,6 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceTB, pkt_dist);
         emit(posX, getCoord().x);
-        emit(posY, getCoord().y);
 
         if(!transmitting_){
 
@@ -1148,7 +1146,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                         //RELAY and NORMAL
                         sciDecodedSuccessfully = true;
                         if (lteInfo->getDirection() == D2D_MULTI)
-                            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, correspondingSCI->getMcs());
+                            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs());
                         else
                             result = channelModel_->error(frame, lteInfo);
                     }
