@@ -691,7 +691,7 @@ void LteMacVUeMode4::handleSelfMessage()
         {
             // Gotten to the point of the final tranmission must determine if we reselect or not.
             double randomReReserve = dblrand(1);
-            if (randomReReserve > probResourceKeep_)
+            if (randomReReserve < probResourceKeep_)
             {
                 int expiration = intuniform(5, 15, 3);
                 mode4Grant -> setResourceReselectionCounter(expiration);
