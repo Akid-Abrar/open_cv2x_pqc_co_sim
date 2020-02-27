@@ -527,7 +527,10 @@ double LteRealisticChannelModel::getAttenuation_D2D(MacNodeId nodeId, Direction 
             attenuation = computeSubUrbanMacro(sqrDistance, dbp, nodeId);
             break;
         case WINNER:
-            attenuation = computerWinnerB1(coord, myCoord_, nodeId);
+            attenuation = computeWinnerB1(coord, myCoord_, nodeId);
+            break;
+        case ANALYTICAL:
+            attenuation = computeAnalyticalPathloss(coord, myCoord_, nodeId);
             break;
         default:
             throw cRuntimeError("Wrong value %d for path-loss scenario", scenario_);
@@ -2026,9 +2029,42 @@ double LteRealisticChannelModel::jakesFading(MacNodeId nodeId, double speed,
     return linearToDb(re_h * re_h + im_h * im_h);
 }
 
+double LteRealisticChannelModel::computeAnalyticalPathloss(Coord destCoord, Coord sourceCoord, MacNodeId)
+{
+    double pathLoss = 0;
+    double pathLossFree = 0;
 
+    double environmentHeight = 0;
 
-double LteRealisticChannelModel::computerWinnerB1 (Coord destCoord, Coord sendCoord, MacNodeId nodeId)
+    double fc = carrierFrequency_;
+
+    double c = 3e8;
+
+    double distance = destCoord.distance(sourceCoord);
+
+    double hMS = hUe_;
+    double hBS = hUe_;
+
+    double dBP = 4 * (hBS - environmentHeight) * (hMS - environmentHeight) * fc / c;
+
+    if (distance < 3){
+        distance = 3;
+    }
+
+    if (distance < dBP){
+        pathLoss = 22.7 * std::log10(distance) + 27 + 20 * std::log10(fc/1e9);
+    } else {
+        pathLoss = 40*std::log10(distance) + 7.56 - 17.3*std::log10(hBS-environmentHeight) - 17.3*std::log10(hMS-environmentHeight) + 2.7*std::log10(fc/1e9);
+    }
+
+    pathLossFree = 20*std::log10(distance) + 46.4 + 20*std::log10(fc*1e-9 / 5);
+
+    pathLoss = std::max(pathLoss, pathLossFree);
+
+    return pathLoss;
+}
+
+double LteRealisticChannelModel::computeWinnerB1 (Coord destCoord, Coord sourceCoord, MacNodeId nodeId)
 {
     // Free space pathloss
     double loss = 0.0;
@@ -2037,7 +2073,7 @@ double LteRealisticChannelModel::computerWinnerB1 (Coord destCoord, Coord sendCo
     // orig double fc = m_frequency / 1e9;
     double fc = carrierFrequency_;
     // Distance between the two nodes in meter
-    double dist = destCoord.distance(sendCoord);
+    double dist = destCoord.distance(sourceCoord);
 
     // Calculate the pathloss based on 3GPP specifications : 3GPP TR 36.843 V12.0.1
     // WINNER II Channel Models, D1.1.2 V1.2., Equation (4.24) p.43, available at
@@ -2953,6 +2989,10 @@ double LteRealisticChannelModel::getStdDev(bool dist, MacNodeId nodeId)
             return 3.;
         else
             return 4.;
+        break;
+    case ANALYTICAL:
+        if (losMap_[nodeId])
+            return 3.;
         break;
     case URBAN_MACROCELL:
         if (losMap_[nodeId])

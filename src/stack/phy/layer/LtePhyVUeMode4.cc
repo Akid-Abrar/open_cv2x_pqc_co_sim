@@ -292,11 +292,18 @@ void LtePhyVUeMode4::handleAirFrame(cMessage* msg)
         scheduleAt(NOW, d2dDecodingTimer_);
     }
 
-    // store frame, together with related control info
-    frame->setControlInfo(lteInfo);
+    Coord myCoord = getCoord();
+    // Only store frames which are within 1500m over this the interference caused is negligible.
+    if (myCoord.distance(lteInfo->getCoord()) < 1500) {
+        // store frame, together with related control info
+        frame->setControlInfo(lteInfo);
 
-    // Capture the Airframe for decoding later
-    storeAirFrame(frame);
+        // Capture the Airframe for decoding later
+        storeAirFrame(frame);
+    } else {
+        delete lteInfo;
+        delete frame;
+    }
 }
 
 void LtePhyVUeMode4::handleUpperMessage(cMessage* msg)

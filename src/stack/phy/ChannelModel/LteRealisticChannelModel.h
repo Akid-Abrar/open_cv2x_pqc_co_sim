@@ -308,7 +308,9 @@ class LteRealisticChannelModel : public LteChannelModel
      */
     double jakesFading(MacNodeId noedId, double speed, unsigned int band, bool cqiDl);
 
-    double computerWinnerB1(const inet::Coord destCoord, const inet::Coord sourceCoord, MacNodeId nodeId);
+    double computeAnalyticalPathloss(const inet::Coord destCoord, const inet::Coord sourceCoord, MacNodeId nodeId);
+
+    double computeWinnerB1(const inet::Coord destCoord, const inet::Coord sourceCoord, MacNodeId nodeId);
     /*
      * Compute LOS probability
      *
