@@ -570,12 +570,13 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
             // CR limit calculation
             // determine b
             if (schedulingGrant_ != NULL){
+                LteMode4SchedulingGrant* mode4Grant = check_and_cast<LteMode4SchedulingGrant*>(schedulingGrant_);
                 if (expirationCounter_ > 499){
                     b = 499;
                 } else {
                     b = expirationCounter_;
                 }
-                subchannelsUsed += b / schedulingGrant_->getPeriod();
+                subchannelsUsed += (b / mode4Grant->getPeriod()) * mode4Grant->getNumSubchannels();
             } else {
                 b = 0;
             }
