@@ -152,16 +152,18 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             LteAirFrame* frame = sciFrames_.back();
             std::vector<double> rsrpVector = sciRsrpVectors_.back();
             std::vector<double> rssiVector = sciRssiVectors_.back();
+            std::vector<double> sinrVector = sciSinrVectors_.back();
 
             // Remove it from the vector
             sciFrames_.pop_back();
             sciRsrpVectors_.pop_back();
             sciRssiVectors_.pop_back();
+            sciSinrVectors_.pop_back();
 
             UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(frame->removeControlInfo());
 
             // decode the selected frame
-            decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector);
+            decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector);
 
             emit(sciReceived, sciReceived_);
             emit(sciDecoded, sciDecoded_);
@@ -202,15 +204,17 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 LteAirFrame *frame = tbFrames_.back();
                 std::vector<double> rsrpVector = tbRsrpVectors_.back();
                 std::vector<double> rssiVector = tbRssiVectors_.back();
+                std::vector<double> sinrVector = tbSinrVectors_.back();
 
                 tbFrames_.pop_back();
                 tbRsrpVectors_.pop_back();
                 tbRssiVectors_.pop_back();
+                tbSinrVectors_.pop_back();
 
                 UserControlInfo *lteInfo = check_and_cast<UserControlInfo *>(frame->removeControlInfo());
 
                 // decode the selected frame
-                decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector);
+                decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector);
 
                 emit(tbReceived, tbReceived_);
                 emit(tbDecoded, tbDecoded_);
@@ -296,11 +300,18 @@ void LtePhyVUeMode4::handleAirFrame(cMessage* msg)
         scheduleAt(NOW, d2dDecodingTimer_);
     }
 
-    // store frame, together with related control info
-    frame->setControlInfo(lteInfo);
+    Coord myCoord = getCoord();
+    // Only store frames which are within 1500m over this the interference caused is negligible.
+    if (myCoord.distance(lteInfo->getCoord()) < 1500) {
+        // store frame, together with related control info
+        frame->setControlInfo(lteInfo);
 
-    // Capture the Airframe for decoding later
-    storeAirFrame(frame);
+        // Capture the Airframe for decoding later
+        storeAirFrame(frame);
+    } else {
+        delete lteInfo;
+        delete frame;
+    }
 }
 
 void LtePhyVUeMode4::handleUpperMessage(cMessage* msg)
@@ -387,6 +398,8 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
     RbMap sciRbs;
     if (adjacencyPSCCHPSSCH_)
     {
+        // Adjacent mode
+
         // Setup so SCI gets 2 RBs from the grantedBlocks.
         RbMap::iterator it;
         std::map<Band, unsigned int>::iterator jt;
@@ -425,25 +438,14 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
     }
     else
     {
-        // Setup so SCI gets 2 RBs from the grantedBlocks.
-        RbMap::iterator it;
-        std::map<Band, unsigned int>::iterator jt;
-        int allocatedRbs = 0;
-        //for each Remote unit used to transmit the packet
-        for (it = rbMap.begin(); it != rbMap.end(); ++it) {
-            if (allocatedRbs == 2) {
-                break;
-            }
-            //for each logical band used to transmit the packet
-            for (jt = it->second.begin(); jt != it->second.end(); ++jt) {
-                if (allocatedRbs == 2) {
-                    // Have all the blocks allocated to the SCI so can move on.
-                    break;
-                }
-                // sciRbs[remote][band] = assigned Rb
-                sciRbs[it->first][jt->first] = 1;
-                ++allocatedRbs;
-            }
+        // Non-Adjacent mode
+
+        // Take 2 rbs from the inital RBs available to nodes.
+        int startingRB = sciGrant_->getStartingSubchannel() * 2;
+
+        for (Band b = startingRB; b <= startingRB + 1 ; b++)
+        {
+            sciRbs[MACRO][b] = 1;
         }
     }
 
@@ -1016,22 +1018,27 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
 
     std::vector<double> rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
     // Seems we don't really actually need the enbId, I have set it to 0 as it is referenced but never used for calc
-    std::vector<double> rssiVector = channelModel_->getRSSI(newFrame, newInfo, nodeId_, myCoord, 0, rsrpVector);
+    std::tuple<std::vector<double>, std::vector<double>> rssiSinrVectors = channelModel_->getRSSI_SINR(newFrame, newInfo, nodeId_, myCoord, 0, rsrpVector);
+
+    std::vector<double> rssiVector = get<0>(rssiSinrVectors);
+    std::vector<double> sinrVector = get<1>(rssiSinrVectors);
 
     // Need to be able to figure out which subchannel is associated to the Rbs in this case
     if (newInfo->getFrameType() == SCIPKT){
         sciFrames_.push_back(newFrame);
         sciRsrpVectors_.push_back(rsrpVector);
         sciRssiVectors_.push_back(rssiVector);
+        sciSinrVectors_.push_back(sinrVector);
     }
     else{
         tbFrames_.push_back(newFrame);
         tbRsrpVectors_.push_back(rsrpVector);
         tbRssiVectors_.push_back(rssiVector);
+        tbSinrVectors_.push_back(sinrVector);
     }
 }
 
-void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector)
+void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector, std::vector<double> &sinrVector)
 {
     EV << NOW << " LtePhyVUeMode4::decodeAirFrame - Start decoding..." << endl;
 
@@ -1070,12 +1077,10 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     {
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceSCI, pkt_dist);
-        emit(posX, getCoord().x);
-
 
         if (!transmitting_)
         {
-            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0);
+            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, 0);
 
             sciReceived_ += 1;
 
@@ -1130,6 +1135,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceTB, pkt_dist);
         emit(posX, getCoord().x);
+        emit(posY, getCoord().y);
 
         if(!transmitting_){
 
@@ -1154,7 +1160,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                         //RELAY and NORMAL
                         sciDecodedSuccessfully = true;
                         if (lteInfo->getDirection() == D2D_MULTI)
-                            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, correspondingSCI->getMcs());
+                            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs());
                         else
                             result = channelModel_->error(frame, lteInfo);
                     }

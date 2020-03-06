@@ -67,6 +67,7 @@ void LteMacVUeMode4::initialize(int stage)
         packetDropping_ = par("packetDropping");
         rriLookup_ = par("rriLookup");
         crLimit_ = par("crLimit");
+        adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -639,12 +640,13 @@ double LteMacVUeMode4::calculateChannelOccupancyRatio(int period){
     // CR limit calculation
     // determine b
     if (schedulingGrant_ != NULL){
+        LteMode4SchedulingGrant* mode4Grant = check_and_cast<LteMode4SchedulingGrant*>(schedulingGrant_);
         if (expirationCounter_ > 499){
             b = 499;
         } else {
             b = expirationCounter_;
         }
-        subchannelsUsed += (b / period) * mode4Grant->getNumSubchannels();
+        subchannelsUsed += (b / mode4Grant->getPeriod()) * mode4Grant->getNumSubchannels();
     } else {
         b = 0;
     }
@@ -712,7 +714,7 @@ void LteMacVUeMode4::handleSelfMessage()
         {
             // Gotten to the point of the final tranmission must determine if we reselect or not.
             double randomReReserve = dblrand(1);
-            if (randomReReserve > probResourceKeep_)
+            if (randomReReserve < probResourceKeep_)
             {
                 int expiration = intuniform(5, 15, 3);
                 mode4Grant -> setResourceReselectionCounter(expiration);
@@ -893,11 +895,31 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     // Determine the RBs on which we will send our message
     RbMap grantedBlocks;
     int totalGrantedBlocks = 0;
-    for (int i=initiailSubchannel;i<finalSubchannel;i++)
-    {
-        std::vector<Band> allocatedBands;
-        for (Band b = i * subchannelSize_; b < (i * subchannelSize_) + subchannelSize_ ; b++)
+    if (adjacencyPSCCHPSSCH_){
+        // Adjacent mode just provide the allocated bands
+
+        for (int i=initiailSubchannel;i<finalSubchannel;i++)
         {
+            int initialBand = i * subchannelSize_;
+            for (Band b = initialBand; b < initialBand + subchannelSize_ ; b++)
+            {
+                grantedBlocks[MACRO][b] = 1;
+                ++totalGrantedBlocks;
+            }
+        }
+    } else {
+        // Start at subchannel numsubchannels.
+        // Remove 1 subchannel from each grant.
+        // Account for the two blocks taken for the SCI
+        totalGrantedBlocks += 2;
+        int initialBand;
+        if (initiailSubchannel == 0){
+            // If first subchannel to use need to make sure to add the number of subchannels for the SCI messages
+            initialBand = numSubchannels_ * 2;
+        } else {
+            initialBand = (numSubchannels_ * 2) + (initiailSubchannel * (subchannelSize_ - 2));
+        }
+        for (Band b = initialBand; b < (initialBand + subchannelSize_ - 2) * mode4Grant->getNumSubchannels() ; b++) {
             grantedBlocks[MACRO][b] = 1;
             ++totalGrantedBlocks;
         }
@@ -1075,7 +1097,7 @@ void LteMacVUeMode4::flushHarqBuffers()
             LteHarqProcessTx* selectedProcess = it2->second->getSelectedProcess();
             for (int cw=0; cw<MAX_CODEWORDS; cw++)
             {
-                int pduLength = selectedProcess->getPduLength(cw) * 8 ;
+                int pduLength = selectedProcess->getPduLength(cw) * 8;
                 int minMCS = minMCSPSSCH_;
                 int maxMCS = maxMCSPSSCH_;
                 if (pduLength > 0)

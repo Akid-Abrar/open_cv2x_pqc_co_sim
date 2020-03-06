@@ -91,6 +91,16 @@ std::vector<double> LteDummyChannelModel::getRSSI(LteAirFrame *frame, UserContro
     return tmp;
 }
 
+std::tuple<std::vector<double>, std::vector<double>> LteDummyChannelModel::getRSSI_SINR(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector)
+{
+    std::vector<double> tmp1;
+    std::vector<double> tmp2;
+    tmp1.push_back(1000);
+    tmp2.push_back(1000);
+
+    return std::make_tuple(tmp1, tmp2);
+}
+
 std::vector<double> LteDummyChannelModel::getSIR(LteAirFrame *frame, UserControlInfo* lteInfo)
 {
     std::vector<double> tmp;
@@ -176,6 +186,33 @@ bool LteDummyChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* 
         return false;
     }
         // Signal is strong enough, receive this Signal
+    EV << "This is your lucky day (" << er << " > " << totalPer
+       << ") -> Receive AirFrame." << endl;
+    return true;
+}
+
+bool LteDummyChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo,std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs)
+{
+    // Number of RTX
+    unsigned char nTx = lteInfo->getTxNumber();
+    //Consistency check
+    if (nTx == 0)
+        throw cRuntimeError("Number of tx should not be 0");
+
+    // compute packet error rate according to number of retransmission
+    // and the harq reduction parameter
+    double totalPer = per_ * pow(harqReduction_, nTx - 1);
+    //Throw random variable
+    double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
+
+    if (er <= totalPer)
+    {
+        EV << "This is NOT your lucky day (" << er << " < " << totalPer
+           << ") -> do not receive." << endl;
+        // Signal too weak, we can't receive it
+        return false;
+    }
+    // Signal is strong enough, receive this Signal
     EV << "This is your lucky day (" << er << " > " << totalPer
        << ") -> Receive AirFrame." << endl;
     return true;

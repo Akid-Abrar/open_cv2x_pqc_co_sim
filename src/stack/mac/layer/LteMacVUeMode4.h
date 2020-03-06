@@ -63,6 +63,7 @@ protected:
    bool packetDropping_;
    bool rriLookup_;
    bool crLimit_;
+   bool adjacencyPSCCHPSSCH_;
    int missedTransmissions_;
 
    double remainingTime_;
