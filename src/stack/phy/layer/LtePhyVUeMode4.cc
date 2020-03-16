@@ -707,7 +707,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                     }
                 }
                 // Increase J to search from the next available subchannel
-                j++;
+                j += grantLength;
             }
         }
         z++;
