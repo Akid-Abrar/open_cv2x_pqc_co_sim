@@ -1246,7 +1246,7 @@ void LteMacVUeMode4::flushHarqBuffers()
                             }
                         }
 
-                        if (rri != mode4Grant->getPeriod()) {
+                        if (rri != mode4Grant->getPeriod()/100) {
                             mode4Grant->setPeriod(rri * 100);
                             periodCounter_ = rri * 100;
 
@@ -1257,7 +1257,7 @@ void LteMacVUeMode4::flushHarqBuffers()
                                     int expiration = intuniform(5, 15, 3);
                                     mode4Grant->setResourceReselectionCounter(expiration);
                                     mode4Grant->setFirstTransmission(true);
-                                    expirationCounter_ = expiration * resourceReservationInterval_;
+                                    expirationCounter_ = expiration * resourceReservationInterval_ * 100;
                                 } else {
                                     emit(grantBreak, 1);
                                     mode4Grant->setExpiration(0);
