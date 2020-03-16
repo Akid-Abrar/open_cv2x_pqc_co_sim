@@ -63,6 +63,7 @@ protected:
    bool packetDropping_;
    bool rriLookup_;
    bool crLimit_;
+   bool dccMechanism_;
    bool adjacencyPSCCHPSSCH_;
    int missedTransmissions_;
 
@@ -75,6 +76,10 @@ protected:
 
    std::vector<std::unordered_map<std::string, double>> cbrPSSCHTxConfigList_;
    std::vector<std::unordered_map<std::string, double>> cbrLevels_;
+
+   std::vector<std::tuple<simtime_t, int>> cbrUpwardTransitions_;
+   std::vector<std::tuple<simtime_t, int>> cbrDownwardTransitions_;
+
    std::unordered_map<double, int> previousTransmissions_;
    std::vector<double> validResourceReservationIntervals_;
 

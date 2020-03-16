@@ -1,4 +1,4 @@
-// 
+//
 //                           SimuLTE
 // 
 // This file is part of a software released under the license included in file
@@ -385,6 +385,7 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
 	    bool packetDropping = default(false);
 	    bool rriLookup = default(false);
 	    bool crLimit = default(false);
+	    bool dccMechanism = default(false);
 	    bool adjacencyPSCCHPSSCH = default(true);
 
 	    bool usePreconfiguredTxParams = default(false);
