@@ -637,10 +637,9 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
 
                             k += grantLength;
                         }
-                    } else {
-                        // Increment K to the next subchannel
-                        k++;
                     }
+                     // Increment K to the next subchannel
+                     k++;
                 }
 
                 if (subchannelReserved) {
