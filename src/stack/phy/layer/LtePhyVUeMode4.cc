@@ -478,7 +478,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
        << " LtePhyVUeMode4::computeCSRs - eliminating CSRS which were not sensed in sensing window and those above the threshold ..."
        << endl;
     int pRsvpTx = grant->getPeriod();
-    unsigned int grantLength = grant->getNumSubchannels();
+    int grantLength = grant->getNumSubchannels();
     int cResel = grant->getResourceReselectionCounter();
     int maxLatency = grant->getMaximumLatency();
     std::vector<double> allowedRRIs = grant->getPossibleRRIs();
@@ -614,7 +614,6 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                 // i.e. SCI reserves subchannels 2 & 3, if we check 1 & 2 and it is above the threshold then we count it
                 // as disallowed, but when we move to check subchannel 3 the same will happen and we will count it again
                 // this is incorrect. Instead move to the end of the grant to avoid this i.e. never check 3.
-                bool overReachingGrant = false;
 
                 bool subchannelReserved = false;
 
@@ -626,10 +625,6 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                 int k = j;
                 while (k < j + grantLength) {
                     if (sensingWindow_[translatedZ][k]->getReserved()) {
-                        // Get the SCI and all the necessary information
-
-                        int lengthInSubchannels = sensingWindow_[translatedZ][k]->getSciLength();
-
                         // If RRI = 0 then we know the next resource is not reserved.
                         if (sensingWindow_[translatedZ][k]->getResourceReservationInterval() > 0) {
                             subchannelReserved = true;
@@ -637,20 +632,15 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                             priorities.push_back(sensingWindow_[translatedZ][k]->getPriority());
                             rris.push_back(sensingWindow_[translatedZ][k]->getResourceReservationInterval());
                             int totalRSRP = 0;
-                            for (int l = k; l < k + lengthInSubchannels; l++) {
+                            // Specifically the average should be for the part of the subchannel we will end up using
+                            for (int l = k; l < k + grantLength; l++) {
                                 totalRSRP += sensingWindow_[translatedZ][l]->getAverageRSRP();
                             }
-                            averageRSRPs.push_back(totalRSRP / lengthInSubchannels);
+                            averageRSRPs.push_back(totalRSRP / grantLength);
                         }
-
-                        k += lengthInSubchannels;
-                        if (k > j + grantLength) {
-                            overReachingGrant = true;
-                        }
-
-                    } else {
-                        k++;
                     }
+                    // Increment K to the next subchannel
+                    k++;
                 }
 
                 if (subchannelReserved) {
@@ -709,11 +699,8 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                         }
                     }
                 }
-                if (overReachingGrant) {
-                    j = k;
-                } else {
-                    j += grantLength;
-                }
+                // Increase J to search from the next available subchannel
+                j++;
             }
         }
         z++;
