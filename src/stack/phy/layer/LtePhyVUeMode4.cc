@@ -632,8 +632,6 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                         if (sensingWindow_[translatedZ][k]->getResourceReservationInterval() > 0) {
                             subchannelReserved = true;
 
-                            int lengthInSubchannels = sensingWindow_[translatedZ][k]->getSciLength();
-
                             priorities.push_back(sensingWindow_[translatedZ][k]->getPriority());
                             rris.push_back(sensingWindow_[translatedZ][k]->getResourceReservationInterval());
                             int totalRSRP = 0;
