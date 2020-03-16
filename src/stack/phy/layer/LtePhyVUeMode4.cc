@@ -610,11 +610,6 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                 std::vector<int> priorities;
                 std::vector<int> rris;
 
-                // If an SCI reserves subchannels spanning a selection then use this to avoid double counting it.
-                // i.e. SCI reserves subchannels 2 & 3, if we check 1 & 2 and it is above the threshold then we count it
-                // as disallowed, but when we move to check subchannel 3 the same will happen and we will count it again
-                // this is incorrect. Instead move to the end of the grant to avoid this i.e. never check 3.
-
                 bool subchannelReserved = false;
 
                 if (j + grantLength > numSubchannels_) {
@@ -629,18 +624,23 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                         if (sensingWindow_[translatedZ][k]->getResourceReservationInterval() > 0) {
                             subchannelReserved = true;
 
+                            int lengthInSubchannels = sensingWindow_[translatedZ][k]->getSciLength();
+
                             priorities.push_back(sensingWindow_[translatedZ][k]->getPriority());
                             rris.push_back(sensingWindow_[translatedZ][k]->getResourceReservationInterval());
                             int totalRSRP = 0;
                             // Specifically the average should be for the part of the subchannel we will end up using
-                            for (int l = k; l < k + grantLength; l++) {
+                            for (int l = j; l < j + grantLength; l++) {
                                 totalRSRP += sensingWindow_[translatedZ][l]->getAverageRSRP();
                             }
                             averageRSRPs.push_back(totalRSRP / grantLength);
+
+                            k += grantLength;
                         }
+                    } else {
+                        // Increment K to the next subchannel
+                        k++;
                     }
-                    // Increment K to the next subchannel
-                    k++;
                 }
 
                 if (subchannelReserved) {
