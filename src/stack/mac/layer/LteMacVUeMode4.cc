@@ -1222,12 +1222,12 @@ void LteMacVUeMode4::flushHarqBuffers()
                         else
                             cbrMaxMCS = (int)got->second;
 
-                        int rri = mode4Grant->getPeriod()/100;
+                        int rri = mode4Grant->getPeriod();
                         if (rriLookup_) {
                             // RRI Adaptation based on lookup table similar to DCC
                             got = cbrMap.find("allowedRRI");
                             if (got != cbrMap.end()) {
-                                rri = (int) got->second;
+                                rri = (int) got->second * 100;
                             }
                         }
                         else if (crLimit_) {
@@ -1246,9 +1246,9 @@ void LteMacVUeMode4::flushHarqBuffers()
                             }
                         }
 
-                        if (rri != mode4Grant->getPeriod()/100) {
-                            mode4Grant->setPeriod(rri * 100);
-                            periodCounter_ = rri * 100;
+                        if (rri != mode4Grant->getPeriod()) {
+                            mode4Grant->setPeriod(rri);
+                            periodCounter_ = rri;
 
                             if (periodCounter_ > expirationCounter_) {
                                 // Gotten to the point of the final transmission must determine if we reselect or not.
@@ -1257,6 +1257,7 @@ void LteMacVUeMode4::flushHarqBuffers()
                                     int expiration = intuniform(5, 15, 3);
                                     mode4Grant->setResourceReselectionCounter(expiration);
                                     mode4Grant->setFirstTransmission(true);
+                                    // This remains at the default RRI this ensures that grants don't live overly long if they return to lower RRIs
                                     expirationCounter_ = expiration * resourceReservationInterval_ * 100;
                                 } else {
                                     emit(grantBreak, 1);
