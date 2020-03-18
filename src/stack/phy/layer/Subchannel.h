@@ -139,7 +139,7 @@ class Subchannel
         {
             auto it = rsrpValues.find(band);
             if (it != rsrpValues.end()) {
-                if (it->second > rsrpValue){
+                if (it->second < rsrpValue){
                     it->second = rsrpValue;
                 }
             } else {
@@ -150,7 +150,7 @@ class Subchannel
         {
             auto it = rssiValues.find(band);
             if (it != rssiValues.end()) {
-                if (it->second > rssiValue){
+                if (it->second < rssiValue){
                     it->second = rssiValue;
                 }
             } else {

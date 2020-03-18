@@ -611,7 +611,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                 std::vector<int> rris;
 
                 bool subchannelReserved = false;
-
+                bool subchannelUsed = false;
                 if (j + grantLength > numSubchannels_) {
                     // We cannot fill this grant in this subframe and should move to the next one
                     break;
@@ -624,25 +624,26 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                         if (sensingWindow_[translatedZ][k]->getResourceReservationInterval() > 0) {
                             subchannelReserved = true;
 
-                            int lengthInSubchannels = sensingWindow_[translatedZ][k]->getSciLength();
-
                             priorities.push_back(sensingWindow_[translatedZ][k]->getPriority());
                             rris.push_back(sensingWindow_[translatedZ][k]->getResourceReservationInterval());
-                            int totalRSRP = 0;
+                            double totalRSRPLinear = 0;
                             // Specifically the average should be for the part of the subchannel we will end up using
                             for (int l = j; l < j + grantLength; l++) {
-                                totalRSRP += sensingWindow_[translatedZ][l]->getAverageRSRP();
+                                if (sensingWindow_[translatedZ][l]->getAverageRSRP() != -std::numeric_limits<double>::infinity()) {
+                                    totalRSRPLinear += dBmToLinear(sensingWindow_[translatedZ][l]->getAverageRSRP());
+                                }
                             }
-                            averageRSRPs.push_back(totalRSRP / grantLength);
-
+                            if (totalRSRPLinear != 0) {
+                                subchannelUsed = true;
+                                averageRSRPs.push_back(linearToDBm(totalRSRPLinear/grantLength));
+                            }
                             k += grantLength;
                         }
                     }
                      // Increment K to the next subchannel
                      k++;
                 }
-
-                if (subchannelReserved) {
+                if (subchannelReserved && subchannelUsed) {
                     subchannelReserved = false;
 
                     int highestThreshold = 0;
@@ -1163,6 +1164,11 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 previousTransmissionTimes_[lteInfo->getSourceId()] = NOW;
             }
             if (foundCorrespondingSci) {
+                // Need to get the map only for the RBs used for transmission
+                RbMap::iterator mt;
+                std::map<Band, unsigned int>::iterator nt;
+                RbMap usedRbs = lteInfo->getGrantedBlocks();
+
                 // Now need to find the associated Subchannels, record the RSRP and RSSI for the message and go from there.
                 // Need to again do the RIV steps
                 std::tuple<int, int> indexAndLength = decodeRivValue(correspondingSCI, sciInfo);
@@ -1171,13 +1177,25 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
                 std::vector <Subchannel *> currentSubframe = sensingWindow_[sensingWindowFront_];
                 for (int i = subchannelIndex; i < subchannelIndex + lengthInSubchannels; i++) {
-                    Subchannel* currentSubchannel = currentSubframe[i];
+                    Subchannel *currentSubchannel = currentSubframe[i];
                     std::vector<Band>::iterator lt;
                     std::vector <Band> allocatedBands = currentSubchannel->getOccupiedBands();
                     for (lt = allocatedBands.begin(); lt != allocatedBands.end(); lt++) {
-                        // Record RSRP and RSSI for this band
-                        currentSubchannel->addRsrpValue(rsrpVector[(*lt)], (*lt));
-                        currentSubchannel->addRssiValue(rssiVector[(*lt)], (*lt));
+                        // Record RSRP and RSSI for this band depending if it was used or not
+                        bool used = false;
+
+                        //for each Remote unit used to transmit the packet
+                        for (mt = usedRbs.begin(); mt != usedRbs.end(); ++mt) {
+                            //for each logical band used to transmit the packet
+                            for (nt = mt->second.begin(); nt != mt->second.end(); ++nt) {
+                                if (nt->first == *lt) {
+                                    currentSubchannel->addRsrpValue(rsrpVector[(*lt)], (*lt));
+                                    currentSubchannel->addRssiValue(rssiVector[(*lt)], (*lt));
+                                    used = true;
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
                 // Need to delete the message now
