@@ -1232,17 +1232,15 @@ void LteMacVUeMode4::flushHarqBuffers()
                         }
                         else if (crLimit_) {
                             got = cbrMap.find("cr-Limit");
-                            if (channelOccupancyRatio_ > got->second) {
-                                // Calculate an RRI which ensures the channelOccupancyRatio reduces to the point that
-                                // it remains within the cr-limit
-                                double newOccupancyRatio = channelOccupancyRatio_;
-
-                                int i = 0;
-                                while (newOccupancyRatio > got->second && i < validResourceReservationIntervals_.size()){
-                                    rri = (int) validResourceReservationIntervals_.at(i) * 100;
-                                    newOccupancyRatio = calculateChannelOccupancyRatio(rri);
-                                    i++;
-                                }
+                            // Calculate an RRI which ensures the channelOccupancyRatio reduces to the point that
+                            // it remains within the cr-limit
+                            int i = 0;
+                            double newOccupancyRatio = channelOccupancyRatio_;
+                            rri = (int) validResourceReservationIntervals_.at(i) * 100;
+                            while (newOccupancyRatio > got->second && i < validResourceReservationIntervals_.size()){
+                                rri = (int) validResourceReservationIntervals_.at(i) * 100;
+                                newOccupancyRatio = calculateChannelOccupancyRatio(rri);
+                                i++;
                             }
                         }
 
