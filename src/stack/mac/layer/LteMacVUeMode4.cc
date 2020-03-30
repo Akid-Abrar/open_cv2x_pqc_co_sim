@@ -1245,16 +1245,14 @@ void LteMacVUeMode4::flushHarqBuffers()
                         }
 
                         if (rri != mode4Grant->getPeriod()) {
-                            mode4Grant->setPeriod(rri);
                             periodCounter_ = rri;
 
                             if (periodCounter_ > expirationCounter_) {
                                 // Gotten to the point of the final transmission must determine if we reselect or not.
                                 double randomReReserve = dblrand(1);
                                 if (randomReReserve > probResourceKeep_) {
-                                    int expiration = intuniform(5, 15, 3);
+                                    int expiration = intuniform(rri/100, 15, 3);
                                     mode4Grant->setResourceReselectionCounter(expiration);
-                                    mode4Grant->setFirstTransmission(true);
                                     // This remains at the default RRI this ensures that grants don't live overly long if they return to lower RRIs
                                     expirationCounter_ = expiration * resourceReservationInterval_ * 100;
                                 } else {
