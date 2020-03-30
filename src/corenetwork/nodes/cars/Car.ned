@@ -22,7 +22,7 @@ import inet.transportlayer.udp.UDP;
 import lte.stack.phy.ILteNic;
 import lte.stack.phy.LteNicUe;
 import lte.stack.phy.LteNicUeD2D;
-import lte.stack.phy.LteNicUeMode4D2D;
+import lte.stack.phy.LteNicVUeMode4;
 
 // 
 // Car Module

@@ -10,6 +10,7 @@
 
 #include <omnetpp.h>
 #include "corenetwork/binder/PhyPisaData.h"
+#include "common/LteCommon.h"
 
 double blerCurvesNew[3][15][49]={
         {
@@ -2948,6 +2949,7 @@ static const double PscchAwgnSisoBlerCurveXaxis[1][3] = {
   {-6.2,1.2,0.2}
 };
 
+
 /**
  * BLER values for the physical sidelink control channel
  * One dimension version of original table of [116][33]
@@ -2955,6 +2957,31 @@ static const double PscchAwgnSisoBlerCurveXaxis[1][3] = {
  */
 static const double PscchAwgnSisoBlerCurveYaxis[38] = {
   1,0.9883,0.9784,0.9721,0.9631,0.9517,0.9325,0.9133,0.8783,0.849,0.8048,0.7565,0.6958,0.6325,0.5703,0.5049,0.4273,0.3733,0.2989,0.2437,0.1932,0.1467,0.1126,0.0785,0.0592,0.0423,0.0265,0.0186,0.011,0.0072,0.0031,0.0026,0.0011,0.0008,0.0003,0.0002,0.0001,0
+};
+
+
+/**
+ * SNR/SINR table associating SNR/SINR to BLER values for
+ * 190 Byte packet, QPSK r=0.7 (MCS 9), Vr = 280 km/h - From R1-160284, DMRS enhancement of V2V in 3GPP
+ */
+static const double analyticalBlerCurveXaxis9MCS[12] = {
+  0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20+1e-6
+};
+
+static const double blerCurvesAnalytical9MCS[12] = {
+  1, 0.9, 0.7, 0.4, 0.13, 0.045, 0.017, 0.007, 1e-3, 1e-3, 1e-3, 1e-4
+};
+
+/**
+ * SNR/SINR table associating SNR/SINR to BLER values for
+ * 190 Byte packet, QPSK r=0.5 (MCS 7), Vr = 280 km/h - From R1-160284, DMRS enhancement of V2V in 3GPP
+ */
+static const double analyticalBlerCurveXaxis7MCS[13] = {
+  -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20+1e-6
+};
+
+static const double blerCurvesAnalytical7MCS[13] = {
+  1, 0.9, 0.7, 0.3, 0.09, 0.02, 0.002, 1e-3, 1e-3, 1e-3, 1e-3, 1e-3, 1e-4
 };
 
 /**
@@ -3001,23 +3028,23 @@ double
 PhyPisaData::GetBlerValue (const double (*xtable)[XTABLE_SIZE], const double (*ytable), const uint16_t ysize, uint16_t mcs, uint8_t harq, double sinr)
 {
 //  NS_LOG_FUNCTION (mcs << (uint16_t) harq << sinr);
-  double sinrDb = 10 * std::log10 (sinr);
+  double sinrLin = dBToLinear(sinr);
   int16_t rIndex = GetRowIndex (mcs, harq);
   double bler = 1;
 
 //  NS_LOG_DEBUG ("sinrDb=" << sinrDb << " min=" << xtable[rIndex][0] << " max=" << xtable[rIndex][1]);
-  if (sinrDb < xtable[rIndex][0])
+  if (sinr < xtable[rIndex][0])
     {
       bler = 1;
     }
-  else if (sinrDb  > xtable[rIndex][1])
+  else if (sinr  > xtable[rIndex][1])
     {
       bler = 0;
     }
   else
     {
-      int16_t index1 = std::floor ((sinrDb - xtable[rIndex][0]) / xtable[rIndex][2]);
-      int16_t index2 = std::ceil ((sinrDb - xtable[rIndex][0]) / xtable[rIndex][2]);
+      int16_t index1 = std::floor ((sinr - xtable[rIndex][0]) / xtable[rIndex][2]);
+      int16_t index2 = std::ceil ((sinr - xtable[rIndex][0]) / xtable[rIndex][2]);
       if (index1 != index2)
         {
           //interpolate
@@ -3025,7 +3052,7 @@ PhyPisaData::GetBlerValue (const double (*xtable)[XTABLE_SIZE], const double (*y
           double sinr2 = std::pow (10, (xtable[rIndex][0] + index2 * xtable[rIndex][2]) / 10);
           double bler1 = ytable[rIndex * ysize + index1];
           double bler2 = ytable[rIndex * ysize + index2];
-          bler = bler1 + (bler2 - bler1) * (sinr - sinr1) / (sinr2 - sinr1);
+          bler = bler1 + (bler2 - bler1) * (sinrLin - sinr1) / (sinr2 - sinr1);
         }
       else
         {
@@ -3033,6 +3060,70 @@ PhyPisaData::GetBlerValue (const double (*xtable)[XTABLE_SIZE], const double (*y
         }
     }
   return bler;
+}
+
+double
+PhyPisaData::GetBlerAnalytical(uint16_t mcs, double sinr)
+{
+    double bler = 0;
+    // Assume MCS = 9
+    if (mcs == 7){
+        if (sinr < analyticalBlerCurveXaxis7MCS[0]){
+            bler = 1;
+        }
+        else if (sinr > analyticalBlerCurveXaxis7MCS[12]){
+            bler = 1e-4;
+        }
+        else{
+            int lastSinr=0;
+            int correctIndex=-1;
+            for(int i=0; i<12; i++){
+                if (sinr == analyticalBlerCurveXaxis7MCS[i]){
+                    correctIndex=i;
+                    break;
+                } else if (sinr > analyticalBlerCurveXaxis7MCS[i]){
+                    lastSinr=i;
+                }
+            }
+            if (correctIndex > 0){
+                bler = blerCurvesAnalytical7MCS[correctIndex];
+            } else {
+                double sinr1 = analyticalBlerCurveXaxis7MCS[lastSinr];
+                double sinr2 = analyticalBlerCurveXaxis7MCS[lastSinr+1];
+                double bler1 = blerCurvesAnalytical7MCS[lastSinr];
+                double bler2 = blerCurvesAnalytical7MCS[lastSinr+1];
+                bler = bler1 + (bler2 - bler1) * (sinr - sinr1) / (sinr2 - sinr1);
+            }
+        }
+    } else {
+        if (sinr < analyticalBlerCurveXaxis9MCS[0]){
+            bler = 1;
+        }
+        else if (sinr > analyticalBlerCurveXaxis9MCS[11])
+        {
+            bler = 1e-4;
+        } else {
+            int lastSinr=0;
+            int correctIndex=-1;
+            for (int i=0; i<12; i++){
+                if (sinr == analyticalBlerCurveXaxis9MCS[i]){
+                    correctIndex=i;
+                    break;
+                } else if (sinr > analyticalBlerCurveXaxis9MCS[i]){
+                    lastSinr=i;
+                }
+            } if (correctIndex > 0){
+                bler = blerCurvesAnalytical9MCS[correctIndex];
+            } else {
+                double sinr1 = analyticalBlerCurveXaxis9MCS[lastSinr];
+                double sinr2 = analyticalBlerCurveXaxis9MCS[lastSinr+1];
+                double bler1 = blerCurvesAnalytical9MCS[lastSinr];
+                double bler2 = blerCurvesAnalytical9MCS[lastSinr+1];
+                bler = bler1 + (bler2 - bler1) * (sinr - sinr1) / (sinr2 - sinr1);
+            }
+        }
+    }
+    return bler;
 }
 
 double
@@ -3156,7 +3247,7 @@ PhyPisaData::GetPsschBler (LteFadingModel fadingChannel, LteTxMode txmode, uint1
           ysize = PUSCH_AWGN_SIZE;
           break;
         default:
-            throw new cRuntimeError("Transmit mode %i not supported in AWGN channel", txmode );
+            throw new cRuntimeError("Transmit mode %i not supported in AWGN channel", txmode);
         }
       break;
     default:
@@ -3164,14 +3255,7 @@ PhyPisaData::GetPsschBler (LteFadingModel fadingChannel, LteTxMode txmode, uint1
     }
 
   TbErrorStats_t tbStat;
-//  if (harqHistory.size () == 0)
-//    {
-  tbStat = GetBler (xtable, ytable, ysize, mcs, 0, 0,  sinr);
-//    }
-//  else
-//    {
-//      tbStat = GetBler (xtable, ytable, ysize, mcs, harqHistory.size (), harqHistory[harqHistory.size () - 1].m_sinr,  sinr);
-//    }
+  tbStat = GetBler (xtable, ytable, ysize, mcs, 0, 0, sinr);
 
   return tbStat.tbler;
 }

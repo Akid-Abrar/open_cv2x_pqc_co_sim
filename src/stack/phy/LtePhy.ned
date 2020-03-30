@@ -75,7 +75,7 @@ simple LtePhyUe extends LtePhyBase {
 simple LtePhyUeD2D extends LtePhyUe {
      parameters:
          @class("LtePhyUeD2D");
-         double d2dTxPower =default(26);
+         double d2dTxPower =default(23);
          bool d2dMulticastCaptureEffect = default(true);
          string d2dMulticastCaptureEffectFactor = default("RSRP");  // or distance
          
@@ -94,31 +94,41 @@ simple LtePhyVUeMode4 extends LtePhyUeD2D {
 	    int subchannelSize = default(5);
 	    int selectionWindowStartingSubframe = default(1);
 	    int shapeFactor = default(6);
-	    
+	    int thresholdRSSI = default(22);
+
 	    @signal[cbr];
  		@statistic[cbr](title="Channel Busy Ratio"; source="cbr"; record=mean,vector);
  		@signal[sciReceived];
-		@statistic[sciReceived](title="Number of received SCIs"; source="sciReceived"; record=sum,vector);
+		@statistic[sciReceived](title="Number of received sci"; source="sciReceived"; record=sum,vector);
 		@signal[sciDecoded];
-		@statistic[sciDecoded](title="Number of SCIs successfully decoded"; source="sciDecoded"; record=sum,vector);
+		@statistic[sciDecoded](title="Number of sci successfully decoded"; source="sciDecoded"; record=sum,vector);
 		@signal[sciNotDecoded];
-        @statistic[sciNotDecoded](title="Number of SCIs successfully decoded"; source="sciNotDecoded"; record=sum,vector);
+        @statistic[sciNotDecoded](title="Number of sci successfully decoded"; source="sciNotDecoded"; record=sum,vector);
+
 		@signal[sciSent];
-		@statistic[sciSent](title="Number of SCIs sent"; source="sciSent"; record=sum,vector);
+		@statistic[sciSent](title="Number of sci sent"; source="sciSent"; record=sum,vector);
 		@signal[tbSent];
-		@statistic[tbSent](title="Number of TBs sent"; source="tbSent"; record=sum,vector);
+		@statistic[tbSent](title="Number of tb sent"; source="tbSent"; record=sum,vector);
+		@signal[subchannelSent];
+		@statistic[subchannelSent](title="starting Subchannel used for sent message"; source="subchannelSent"; record=sum,vector);
+		@signal[subchannelsUsedToSend];
+		@statistic[subchannelsUsedToSend](title="Number of subchannels used for message"; source="subchannelsUsedToSend"; record=sum,vector);
+
 		@signal[tbReceived];
-		@statistic[tbReceived](title="Number of TBs received"; source="tbReceived"; record=sum,vector);
+		@statistic[tbReceived](title="Number of tb received"; source="tbReceived"; record=sum,vector);
 		@signal[tbDecoded];
 		@statistic[tbDecoded](title="Number of tb Decoded"; source="tbDecoded"; record=sum,vector);
 		@signal[tbFailedDueToNoSCI];
-		@statistic[tbFailedDueToNoSCI](title="Number of Tbs not decoded due to no SCI"; source="tbFailedDueToNoSCI"; record=sum,vector);
+		@statistic[tbFailedDueToNoSCI](title="Number of tb not decoded due to no SCI"; source="tbFailedDueToNoSCI"; record=sum,vector);
 		@signal[tbFailedButSCIReceived];
 		@statistic[tbFailedButSCIReceived](title="Number of failed TBs with a decoded SCI"; source="tbFailedButSCIReceived"; record=sum,vector);
 		@signal[tbAndSCINotReceived];
 		@statistic[tbAndSCINotReceived](title="Number of failed TBs with a failed SCI"; source="tbAndSCINotReceived"; record=sum,vector);
 		@signal[threshold];
 		@statistic[threshold](title="Increase in RSRP needed to find csr"; source="threshold"; record=mean,vector);
+
+		@signal[senderID];
+		@statistic[senderID](title="ID of node who sent message"; source="senderID"; record=vector);
 
         @signal[sciFailedHalfDuplex];
         @statistic[sciFailedHalfDuplex](title="Number of failed SCIs due to Half Duplex"; source="sciFailedHalfDuplex"; record=sum,vector);
@@ -138,6 +148,18 @@ simple LtePhyVUeMode4 extends LtePhyUeD2D {
 		@statistic[txRxDistanceSCI](title="Distance between transmitter and receiver"; source="txRxDistanceSCI"; record=mean,vector);
 		@signal[txRxDistanceTB];
         @statistic[txRxDistanceTB](title="Distance between transmitter and receiver"; source="txRxDistanceTB"; record=mean,vector);
+
+        @signal[subchannelReceived];
+        @statistic[subchannelReceived](title="Initial Subchannel on which packet is received"; source="subchannelReceived"; record=mean,vector);
+        @signal[subchannelsUsed];
+        @statistic[subchannelsUsed](title="Number of Subchannels used for the received packet"; source="subchannelsUsed"; record=mean, vector);
+
+        @signal[interPacketDelay];
+        @statistic[interPacketDelay](title="Delay between packet receptions from a node"; source="interPacketDelay"; record=mean,vector);
+        @signal[posX];
+        @statistic[posX](title="X position of node (at reception time)"; source="posX"; record=mean, vector);
+        @signal[posY];
+        @statistic[posY](title="Y position of node (at reception time)"; source="posY"; record=mean, vector);
 }
 
 // 

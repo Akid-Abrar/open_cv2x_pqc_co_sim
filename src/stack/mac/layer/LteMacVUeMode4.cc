@@ -34,7 +34,6 @@
 #include "inet/common/ModuleAccess.h"
 #include "inet/networklayer/ipv4/IPv4InterfaceData.h"
 #include "stack/mac/amc/LteMcs.h"
-#include <random>
 #include <map>
 
 Define_Module(LteMacVUeMode4);
@@ -55,7 +54,6 @@ void LteMacVUeMode4::initialize(int stage)
 
     if (stage == inet::INITSTAGE_LOCAL)
     {
-        generator_.seed(rand_device_());
         parseUeTxConfig(par("txConfig").xmlValue());
         parseCbrTxConfig(par("txConfig").xmlValue());
         parseRriConfig(par("txConfig").xmlValue());
@@ -66,24 +64,31 @@ void LteMacVUeMode4::initialize(int stage)
         usePreconfiguredTxParams_ = par("usePreconfiguredTxParams");
         reselectAfter_ = par("reselectAfter");
         useCBR_ = par("useCBR");
+        packetDropping_ = par("packetDropping");
+        adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
         missedTransmissions_=0;
 
+        expiredGrant_ = false;
+
         // Register the necessary signals for this simulation
 
-        generatedGrants = registerSignal("generatedGrants");
-        grantBreak = registerSignal("grantBreak");
-        grantBreakTiming = registerSignal("grantBreakTiming");
-        grantBreakSize = registerSignal("grantBreakSize");
-        droppedTimeout = registerSignal("droppedTimeout");
-        grantBreakMissedTrans = registerSignal("grantBreakMissedTrans");
-        missedTransmission = registerSignal("missedTransmission");
-        selectedMCS = registerSignal("selectedMCS");
-        selectedNumSubchannels = registerSignal("selectedNumSubchannels");
-        maximumCapacity = registerSignal("maximumCapacity");
-        grantRequests = registerSignal("grantRequests");
+        grantStartTime          = registerSignal("grantStartTime");
+        grantBreak              = registerSignal("grantBreak");
+        grantBreakTiming        = registerSignal("grantBreakTiming");
+        grantBreakSize          = registerSignal("grantBreakSize");
+        droppedTimeout          = registerSignal("droppedTimeout");
+        grantBreakMissedTrans   = registerSignal("grantBreakMissedTrans");
+        missedTransmission      = registerSignal("missedTransmission");
+        selectedMCS             = registerSignal("selectedMCS");
+        selectedSubchannelIndex = registerSignal("selectedSubchannelIndex");
+        selectedNumSubchannels  = registerSignal("selectedNumSubchannels");
+        maximumCapacity         = registerSignal("maximumCapacity");
+        grantRequests           = registerSignal("grantRequests");
+        packetDropDCC           = registerSignal("packetDropDCC");
+        macNodeID               = registerSignal("macNodeID");
     }
     else if (stage == inet::INITSTAGE_NETWORK_LAYER_3)
     {
@@ -99,6 +104,8 @@ void LteMacVUeMode4::initialize(int stage)
 
         // LTE UE Section
         nodeId_ = getAncestorPar("macNodeId");
+
+        emit(macNodeID, nodeId_);
 
         /* Insert UeInfo in the Binder */
         ueInfo_ = new UeInfo();
@@ -137,38 +144,38 @@ void LteMacVUeMode4::parseUeTxConfig(cXMLElement* xmlConfig)
     ParameterMap::iterator it = params.find("minMCS-PSSCH");
     if (it != params.end())
     {
-        minMCSPSSCH_ = it->second;
+        minMCSPSSCH_ = (int)it->second;
     }
     else
-        minMCSPSSCH_ = par("minMCSPSSCH");
+        minMCSPSSCH_ = (int)par("minMCSPSSCH");
     it = params.find("maxMCS-PSSCH");
     if (it != params.end())
     {
-        maxMCSPSSCH_ = it->second;
+        maxMCSPSSCH_ = (int)it->second;
     }
     else
-        maxMCSPSSCH_ = par("minMCSPSSCH");
+        maxMCSPSSCH_ = (int)par("minMCSPSSCH");
     it = params.find("minSubchannel-NumberPSSCH");
     if (it != params.end())
     {
-        minSubchannelNumberPSSCH_ = it->second;
+        minSubchannelNumberPSSCH_ = (int)it->second;
     }
     else
-        minSubchannelNumberPSSCH_ = par("minSubchannelNumberPSSCH");
+        minSubchannelNumberPSSCH_ = (int)par("minSubchannelNumberPSSCH");
     it = params.find("maxSubchannel-NumberPSSCH");
     if (it != params.end())
     {
-        maxSubchannelNumberPSSCH_ = it->second;
+        maxSubchannelNumberPSSCH_ = (int)it->second;
     }
     else
-        maxSubchannelNumberPSSCH_ = par("maxSubchannelNumberPSSCH");
+        maxSubchannelNumberPSSCH_ = (int)par("maxSubchannelNumberPSSCH");
     it = params.find("allowedRetxNumberPSSCH");
     if (it != params.end())
     {
-        allowedRetxNumberPSSCH_ = it->second;
+        allowedRetxNumberPSSCH_ = (int)it->second;
     }
     else
-        allowedRetxNumberPSSCH_ = par("allowedRetxNumberPSSCH");
+        allowedRetxNumberPSSCH_ = (int)par("allowedRetxNumberPSSCH");
 }
 
 void LteMacVUeMode4::parseCbrTxConfig(cXMLElement* xmlConfig)
@@ -192,9 +199,10 @@ void LteMacVUeMode4::parseCbrTxConfig(cXMLElement* xmlConfig)
     if (it != params.end())
     {
         defaultCbrIndex_ = it->second;
+        currentCbrIndex_ = defaultCbrIndex_;
     }
 
-    cXMLElementList cbrLevelConfigs = xmlConfig->getElementsByTagName("cbr-Levels-Config");
+    cXMLElementList cbrLevelConfigs = xmlConfig->getElementsByTagName("cbr-ConfigIndex");
 
     if (cbrLevelConfigs.empty())
         throw cRuntimeError("No cbr-Levels-Config found in configuration file");
@@ -202,24 +210,25 @@ void LteMacVUeMode4::parseCbrTxConfig(cXMLElement* xmlConfig)
     cXMLElementList::iterator xmlIt;
     for(xmlIt = cbrLevelConfigs.begin(); xmlIt != cbrLevelConfigs.end(); xmlIt++)
     {
-        std::map<std::string, int> cbrLevelsMap;
+        std::unordered_map<std::string, double> cbrLevelsMap;
         ParameterMap cbrLevelsParams;
         getParametersFromXML((*xmlIt), cbrLevelsParams);
         it = cbrLevelsParams.find("cbr-lower");
         if (it != cbrLevelsParams.end())
         {
-            cbrLevelsMap.insert(pair<string, int>("cbr-lower",  it->second));
+            cbrLevelsMap.insert(pair<std::string, double>("cbr-lower",  it->second));
         }
         it = cbrLevelsParams.find("cbr-upper");
         if (it != cbrLevelsParams.end())
         {
-            cbrLevelsMap.insert(pair<string, int>("cbr-upper",  it->second));
+            cbrLevelsMap.insert(pair<std::string, double>("cbr-upper",  it->second));
         }
-        it = cbrLevelsParams.find("cbr-lower");
+        it = cbrLevelsParams.find("cbr-PSSCH-TxConfig-Index");
         if (it != cbrLevelsParams.end())
         {
-            cbrLevelsMap.insert(pair<string, int>("cbr-PSSCH-TxConfig-Index",  it->second));
+            cbrLevelsMap.insert(pair<std::string, double>("cbr-PSSCH-TxConfig-Index",  it->second));
         }
+        cbrLevels_.push_back(cbrLevelsMap);
     }
 
     cXMLElementList cbrTxConfigs = xmlConfig->getElementsByTagName("cbr-PSSCH-TxConfig");
@@ -231,48 +240,48 @@ void LteMacVUeMode4::parseCbrTxConfig(cXMLElement* xmlConfig)
 
     for(xmlIt = cbrTxParams.begin(); xmlIt != cbrTxParams.end(); xmlIt++)
     {
-        std::map<std::string, int> cbrMap;
+        std::unordered_map<std::string, double> cbrMap;
         ParameterMap cbrParams;
         getParametersFromXML((*xmlIt), cbrParams);
         it = cbrParams.find("minMCS-PSSCH");
         if (it != cbrParams.end())
         {
-            cbrMap.insert(pair<string, int>("minMCSPSSCH",  it->second));
+            cbrMap.insert({"minMCS-PSSCH",  it->second});
         }
         else
-            cbrMap.insert(pair<string, int>("minMCSPSSCH",  par("minMCSPSSCH")));
+            cbrMap.insert({"minMCS-PSSCH",  par("minMCSPSSCH")});
         it = cbrParams.find("maxMCS-PSSCH");
         if (it != cbrParams.end())
         {
-            cbrMap.insert(pair<string, int>("maxMCSPSSCH",  it->second));
+            cbrMap.insert({"maxMCS-PSSCH",  it->second});
         }
         else
-            cbrMap.insert(pair<string, int>("maxMCSPSSCH",  par("maxMCSPSSCH")));
+            cbrMap.insert({"maxMCS-PSSCH",  par("maxMCSPSSCH")});
         it = cbrParams.find("minSubchannel-NumberPSSCH");
         if (it != cbrParams.end())
         {
-            cbrMap.insert(pair<string, int>("minSubchannelNumberPSSCH",  it->second));
+            cbrMap.insert({"minSubchannel-NumberPSSCH",  it->second});
         }
         else
-            cbrMap.insert(pair<string, int>("minSubchannelNumberPSSCH",  par("minSubchannelNumberPSSCH")));
+            cbrMap.insert({"minSubchannel-NumberPSSCH",  par("minSubchannelNumberPSSCH")});
         it = cbrParams.find("maxSubchannel-NumberPSSCH");
         if (it != cbrParams.end())
         {
-            cbrMap.insert(pair<string, int>("maxSubchannelNumberPSSCH",  it->second));
+            cbrMap.insert({"maxSubchannel-NumberPSSCH",  it->second});
         }
         else
-            cbrMap.insert(pair<string, int>("maxSubchannelNumberPSSCH",  par("maxSubchannelNumberPSSCH")));
+            cbrMap.insert({"maxSubchannel-NumberPSSCH",  par("maxSubchannelNumberPSSCH")});
         it = cbrParams.find("allowedRetxNumberPSSCH");
         if (it != cbrParams.end())
         {
-            cbrMap.insert(pair<string, int>("allowedRetxNumberPSSCH",  it->second));
+            cbrMap.insert({"allowedRetxNumberPSSCH",  it->second});
         }
         else
-            cbrMap.insert(pair<string, int>("allowedRetxNumberPSSCH",  par("allowedRetxNumberPSSCH")));
+            cbrMap.insert({"allowedRetxNumberPSSCH",  par("allowedRetxNumberPSSCH")});
         it = cbrParams.find("cr-Limit");
         if (it != cbrParams.end())
         {
-            cbrMap.insert(pair<string, int>("cr-Limit",  it->second));
+            cbrMap.insert({"cr-Limit",  it->second});
         }
         cbrPSSCHTxConfigList_.push_back(cbrMap);
     }
@@ -524,10 +533,75 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
             Cbr* cbrPkt = check_and_cast<Cbr*>(pkt);
             cbr_ = cbrPkt->getCbr();
 
+            currentCbrIndex_ = defaultCbrIndex_;
+            if (useCBR_)
+            {
+                std::vector<std::unordered_map<std::string, double>>::iterator it;
+                for (it = cbrLevels_.begin(); it!=cbrLevels_.end(); it++)
+                {
+                    double cbrUpper = (*it).at("cbr-upper");
+                    double cbrLower = (*it).at("cbr-lower");
+                    double index = (*it).at("cbr-PSSCH-TxConfig-Index");
+                    if (cbrLower == 0){
+                        if (cbr_< cbrUpper)
+                        {
+                            currentCbrIndex_ = (int)index;
+                            break;
+                        }
+                    } else if (cbrUpper == 1){
+                        if (cbr_ > cbrLower)
+                        {
+                            currentCbrIndex_ = (int)index;
+                            break;
+                        }
+                    } else {
+                        if (cbr_ > cbrLower && cbr_<= cbrUpper)
+                        {
+                            currentCbrIndex_ = (int)index;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            int b;
+            int a;
+            int subchannelsUsed = 0;
+            // CR limit calculation
+            // determine b
+            if (schedulingGrant_ != NULL){
+                LteMode4SchedulingGrant* mode4Grant = check_and_cast<LteMode4SchedulingGrant*>(schedulingGrant_);
+                if (expirationCounter_ > 499){
+                    b = 499;
+                } else {
+                    b = expirationCounter_;
+                }
+                subchannelsUsed += (b / mode4Grant->getPeriod()) * mode4Grant->getNumSubchannels();
+            } else {
+                b = 0;
+            }
+            // determine a
+            a = 999 - b;
+
+            // determine previous transmissions -> Need to account for if we have already done a drop. Must maintain a
+            // history of past transmissions i.e. subchannels used and subframe in which they occur. delete entries older
+            // than 1000.
+            std::unordered_map<double, int>::const_iterator it = previousTransmissions_.begin();
+            while (it != previousTransmissions_.end()){
+                if (it->first < NOW.dbl() - 1){
+                    it = previousTransmissions_.erase(it);
+                } else if (it->first > NOW.dbl() - (0.1 * a)) {
+                    subchannelsUsed += it->second;
+                    it++;
+                }
+            }
+            // calculate cr
+            channelOccupancyRatio_ = subchannelsUsed /(numSubchannels_ * 1000.0);
+
             // message from PHY_to_MAC gate (from lower layer)
             emit(receivedPacketFromLowerLayer, pkt);
 
-            delete pkt;
+            LteMacBase::sendUpperPackets(cbrPkt);
 
             return;
         }
@@ -617,38 +691,30 @@ void LteMacVUeMode4::handleSelfMessage()
         if(--expirationCounter_ == mode4Grant->getPeriod())
         {
             // Gotten to the point of the final tranmission must determine if we reselect or not.
-            std::uniform_real_distribution<float> floatdist(0, 1);
-            float randomReReserve = floatdist(generator_);
-            if (randomReReserve > probResourceKeep_)
+            double randomReReserve = dblrand(1);
+            if (randomReReserve < probResourceKeep_)
             {
-                std::uniform_int_distribution<int> range(5, 15);
-                int expiration = range(generator_);
+                int expiration = intuniform(5, 15, 3);
                 mode4Grant -> setResourceReselectionCounter(expiration);
                 mode4Grant -> setFirstTransmission(true);
                 expirationCounter_ = expiration * mode4Grant->getPeriod();
-            }
-            else
-            {
-                mode4Grant->setExpiration(0);
             }
         }
         if (--periodCounter_>0 && !mode4Grant->getFirstTransmission())
         {
             return;
         }
-        else if (expirationCounter_ != 0)
+        else if (expirationCounter_ > 0)
         {
             // resetting grant period
             periodCounter_=mode4Grant->getPeriod();
             // this is periodic grant TTI - continue with frame sending
         }
-        else if (expirationCounter_ == 0)
+        else if (expirationCounter_ <= 0)
         {
             emit(grantBreak, 1);
-            // Grant has expired, only generate new grant on receiving next message to be sent.
-            delete schedulingGrant_;
-            schedulingGrant_ = NULL;
-            mode4Grant = NULL;
+            mode4Grant->setExpiration(0);
+            expiredGrant_ = true;
         }
     }
     bool requestSdu = false;
@@ -785,29 +851,54 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
      * 4. return
      */
     SpsCandidateResources* candidatesPacket = check_and_cast<SpsCandidateResources *>(pkt);
-    std::vector<std::tuple<int, int, int>> CSRs = candidatesPacket->getCSRs();
+    std::vector<std::tuple<double, int, int>> CSRs = candidatesPacket->getCSRs();
 
     LteMode4SchedulingGrant* mode4Grant = check_and_cast<LteMode4SchedulingGrant*>(schedulingGrant_);
 
     // Select random element from vector
-    std::uniform_int_distribution<int> distr(0, CSRs.size()-1);
-    int index = distr(generator_);
+    int index = intuniform(0, CSRs.size()-1, 1);
 
-    std::tuple<int, int, int> selectedCR = CSRs[index];
+    std::tuple<double, int, int> selectedCR = CSRs[index];
     // Gives us the time at which we will send the subframe.
-    simtime_t selectedStartTime = NOW + TTI * std::get<1>(selectedCR);
+    simtime_t selectedStartTime = (simTime() + SimTime(std::get<1>(selectedCR), SIMTIME_MS) - TTI).trunc(SIMTIME_MS);
+
+    emit(grantStartTime, selectedStartTime);
 
     int initiailSubchannel = std::get<2>(selectedCR);
     int finalSubchannel = initiailSubchannel + mode4Grant->getNumSubchannels(); // Is this actually one additional subchannel?
 
+    // Emit statistic about the use of resources, i.e. the initial subchannel and it's length.
+    emit(selectedSubchannelIndex, initiailSubchannel);
+    emit(selectedNumSubchannels, mode4Grant->getNumSubchannels());
+
     // Determine the RBs on which we will send our message
     RbMap grantedBlocks;
     int totalGrantedBlocks = 0;
-    for (int i=initiailSubchannel;i<finalSubchannel;i++)
-    {
-        std::vector<Band> allocatedBands;
-        for (Band b = i * subchannelSize_; b < (i * subchannelSize_) + subchannelSize_ ; b++)
+    if (adjacencyPSCCHPSSCH_){
+        // Adjacent mode just provide the allocated bands
+
+        for (int i=initiailSubchannel;i<finalSubchannel;i++)
         {
+            int initialBand = i * subchannelSize_;
+            for (Band b = initialBand; b < initialBand + subchannelSize_ ; b++)
+            {
+                grantedBlocks[MACRO][b] = 1;
+                ++totalGrantedBlocks;
+            }
+        }
+    } else {
+        // Start at subchannel numsubchannels.
+        // Remove 1 subchannel from each grant.
+        // Account for the two blocks taken for the SCI
+        totalGrantedBlocks += 2;
+        int initialBand;
+        if (initiailSubchannel == 0){
+            // If first subchannel to use need to make sure to add the number of subchannels for the SCI messages
+            initialBand = numSubchannels_ * 2;
+        } else {
+            initialBand = (numSubchannels_ * 2) + (initiailSubchannel * (subchannelSize_ - 2));
+        }
+        for (Band b = initialBand; b < (initialBand + subchannelSize_ - 2) * mode4Grant->getNumSubchannels() ; b++) {
             grantedBlocks[MACRO][b] = 1;
             ++totalGrantedBlocks;
         }
@@ -819,7 +910,7 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     mode4Grant->setTotalGrantedBlocks(totalGrantedBlocks);
     mode4Grant->setDirection(D2D_MULTI);
     mode4Grant->setCodewords(1);
-
+    mode4Grant->setStartingSubchannel(initiailSubchannel);
     mode4Grant->setMcs(maxMCSPSSCH_);
 
     LteMod mod = _QPSK;
@@ -840,8 +931,8 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     // Simply flips the codeword.
     currentCw_ = MAX_CODEWORDS - currentCw_;
 
-    periodCounter_=mode4Grant->getPeriod();
-    expirationCounter_=mode4Grant->getResourceReselectionCounter() * periodCounter_;
+    periodCounter_= mode4Grant->getPeriod();
+    expirationCounter_= (mode4Grant->getResourceReselectionCounter() * periodCounter_) + 1;
 
     // TODO: Setup for HARQ retransmission, if it can't be satisfied then selection must occur again.
 
@@ -868,52 +959,59 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     mode4Grant -> setMaximumLatency(maximumLatency);
     mode4Grant -> setPossibleRRIs(validResourceReservationIntervals_);
 
-    int cbrIndex = defaultCbrIndex_;
+    int minSubchannelNumberPSSCH = minSubchannelNumberPSSCH_;
+    int maxSubchannelNumberPSSCH = maxSubchannelNumberPSSCH_;
+
     if (useCBR_)
     {
-        std::vector<std::map<string, int>>::iterator it;
-        for (it = cbrLevels_.begin(); it!=cbrLevels_.end(); it++)
+        int cbrMinSubchannelNum;
+        int cbrMaxSubchannelNum;
+        std::unordered_map<std::string,double> cbrMap = cbrPSSCHTxConfigList_.at(currentCbrIndex_);
+
+        std::unordered_map<std::string,double>::const_iterator got = cbrMap.find("allowedRetxNumberPSSCH");
+        if ( got == cbrMap.end() )
+            allowedRetxNumberPSSCH_ = allowedRetxNumberPSSCH_;
+        else
+            allowedRetxNumberPSSCH_ = min((int)got->second, allowedRetxNumberPSSCH_);
+
+        got = cbrMap.find("minSubchannel-NumberPSSCH");
+        if ( got == cbrMap.end() )
+            cbrMinSubchannelNum = minSubchannelNumberPSSCH_;
+        else
+            cbrMinSubchannelNum = (int)got->second;
+
+        got = cbrMap.find("maxSubchannel-NumberPSSCH");
+        if ( got == cbrMap.end() )
+            cbrMaxSubchannelNum = maxSubchannelNumberPSSCH_;
+        else
+            cbrMaxSubchannelNum = (int)got->second;
+
+        /**
+         * Need to pick the number of subchannels for this reservation
+         */
+        if (maxSubchannelNumberPSSCH_ < cbrMinSubchannelNum || cbrMaxSubchannelNum < minSubchannelNumberPSSCH_)
         {
-            if (cbr_<(*it).at("cbr-upper"))
-            {
-                cbrIndex = (*it).at("cbr-PSSCH-TxConfig-Index");
-                break;
-            }
+            // No overlap therefore I will use the cbr values (this is left to the UE, the opposite approach is also entirely valid).
+            minSubchannelNumberPSSCH = cbrMinSubchannelNum;
+            maxSubchannelNumberPSSCH = cbrMaxSubchannelNum;
+        }
+        else
+        {
+            minSubchannelNumberPSSCH = max(minSubchannelNumberPSSCH_, cbrMinSubchannelNum);
+            maxSubchannelNumberPSSCH = min(maxSubchannelNumberPSSCH_, cbrMaxSubchannelNum);
         }
     }
-
-    allowedRetxNumberPSSCH_ = min(cbrPSSCHTxConfigList_.at(cbrIndex).at("allowedRetxNumberPSSCH"), allowedRetxNumberPSSCH_);
-
-    /**
-     * Need to pick the number of subchannels for this reservation
-     */
-    int minSubchannelNumberPSSCH;
-    int maxSubchannelNumberPSSCH;
-    if (maxMCSPSSCH_ < cbrPSSCHTxConfigList_.at(cbrIndex).at("minMCSPSSCH") || cbrPSSCHTxConfigList_.at(cbrIndex).at("maxMCSPSSCH") < minMCSPSSCH_)
-    {
-        // No overlap therefore I will use the cbr values (this is left to the UE, the opposite approach is also entirely valid).
-        minSubchannelNumberPSSCH = cbrPSSCHTxConfigList_.at(cbrIndex).at("minSubchannel-NumberPSSCH");
-        maxSubchannelNumberPSSCH = cbrPSSCHTxConfigList_.at(cbrIndex).at("maxSubchannel-NumberPSSCH");
-    }
-    else
-    {
-        minSubchannelNumberPSSCH = max(minSubchannelNumberPSSCH_, cbrPSSCHTxConfigList_.at(cbrIndex).at("minSubchannelNumberPSSCH"));
-        maxSubchannelNumberPSSCH = min(maxSubchannelNumberPSSCH_, cbrPSSCHTxConfigList_.at(cbrIndex).at("maxSubchannelNumberPSSCH"));
-    }
     // Selecting the number of subchannel at random as there is no explanation as to the logic behind selecting the resources in the range unlike when selecting MCS.
-    std::uniform_int_distribution<> distr(minSubchannelNumberPSSCH, maxSubchannelNumberPSSCH);
-    int numSubchannels = distr(generator_);
+    int numSubchannels = intuniform(minSubchannelNumberPSSCH, maxSubchannelNumberPSSCH, 2);
 
     mode4Grant -> setNumberSubchannels(numSubchannels);
 
-    emit(selectedNumSubchannels, numSubchannels);
-
     // Based on restrictResourceReservation interval But will be between 1 and 15
     // Again technically this needs to reconfigurable as well. But all of that needs to come in through ini and such.
-    std::uniform_int_distribution<int> range(5, 15);
-    int resourceReselectionCounter = range(generator_);
+    int resourceReselectionCounter = intuniform(5, 15, 3);
 
     mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
+    mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval_);
 
     LteMode4SchedulingGrant* phyGrant = mode4Grant->dup();
 
@@ -944,46 +1042,69 @@ void LteMacVUeMode4::flushHarqBuffers()
     HarqTxBuffers::iterator it2;
     for(it2 = harqTxBuffers_.begin(); it2 != harqTxBuffers_.end(); it2++)
     {
+        std::unordered_map<std::string,double> cbrMap = cbrPSSCHTxConfigList_.at(currentCbrIndex_);
+        std::unordered_map<std::string,double>::const_iterator got;
+
+        if (packetDropping_) {
+            double crLimit;
+            got = cbrMap.find("cr-Limit");
+            if (got == cbrMap.end())
+                crLimit = 1;
+            else
+                crLimit = got->second;
+
+            if (channelOccupancyRatio_ > crLimit) {
+                // Need to drop the unit currently selected
+                UnitList ul = it2->second->firstAvailable();
+                it2->second->forceDropProcess(ul.first);
+                emit(packetDropDCC, 1);
+            }
+        }
+
         if (it2->second->isSelected())
         {
             LteHarqProcessTx* selectedProcess = it2->second->getSelectedProcess();
             for (int cw=0; cw<MAX_CODEWORDS; cw++)
             {
-                int pduLength = selectedProcess->getPduLength(cw);
-                if ( pduLength > 0)
+                int pduLength = selectedProcess->getPduLength(cw) * 8;
+                int minMCS = minMCSPSSCH_;
+                int maxMCS = maxMCSPSSCH_;
+                if (pduLength > 0)
                 {
-                    int cbrIndex = defaultCbrIndex_;
-                    if (useCBR_)
-                    {
-                        std::vector<std::map<string, int>>::iterator it;
-                        for (it = cbrLevels_.begin(); it!=cbrLevels_.end(); it++)
+                    if (useCBR_){
+                        int cbrMinMCS;
+                        int cbrMaxMCS;
+
+                        got = cbrMap.find("minMCS-PSSCH");
+                        if ( got == cbrMap.end() )
+                            cbrMinMCS = minMCSPSSCH_;
+                        else
+                            cbrMinMCS = (int)got->second;
+
+                        got = cbrMap.find("maxMCS-PSSCH");
+                        if ( got == cbrMap.end() )
+                            cbrMaxMCS = maxMCSPSSCH_;
+                        else
+                            cbrMaxMCS = (int)got->second;
+
+                        if (maxMCSPSSCH_ < cbrMinMCS || cbrMaxMCS < minMCSPSSCH_)
                         {
-                            if (cbr_<(*it).at("cbr-upper"))
-                            {
-                                cbrIndex = (*it).at("cbr-PSSCH-TxConfig-Index");
-                                break;
-                            }
+                            // No overlap therefore I will use the cbr values (this is left to the UE).
+                            minMCS = cbrMinMCS;
+                            maxMCS = cbrMaxMCS;
+                        }
+                        else
+                        {
+                            minMCS = max(minMCSPSSCH_, cbrMinMCS);
+                            maxMCS = min(maxMCSPSSCH_, cbrMaxMCS);
                         }
                     }
 
-                    int minMCS;
-                    int maxMCS;
-                    if (maxMCSPSSCH_ < cbrPSSCHTxConfigList_.at(cbrIndex).at("minMCSPSSCH") || cbrPSSCHTxConfigList_.at(cbrIndex).at("maxMCSPSSCH") < minMCSPSSCH_)
-                    {
-                        // No overlap therefore I will use the cbr values (this is left to the UE).
-                        minMCS = cbrPSSCHTxConfigList_.at(cbrIndex).at("minMCSPSSCH");
-                        maxMCS = cbrPSSCHTxConfigList_.at(cbrIndex).at("maxMCSPSSCH");
-                    }
-                    else
-                    {
-                        minMCS = max(minMCSPSSCH_, cbrPSSCHTxConfigList_.at(cbrIndex).at("minMCSPSSCH"));
-                        maxMCS = min(maxMCSPSSCH_, cbrPSSCHTxConfigList_.at(cbrIndex).at("maxMCSPSSCH"));
-                    }
                     bool foundValidMCS = false;
                     int totalGrantedBlocks = mode4Grant->getTotalGrantedBlocks();
 
                     int mcsCapacity = 0;
-                    for (int mcs=minMCS; mcs < maxMCS; mcs++)
+                    for (int mcs=minMCS; mcs <= maxMCS; mcs++)
                     {
                         LteMod mod = _QPSK;
                         if (maxMCSPSSCH_ > 9 && maxMCSPSSCH_ < 17)
@@ -1020,6 +1141,9 @@ void LteMacVUeMode4::flushHarqBuffers()
                             uinfo->setTxNumber(1);
                             uinfo->setDirection(D2D_MULTI);
                             uinfo->setUserTxParams(preconfiguredTxParams_->dup());
+                            uinfo->setSubchannelNumber(mode4Grant->getStartingSubchannel());
+                            uinfo->setSubchannelLength(mode4Grant->getNumSubchannels());
+                            uinfo->setGrantStartTime(mode4Grant->getStartTime());
 
                             phyGrant->setControlInfo(uinfo);
 
@@ -1027,6 +1151,9 @@ void LteMacVUeMode4::flushHarqBuffers()
                             sendLowerPackets(phyGrant);
                             // Send pdu to PHY layer for sending.
                             it2->second->sendSelectedDown();
+
+                            // Log transmission to A calculation log
+                            previousTransmissions_[NOW.dbl()] = mode4Grant->getNumSubchannels();
 
                             missedTransmissions_ = 0;
 
@@ -1072,8 +1199,6 @@ void LteMacVUeMode4::flushHarqBuffers()
             emit(missedTransmission, 1);
 
             LteMode4SchedulingGrant* phyGrant = mode4Grant->dup();
-            phyGrant->setSpsPriority(0);
-
 
             UserControlInfo* uinfo = new UserControlInfo();
             uinfo->setSourceId(getMacNodeId());
@@ -1088,6 +1213,7 @@ void LteMacVUeMode4::flushHarqBuffers()
             if (missedTransmissions_ >= reselectAfter_)
             {
                 phyGrant->setPeriod(0);
+                phyGrant->setExpiration(0);
 
                 delete schedulingGrant_;
                 schedulingGrant_ = NULL;
@@ -1099,6 +1225,12 @@ void LteMacVUeMode4::flushHarqBuffers()
             // Send Grant to PHY layer for sci creation
             sendLowerPackets(phyGrant);
         }
+    }
+    if (expiredGrant_) {
+        // Grant has expired, only generate new grant on receiving next message to be sent.
+        delete schedulingGrant_;
+        schedulingGrant_ = NULL;
+        expiredGrant_ = false;
     }
 }
 

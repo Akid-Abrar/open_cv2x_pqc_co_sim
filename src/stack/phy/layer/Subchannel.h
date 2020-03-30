@@ -21,34 +21,36 @@ class Subchannel
         bool sensed;
         bool possibleCSR;
         simtime_t subframeTime;
-        int subframeIndex;
-        int subchannelIndex;
-        SidelinkControlInformation* sci;
+
+        int priority;
+        int resourceReservationInterval;
+        int frequencyResourceLocation;
+        int timeGapRetrans;
+        int mcs;
+        int retransmissionIndex;
+
+        int sciSubchannelIndex;
+        int sciLength;
+
         std::vector<Band> occupiedBands;
         std::map<Band, double> rsrpValues;
         std::map<Band, double> rssiValues;
 
     public:
-        Subchannel(const int subchannelSize, simtime_t simulationTime, int subframeIndex=0, int subchannelIndex=0)
+        Subchannel(const int subchannelSize, simtime_t simulationTime)
         {
             numRbs = subchannelSize;
             reserved = false;
             sensed = true;
             possibleCSR = true;
-            sci = nullptr;
             subframeTime = simulationTime;
-            this->subframeIndex = subframeIndex;
-            this->subchannelIndex = subchannelIndex;
+            sciLength = 0;
+            sciSubchannelIndex = 0;
         }
 
 
         ~Subchannel()
         {
-            if (sci != nullptr)
-            {
-                delete sci;
-                sci = nullptr;
-            }
         }
 
         Subchannel(const Subchannel& other)
@@ -61,12 +63,18 @@ class Subchannel
             numRbs = other.numRbs;
             reserved = other.reserved;
             subframeTime = other.subframeTime;
-            sci = other.sci;
+            priority = other.priority;
+            resourceReservationInterval = other.resourceReservationInterval;
+            frequencyResourceLocation = other.frequencyResourceLocation;
+            timeGapRetrans = other.timeGapRetrans;
+            mcs = other.mcs;
+            retransmissionIndex = other.retransmissionIndex;
+            sciSubchannelIndex = other.sciSubchannelIndex;
+            sciLength = other.sciLength;
             rsrpValues = other.rsrpValues;
             rssiValues = other.rssiValues;
             occupiedBands = other.occupiedBands;
             sensed = other.sensed;
-            subchannelIndex = other.subchannelIndex;
             possibleCSR = other.possibleCSR;
             return *this;
         }
@@ -100,41 +108,55 @@ class Subchannel
         {
             return reserved;
         }
-        void setSCI(SidelinkControlInformation* SCI)
-        {
-            this->sci = SCI;
-        }
-        SidelinkControlInformation* getSCIMessage()
-        {
-            return sci;
-        }
         double getAverageRSRP()
         {
-            double sum = 0;
-            std::map<Band, double>::iterator it;
-            for(it=rsrpValues.begin(); it!=rsrpValues.end(); it++)
-            {
-                sum += it->second;
+            if (rsrpValues.size() != 0) {
+                double sum = 0;
+                std::map<Band, double>::iterator it;
+                for (it = rsrpValues.begin(); it != rsrpValues.end(); it++) {
+                    sum += it->second;
+                }
+                return sum / numRbs;
+            } else {
+                return -std::numeric_limits<double>::infinity();
             }
-            return sum/numRbs;
         }
         double getAverageRSSI()
         {
-            double sum = 0;
-            std::map<Band, double>::iterator it;
-            for(it=rssiValues.begin(); it!=rssiValues.end(); it++)
-            {
-                sum += it->second;
+            if (rssiValues.size() != 0){
+                double sum = 0;
+                std::map<Band, double>::iterator it;
+                for(it=rssiValues.begin(); it!=rssiValues.end(); it++)
+                {
+                    sum += it->second;
+                }
+                return sum/numRbs;
+            } else {
+                return - std::numeric_limits<double>::infinity();
             }
-            return sum/numRbs;
         }
         void addRsrpValue(double rsrpValue, Band band)
         {
-            rsrpValues[band] = rsrpValue;
+            auto it = rsrpValues.find(band);
+            if (it != rsrpValues.end()) {
+                if (it->second < rsrpValue){
+                    it->second = rsrpValue;
+                }
+            } else {
+                rsrpValues[band] = rsrpValue;
+            }
         }
         void addRssiValue(double rssiValue, Band band)
         {
-            rssiValues[band] = rssiValue;
+            auto it = rssiValues.find(band);
+            if (it != rssiValues.end()) {
+                if (it->second < rssiValue){
+                    it->second = rssiValue;
+                }
+            } else {
+                rssiValues[band] = rssiValue;
+            }
+
         }
         std::vector<Band> getOccupiedBands() const
         {
@@ -152,22 +174,6 @@ class Subchannel
         {
             return sensed;
         }
-        void setSubframeIndex(int subframeIndex)
-        {
-            this->subframeIndex = subframeIndex;
-        }
-        int getSubframeIndex() const
-        {
-            return subframeIndex;
-        }
-        void setSubchannelIndex(int subchannelIndex)
-        {
-            this->subchannelIndex = subchannelIndex;
-        }
-        int getSubchannelIndex() const
-        {
-            return subchannelIndex;
-        }
         void setPossibleCSR(bool possibleCSR)
         {
             this->possibleCSR = possibleCSR;
@@ -176,19 +182,86 @@ class Subchannel
         {
             return possibleCSR;
         }
+        void setPriority(int priority)
+        {
+            this->priority = priority;
+        }
+        int getPriority()
+        {
+            return priority;
+        }
+        void setResourceReservationInterval(int resourceReservationInterval)
+        {
+            this->resourceReservationInterval = resourceReservationInterval;
+        }
+        int getResourceReservationInterval()
+        {
+            return resourceReservationInterval;
+        }
+        void setFrequencyResourceLocation(int frequencyResourceLocation)
+        {
+            this->frequencyResourceLocation = frequencyResourceLocation;
+        }
+        int getFrequencyResourceLocation()
+        {
+            return frequencyResourceLocation;
+        }
+        void setMcs (int mcs)
+        {
+            this->mcs = mcs;
+        }
+        int getMcs()
+        {
+            return mcs;
+        }
+        void setRetransmissionIndex(int retransmissionIndex)
+        {
+            this->retransmissionIndex = retransmissionIndex;
+        }
+        int getRetransmissionIndex()
+        {
+            return retransmissionIndex;
+        }
+        void setTimeGapRetrans(int timeGapRetrans)
+        {
+            this->timeGapRetrans = timeGapRetrans;
+        }
+        int getTimeGapRetrans()
+        {
+            return timeGapRetrans;
+        }
+        void setSciSubchannelIndex(int sciSubchannelIndex)
+        {
+            this->sciSubchannelIndex = sciSubchannelIndex;
+        }
+        int getSciSubchannelIndex()
+        {
+            return sciSubchannelIndex;
+        }
+        void setSciLength(int sciLength)
+        {
+            this->sciLength = sciLength;
+        }
+        int getSciLength()
+        {
+            return sciLength;
+        }
         void reset(simtime_t simulationTime)
         {
-            if (sci != nullptr)
-            {
-                delete sci;
-                sci = nullptr;
-            }
             reserved = false;
             sensed = true;
             possibleCSR = true;
             subframeTime = simulationTime;
             rsrpValues.clear();
             rssiValues.clear();
+            priority = 0;
+            resourceReservationInterval = 0;
+            frequencyResourceLocation = 0;
+            timeGapRetrans = 0;
+            mcs = 0;
+            retransmissionIndex = 0;
+            sciSubchannelIndex = 0;
+            sciLength = 0;
         }
 };
 

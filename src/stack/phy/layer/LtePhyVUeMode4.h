@@ -29,8 +29,11 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int numSubchannels_;
     int subchannelSize_ ;
     int selectionWindowStartingSubframe_;
+    int thresholdRSSI_;
 
     bool transmitting_;
+
+    std::map<MacNodeId, simtime_t> previousTransmissionTimes_;
 
     std::vector<int> ThresPSSCHRSRPvector_;
 
@@ -39,15 +42,16 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     std::vector<std::vector<double>> tbRsrpVectors_;
     std::vector<std::vector<double>> tbRssiVectors_;
+    std::vector<std::vector<double>> tbSinrVectors_;
 
     std::vector<std::vector<Subchannel*>> sensingWindow_;
     int sensingWindowFront_;
     LteMode4SchedulingGrant* sciGrant_;
     std::vector<std::vector<double>> sciRsrpVectors_;
     std::vector<std::vector<double>> sciRssiVectors_;
+    std::vector<std::vector<double>> sciSinrVectors_;
     std::vector<LteAirFrame*> sciFrames_;
-    std::vector<cPacket*> decodedScis_;
-    std::vector<int> cbrHistory_;
+    std::vector<cPacket*> scis_;
 
     simsignal_t cbr;
     simsignal_t sciReceived;
@@ -65,6 +69,14 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t threshold;
     simsignal_t txRxDistanceSCI;
     simsignal_t txRxDistanceTB;
+    simsignal_t subchannelReceived;
+    simsignal_t subchannelsUsed;
+    simsignal_t senderID;
+    simsignal_t subchannelSent;
+    simsignal_t subchannelsUsedToSend;
+    simsignal_t interPacketDelay;
+    simsignal_t posX;
+    simsignal_t posY;
 
     simsignal_t tbFailedDueToProp;
     simsignal_t tbFailedDueToInterference;
@@ -74,21 +86,20 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int sciReceived_;
     int sciDecoded_;
     int sciNotDecoded_;
+    int sciFailedHalfDuplex_;
     int tbReceived_;
     int tbDecoded_;
     int tbFailedDueToNoSCI_;
     int tbFailedButSCIReceived_;
     int tbAndSCINotReceived_;
-    int sciFailedHalfDuplex_;
     int tbFailedHalfDuplex_;
+    int subchannelReceived_;
+    int subchannelsUsed_;
 
     int tbFailedDueToProp_;
     int tbFailedDueToInterference_;
     int sciFailedDueToProp_;
     int sciFailedDueToInterference_;
-
-    double currentCBR_;
-    int cbrIndex_;
 
     RbMap availableRBs_;
 
@@ -96,7 +107,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame();
-    void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector);
+    void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector, std::vector<double> &sinrVector);
     // ---------------------------------------------------------------- //
 
     virtual void initialize(int stage);
@@ -116,7 +127,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     virtual void updateSubframe();
 
-    virtual std::vector<std::tuple<int, int, int>> selectBestRSSIs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs);
+    virtual std::vector<std::tuple<double, int, int>> selectBestRSSIs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs);
 
     virtual std::tuple<int,int> decodeRivValue(SidelinkControlInformation* sci, UserControlInfo* sciInfo);
 

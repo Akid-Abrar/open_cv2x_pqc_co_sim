@@ -21,7 +21,7 @@
 
 #include "stack/mac/layer/LteMacUeRealisticD2D.h"
 #include "corenetwork/deployer/LteDeployer.h"
-#include <random>
+#include <unordered_map>
 
 //class LteMode4SchedulingGrant;
 
@@ -56,8 +56,12 @@ protected:
    int allowedRetxNumberPSSCH_;
    int reselectAfter_;
    int defaultCbrIndex_;
+   int currentCbrIndex_;
+   double channelOccupancyRatio_;
+   double cbr_;
    bool useCBR_;
-   int cbr_;
+   bool packetDropping_;
+   bool adjacencyPSCCHPSSCH_;
    int missedTransmissions_;
 
    double remainingTime_;
@@ -67,12 +71,10 @@ protected:
 
    std::map<UnitList, int> pduRecord_;
 
-   std::vector<std::map<std::string, int>> cbrPSSCHTxConfigList_;
-   std::vector<std::map<std::string, int>> cbrLevels_;
+   std::vector<std::unordered_map<std::string, double>> cbrPSSCHTxConfigList_;
+   std::vector<std::unordered_map<std::string, double>> cbrLevels_;
+   std::unordered_map<double, int> previousTransmissions_;
    std::vector<double> validResourceReservationIntervals_;
-
-   std::random_device rand_device_;
-   std::mt19937 generator_;
 
    McsTable dlMcsTable_;
    McsTable ulMcsTable_;
@@ -81,6 +83,8 @@ protected:
    double mcsScaleUl_;
    double mcsScaleD2D_;
 
+   bool expiredGrant_;
+
    // if true, use the preconfigured TX params for transmission, else use that signaled by the eNB
    bool usePreconfiguredTxParams_;
    UserTxParams* preconfiguredTxParams_;
@@ -88,7 +92,7 @@ protected:
 
    UeInfo* ueInfo_;
 
-   simsignal_t generatedGrants;
+   simsignal_t grantStartTime;
    simsignal_t grantBreak;
    simsignal_t grantBreakTiming;
    simsignal_t grantBreakSize;
@@ -97,9 +101,11 @@ protected:
    simsignal_t missedTransmission;
    simsignal_t selectedMCS;
    simsignal_t selectedNumSubchannels;
+   simsignal_t selectedSubchannelIndex;
    simsignal_t maximumCapacity;
    simsignal_t grantRequests;
-
+   simsignal_t packetDropDCC;
+   simsignal_t macNodeID;
 
 //   // Lte AMC module
 //   LteAmc *amc_;

@@ -111,6 +111,8 @@ simple LteRlcUm like ILteRlcUm {
         @class("LteRlcUm");
         
         @display("i=block/wheelbarrow");
+
+        int packetSize = default(0);
         
         @signal[rlcDelayDl];
         @statistic[rlcDelayDl](title="Delay at the rlc layer UL"; unit="s"; source="rlcDelayDl"; record=mean);

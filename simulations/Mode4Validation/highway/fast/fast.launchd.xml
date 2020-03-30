@@ -1,0 +1,7 @@
+<launch>
+  <basedir path="/home/brian/git_repos/simulte/simulations/Mode4/highway/fast"/>
+  <copy file="fast.net.xml"/>
+  <copy file="fast.rou.xml"/>
+  <copy file="rerouters.add.xml"/>
+  <copy file="fast.sumo.cfg" type="config"/>
+</launch>
