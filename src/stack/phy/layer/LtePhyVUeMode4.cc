@@ -366,28 +366,12 @@ void LtePhyVUeMode4::handleUpperMessage(cMessage* msg)
 
 RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
 {
-    // Store the RBs used for transmission. For interference computation
     RbMap rbMap = lteInfo->getGrantedBlocks();
-    UsedRBs info;
-    info.time_ = NOW;
-    info.rbMap_ = rbMap;
-
-    usedRbs_.push_back(info);
-
-    std::vector<UsedRBs>::iterator it = usedRbs_.begin();
-    while (it != usedRbs_.end())  // purge old allocations
-    {
-        if (it->time_ < NOW - 0.002)
-            usedRbs_.erase(it++);
-        else
-            ++it;
-    }
-    lastActive_ = NOW;
-
     UserControlInfo* SCIInfo = lteInfo->dup();
     LteAirFrame* frame = NULL;
 
     RbMap sciRbs;
+    RbMap allRbs = rbMap;
     if (adjacencyPSCCHPSSCH_)
     {
         // Adjacent mode
@@ -438,8 +422,26 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
         for (Band b = startingRB; b <= startingRB + 1 ; b++)
         {
             sciRbs[MACRO][b] = 1;
+            allRbs[MACRO][b] = 1;
         }
     }
+
+    // Store the RBs used for transmission. For interference computation
+    UsedRBs info;
+    info.time_ = NOW;
+    info.rbMap_ = allRbs;
+
+    usedRbs_.push_back(info);
+
+    std::vector<UsedRBs>::iterator it = usedRbs_.begin();
+    while (it != usedRbs_.end())  // purge old allocations
+    {
+        if (it->time_ < NOW - 0.002)
+            usedRbs_.erase(it++);
+        else
+            ++it;
+    }
+    lastActive_ = NOW;
 
     SCIInfo->setFrameType(SCIPKT);
     SCIInfo->setGrantedBlocks(sciRbs);
