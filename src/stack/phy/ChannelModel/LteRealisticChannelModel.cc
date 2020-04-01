@@ -2513,13 +2513,37 @@ bool LteRealisticChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlIn
     else  snrV = getSINR(frame, lteInfo); // Take SINR
 
     double bler = 0;
-
+    double usedRbs = 0;
     double averageSINR;
-    std::for_each(snrV.begin(), snrV.end(), [&] (double n){
-        averageSINR += n;
-    });
 
-    averageSINR = averageSINR / snrV.size();
+    //Get the resource Block id used to transmit this packet
+    RbMap rbmap = lteInfo->getGrantedBlocks();
+
+    RbMap::iterator it;
+    std::map<Band, unsigned int>::iterator jt;
+
+    //for each Remote unit used to transmit the packet
+    for (it = rbmap.begin(); it != rbmap.end(); ++it) {
+        //for each logical band used to transmit the packet
+        for (jt = it->second.begin(); jt != it->second.end(); ++jt) {
+            //this Rb is not allocated
+            if (jt->second == 0) continue;
+
+            //check the antenna used in Das
+            if ((lteInfo->getTxMode() == CL_SPATIAL_MULTIPLEXING
+                 || lteInfo->getTxMode() == OL_SPATIAL_MULTIPLEXING)
+                && rbmap.size() > 1)
+
+                //we consider only the snr associated to the LB used
+                if (it->first != lteInfo->getCw()) continue;
+
+
+            averageSINR += dBToLinear(snrV[jt->first]);//XXX because jt->first is a Band (=unsigned short)
+            usedRbs += 1;
+        }
+    }
+
+    averageSINR = linearToDb(averageSINR / usedRbs);
 
     if (averageSINR > binder_->phyPisaData.maxSnr())
         bler = 0;
@@ -2599,13 +2623,37 @@ bool LteRealisticChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlIn
     }
 
     double bler = 0;
+    double usedRbs = 0;
     double averageSINR;
 
-    std::for_each(sinrVector.begin(), sinrVector.end(), [&] (double n){
-        averageSINR += n;
-    });
+    //Get the resource Block id used to transmit this packet
+    RbMap rbmap = lteInfo->getGrantedBlocks();
 
-    averageSINR = averageSINR / sinrVector.size();
+    RbMap::iterator it;
+    std::map<Band, unsigned int>::iterator jt;
+
+    //for each Remote unit used to transmit the packet
+    for (it = rbmap.begin(); it != rbmap.end(); ++it) {
+        //for each logical band used to transmit the packet
+        for (jt = it->second.begin(); jt != it->second.end(); ++jt) {
+            //this Rb is not allocated
+            if (jt->second == 0) continue;
+
+            //check the antenna used in Das
+            if ((lteInfo->getTxMode() == CL_SPATIAL_MULTIPLEXING
+                 || lteInfo->getTxMode() == OL_SPATIAL_MULTIPLEXING)
+                && rbmap.size() > 1)
+
+            //we consider only the snr associated to the LB used
+            if (it->first != lteInfo->getCw()) continue;
+
+            
+            averageSINR += dBToLinear(sinrVector[jt->first]);//XXX because jt->first is a Band (=unsigned short)
+            usedRbs += 1;
+        }
+    }
+
+    averageSINR = linearToDb(averageSINR / usedRbs);
 
     if (averageSINR > binder_->phyPisaData.maxSnr())
         bler = 0;
