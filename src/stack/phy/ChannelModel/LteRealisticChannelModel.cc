@@ -1003,36 +1003,6 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     // Get Tx power
     double recvPower = lteInfo_1->getD2dTxPower(); // dBm
 
-    //Get the resource Block id used to transmit this packet
-    RbMap rbmap = lteInfo_1->getGrantedBlocks();
-
-    RbMap::iterator jt;
-    std::map<Band, unsigned int>::iterator kt;
-
-    int usedRbs = 0;
-
-    //for each Remote unit used to transmit the packet
-    for (jt = rbmap.begin(); jt != rbmap.end(); ++jt) {
-        //for each logical band used to transmit the packet
-        for (kt = jt->second.begin(); kt != jt->second.end(); ++kt) {
-            //this Rb is not allocated
-            if (kt->second == 0) continue;
-
-            //check the antenna used in Das
-            if ((lteInfo_1->getTxMode() == CL_SPATIAL_MULTIPLEXING
-                 || lteInfo_1->getTxMode() == OL_SPATIAL_MULTIPLEXING)
-                && rbmap.size() > 1)
-
-                //we consider only the snr associated to the LB used
-                if (jt->first != lteInfo_1->getCw()) continue;
-
-            usedRbs += 1;
-        }
-    }
-
-    recvPower = dBmToLinear(recvPower);
-    recvPower = linearToDBm(recvPower/usedRbs);
-
     // Coordinate of the Sender of the Feedback packet
     Coord sourceCoord =  lteInfo_1->getCoord();
 
@@ -3324,14 +3294,14 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
         // Compute attenuation using data structures within the Macro Cell.
         att = getAttenuation_D2D(interferringId, dir, ltePhy->getCoord(), destId, destCoord); // dB
 
+        txPwr = ltePhy->getTxPwr(dir) - cableLoss_ + 2 * antennaGainUe_;
+        EV << "NodeId [" << interferringId << "] - attenuation [" << att << "]" << endl;
+
         // The antenna set in computeTxParams is always "MACRO". Here create a fake set with MACRO as the only element
         std::set<Remote> antennas;
         antennas.insert(MACRO);
         std::set<Remote>::const_iterator antenna_it = antennas.begin();
         std::set<Remote>::const_iterator antenna_et = antennas.end();
-
-        int rbsUsed = 0;
-        std::vector<unsigned int> bandsUsed;
 
         // CQI computation. We need to check the slot occupation of the actual TTI
         if(isCqi)
@@ -3362,24 +3332,19 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
                     // Compute interference only if the band was occupied by an interfering Node
                     if( temp!=0 )
                     {
-                        // log this band
-                        bandsUsed.push_back(i);
-                        rbsUsed++;
+                        // Add the interference
+                        (*interference)[i] += dBmToLinear(txPwr-att);
                     }
                 }
             }
         }
+    }
 
-        // Update the interference at each band.
-        txPwr = dBmToLinear(ltePhy->getTxPwr(dir));
-        txPwr = linearToDBm(txPwr/rbsUsed);
-        txPwr = txPwr - cableLoss_ + 2 * antennaGainUe_;
-
-        std::vector<unsigned int>::iterator it;
-        for (it = bandsUsed.begin(); it != bandsUsed.end(); it++) {
-            (*interference)[(*it)] += dBmToLinear(txPwr-att);
-        }
-
+    // Debug Output
+    EV<<NOW<<"LteRealisticChannelModel::computeInCellD2DInterference() Final Band Interference Status: "<<endl;
+    for(unsigned int i=0;i<band_;i++)
+    {
+        EV << "\t band " << i << " int[" << (*interference)[i] << "]" << endl;
     }
 
     return true;
