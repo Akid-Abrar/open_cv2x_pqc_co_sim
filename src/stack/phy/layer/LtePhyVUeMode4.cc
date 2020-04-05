@@ -1012,6 +1012,20 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
     Coord myCoord = getCoord();
 
     std::vector<double> rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
+
+    double averageRSRP;
+    for (int i = 0; i <= rsrpVector.size(); i++){
+        averageRSRP += rsrpVector[i];
+    }
+
+    averageRSRP = averageRSRP/rsrpVector.size();
+
+    if (averageRSRP < -90.5){
+        // Should log as failed unsensable
+        // then simply skip this Air Frame
+        return;
+    }
+
     // Seems we don't really actually need the enbId, I have set it to 0 as it is referenced but never used for calc
     std::tuple<std::vector<double>, std::vector<double>> rssiSinrVectors = channelModel_->getRSSI_SINR(newFrame, newInfo, nodeId_, myCoord, 0, rsrpVector);
 
