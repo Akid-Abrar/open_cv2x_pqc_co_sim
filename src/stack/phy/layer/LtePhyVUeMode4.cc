@@ -69,7 +69,6 @@ void LtePhyVUeMode4::initialize(int stage)
         cbr                         = registerSignal("cbr");
         sciReceived                 = registerSignal("sciReceived");
         sciDecoded                  = registerSignal("sciDecoded");
-        sciNotDecoded               = registerSignal("sciNotDecoded");
         sciSent                     = registerSignal("sciSent");
         tbSent                      = registerSignal("tbSent");
         tbReceived                  = registerSignal("tbReceived");
@@ -84,8 +83,10 @@ void LtePhyVUeMode4::initialize(int stage)
         tbFailedHalfDuplex          = registerSignal("tbFailedHalfDuplex");
         tbFailedDueToProp           = registerSignal("tbFailedDueToProp");
         tbFailedDueToInterference   = registerSignal("tbFailedDueToInterference");
+        tbUnsensed                  = registerSignal("tbUnsensed");
         sciFailedDueToProp          = registerSignal("sciFailedDueToProp");
         sciFailedDueToInterference  = registerSignal("sciFailedDueToInterference");
+        sciUnsensed                 = registerSignal("sciUnsensed");
         subchannelReceived          = registerSignal("subchannelReceived");
         subchannelsUsed             = registerSignal("subchannelsUsed");
         senderID                    = registerSignal("senderID");
@@ -97,7 +98,6 @@ void LtePhyVUeMode4::initialize(int stage)
 
         sciReceived_ = 0;
         sciDecoded_ = 0;
-        sciNotDecoded_ = 0;
         sciFailedHalfDuplex_ = 0;
         tbReceived_ = 0;
         tbDecoded_ = 0;
@@ -173,6 +173,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector);
 
             emit(sciReceived, sciReceived_);
+            emit(sciUnsensed, 0);
             emit(sciDecoded, sciDecoded_);
             emit(sciFailedDueToProp, sciFailedDueToProp_);
             emit(sciFailedDueToInterference, sciFailedDueToInterference_);
@@ -182,7 +183,6 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
 
             sciReceived_ = 0;
             sciDecoded_ = 0;
-            sciNotDecoded_ = 0;
             sciFailedHalfDuplex_ = 0;
             sciFailedDueToInterference_ = 0;
             sciFailedDueToProp_ = 0;
@@ -198,6 +198,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 emit(tbFailedDueToNoSCI, -1);
                 emit(tbFailedButSCIReceived, -1);
                 emit(tbFailedHalfDuplex, -1);
+                emit(tbUnsensed, -1);
             }
         }
         while (!tbFrames_.empty())
@@ -210,6 +211,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 emit(tbFailedDueToNoSCI, -1);
                 emit(tbFailedButSCIReceived, -1);
                 emit(tbFailedHalfDuplex, -1);
+                emit(tbUnsensed, -1);
             } else {
                 LteAirFrame *frame = tbFrames_.back();
                 std::vector<double> rsrpVector = tbRsrpVectors_.back();
@@ -227,6 +229,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector);
 
                 emit(tbReceived, tbReceived_);
+                emit(tbUnsensed, 0);
                 emit(tbDecoded, tbDecoded_);
                 emit(tbFailedDueToNoSCI, tbFailedDueToNoSCI_);
                 emit(tbFailedDueToProp, tbFailedDueToProp_);
@@ -1021,8 +1024,32 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
     averageRSRP = averageRSRP/rsrpVector.size();
 
     if (averageRSRP < -90.5){
-        // Should log as failed unsensable
-        // then simply skip this Air Frame
+        double pkt_dist = getCoord().distance(newInfo->getCoord());
+        if (newInfo->getFrameType() == SCIPKT){
+            emit(txRxDistanceSCI, pkt_dist);
+            emit(sciUnsensed, 1);
+            emit(sciReceived, 1);
+            emit(sciDecoded, 0);
+            emit(sciFailedDueToProp, 0);
+            emit(sciFailedDueToInterference, 0);
+            emit(sciFailedHalfDuplex, 0);
+            emit(subchannelReceived, 0);
+            emit(subchannelsUsed, 0);
+        }
+        else{
+            emit(txRxDistanceTB, pkt_dist);
+            emit(tbReceived, 1);
+            emit(tbDecoded, 0);
+            emit(tbFailedDueToNoSCI, 0);
+            emit(tbFailedButSCIReceived, 0);
+            emit(tbFailedHalfDuplex, 0);
+            emit(tbUnsensed, 1);
+            emit(posX, getCoord().x);
+            emit(posY, getCoord().y);
+        }
+        // Ensure we don't continue to store an already deleted frame.
+//        delete newInfo;
+        delete newFrame;
         return;
     }
 
@@ -1052,7 +1079,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     EV << NOW << " LtePhyVUeMode4::decodeAirFrame - Start decoding..." << endl;
 
     // apply decider to received packet
-    bool result = false;
+    bool interference_result = false;
     bool prop_result = false;
 
     RemoteSet r = lteInfo->getUserTxParams()->readAntennaSet();
@@ -1078,7 +1105,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
             frame->addRemoteUnitPhyDataVector(data);
         }
         // apply analog models For DAS
-        result=channelModel_->errorDas(frame,lteInfo);
+        interference_result=channelModel_->errorDas(frame,lteInfo);
     }
 
     cPacket* pkt = frame->decapsulate();
@@ -1091,7 +1118,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         if (!transmitting_)
         {
             prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0, false);
-            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, 0);
+            interference_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, 0);
 
             sciReceived_ += 1;
 
@@ -1104,7 +1131,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
             subchannelsUsed_ = lengthInSubchannels;
             emit(senderID, lteInfo->getSourceId());
 
-            if (result) {
+            if (interference_result) {
 
                 std::vector <Subchannel *> currentSubframe = sensingWindow_[sensingWindowFront_];
                 for (int i = subchannelIndex; i < subchannelIndex + lengthInSubchannels; i++) {
@@ -1129,7 +1156,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 sciFailedDueToProp_ += 1;
                 delete lteInfo;
                 delete pkt;
-            } else if (!result) {
+            } else if (!interference_result) {
                 sciFailedDueToInterference_ += 1;
                 delete lteInfo;
                 delete pkt;
@@ -1139,7 +1166,6 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 lteInfo->setDeciderResult(false);
                 pkt->setControlInfo(lteInfo);
                 scis_.push_back(pkt);
-                sciNotDecoded_ += 1;
             }
         }
         else
@@ -1180,13 +1206,10 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                         //RELAY and NORMAL
                         sciDecodedSuccessfully = true;
                         if (lteInfo->getDirection() == D2D_MULTI)
-                            result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs());
-                            prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector,
-                                                                     correspondingSCI->getMcs(), false);
-                    }
-                    else
-                        result = channelModel_->error(frame, lteInfo);
+                            prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, correspondingSCI->getMcs(), false);
+                            interference_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs());
 
+                    }
                     // Remove the SCI
                     scis_.erase(it);
                     break;
@@ -1198,7 +1221,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 tbFailedDueToNoSCI_ += 1;
             } else if (!prop_result) {
                 tbFailedDueToProp_ += 1;
-            } else if (!result) {
+            } else if (!interference_result) {
                 tbFailedButSCIReceived_ += 1;
                 tbFailedDueToInterference_ += 1;
             } else {
@@ -1257,7 +1280,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         delete frame;
 
         // send decapsulated message along with result control info to upperGateOut_
-        lteInfo->setDeciderResult(result);
+        lteInfo->setDeciderResult(interference_result);
         pkt->setControlInfo(lteInfo);
         send(pkt, upperGateOut_);
 
@@ -1266,7 +1289,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     }
 
     // update statistics
-    if (result)
+    if (interference_result)
     {
         numAirFrameReceived_++;
     }
@@ -1276,7 +1299,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     }
 
     EV << "Handled LteAirframe with ID " << frame->getId() << " with result "
-       << (result ? "RECEIVED" : "NOT RECEIVED") << endl;
+       << (interference_result ? "RECEIVED" : "NOT RECEIVED") << endl;
 }
 
 std::tuple<int,int> LtePhyVUeMode4::decodeRivValue(SidelinkControlInformation* sci, UserControlInfo* sciInfo)

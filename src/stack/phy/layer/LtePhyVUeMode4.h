@@ -56,7 +56,6 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t cbr;
     simsignal_t sciReceived;
     simsignal_t sciDecoded;
-    simsignal_t sciNotDecoded;
     simsignal_t sciSent;
     simsignal_t tbSent;
     simsignal_t tbReceived;
@@ -82,10 +81,11 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t tbFailedDueToInterference;
     simsignal_t sciFailedDueToProp;
     simsignal_t sciFailedDueToInterference;
+    simsignal_t tbUnsensed;
+    simsignal_t sciUnsensed;
 
     int sciReceived_;
     int sciDecoded_;
-    int sciNotDecoded_;
     int sciFailedHalfDuplex_;
     int tbReceived_;
     int tbDecoded_;
