@@ -347,6 +347,7 @@ void LtePhyVUeMode4::handleUpperMessage(cMessage* msg)
             sciGrant_ = grant;
             lteInfo->setUserTxParams(sciGrant_->getUserTxParams()->dup());
             lteInfo->setGrantedBlocks(sciGrant_->getGrantedBlocks());
+            lteInfo->setTotalGrantedBlocks(sciGrant_->getTotalGrantedBlocks());
             lteInfo->setDirection(D2D_MULTI);
             availableRBs_ = sendSciMessage(msg, lteInfo);
             for (int i=0; i<numSubchannels_; i++)
@@ -462,6 +463,7 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
 
     SCIInfo->setFrameType(SCIPKT);
     SCIInfo->setGrantedBlocks(sciRbs);
+    SCIInfo->setTotalGrantedBlocks(sciGrant_->getTotalGrantedBlocks());
     SCIInfo->setGrantStartTime(sciGrant_->getStartTime());
 
     /*
@@ -1023,35 +1025,35 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
 
     averageRSRP = averageRSRP/rsrpVector.size();
 
-    if (averageRSRP < -90.5){
-        double pkt_dist = getCoord().distance(newInfo->getCoord());
-        if (newInfo->getFrameType() == SCIPKT){
-            emit(txRxDistanceSCI, pkt_dist);
-            emit(sciUnsensed, 1);
-            emit(sciReceived, 1);
-            emit(sciDecoded, 0);
-            emit(sciFailedDueToProp, 0);
-            emit(sciFailedDueToInterference, 0);
-            emit(sciFailedHalfDuplex, 0);
-            emit(subchannelReceived, 0);
-            emit(subchannelsUsed, 0);
-        }
-        else{
-            emit(txRxDistanceTB, pkt_dist);
-            emit(tbReceived, 1);
-            emit(tbDecoded, 0);
-            emit(tbFailedDueToNoSCI, 0);
-            emit(tbFailedButSCIReceived, 0);
-            emit(tbFailedHalfDuplex, 0);
-            emit(tbUnsensed, 1);
-            emit(posX, getCoord().x);
-            emit(posY, getCoord().y);
-        }
-        // Ensure we don't continue to store an already deleted frame.
-//        delete newInfo;
-        delete newFrame;
-        return;
-    }
+//    if (averageRSRP < -90.5){
+//        double pkt_dist = getCoord().distance(newInfo->getCoord());
+//        if (newInfo->getFrameType() == SCIPKT){
+//            emit(txRxDistanceSCI, pkt_dist);
+//            emit(sciUnsensed, 1);
+//            emit(sciReceived, 1);
+//            emit(sciDecoded, 0);
+//            emit(sciFailedDueToProp, 0);
+//            emit(sciFailedDueToInterference, 0);
+//            emit(sciFailedHalfDuplex, 0);
+//            emit(subchannelReceived, 0);
+//            emit(subchannelsUsed, 0);
+//        }
+//        else{
+//            emit(txRxDistanceTB, pkt_dist);
+//            emit(tbReceived, 1);
+//            emit(tbDecoded, 0);
+//            emit(tbFailedDueToNoSCI, 0);
+//            emit(tbFailedButSCIReceived, 0);
+//            emit(tbFailedHalfDuplex, 0);
+//            emit(tbUnsensed, 1);
+//            emit(posX, getCoord().x);
+//            emit(posY, getCoord().y);
+//        }
+//        // Ensure we don't continue to store an already deleted frame.
+////        delete newInfo;
+//        delete newFrame;
+//        return;
+//    }
 
     // Seems we don't really actually need the enbId, I have set it to 0 as it is referenced but never used for calc
     std::tuple<std::vector<double>, std::vector<double>> rssiSinrVectors = channelModel_->getRSSI_SINR(newFrame, newInfo, nodeId_, myCoord, 0, rsrpVector);

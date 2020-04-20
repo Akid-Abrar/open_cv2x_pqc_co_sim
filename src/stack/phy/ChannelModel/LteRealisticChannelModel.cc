@@ -1006,24 +1006,9 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     double recvPowLinear = dBmToLinear(recvPower);
     double numRbsUsed = 0;
 
-    RbMap grantedRbs = lteInfo_1->getGrantedBlocks();
+    unsigned int totalGrantedBlocks = lteInfo_1->getTotalGrantedBlocks();
 
-    RbMap::iterator jt;
-    std::map<Band, unsigned int>::iterator kt;
-    for (jt = grantedRbs.begin(); jt != grantedRbs.end(); ++jt) {
-        //for each logical band used to transmit the packet
-        for (kt = jt->second.begin(); kt != jt->second.end(); ++kt) {
-            Band band = kt->first;
-
-            if (kt->second == 0) // this Rb is not allocated
-                continue;
-            else {
-                numRbsUsed++;
-            }
-        }
-    }
-
-    recvPowLinear = recvPowLinear/numRbsUsed;
+    recvPowLinear = recvPowLinear/totalGrantedBlocks;
 
     // Coordinate of the Sender of the Feedback packet
     Coord sourceCoord =  lteInfo_1->getCoord();
