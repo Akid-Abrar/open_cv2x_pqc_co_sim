@@ -1097,6 +1097,7 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     for (unsigned int i = 0; i < band_; i++)
     {
         fadingAttenuation = 0;
+        double finalRecvPower = recvPowLinear;
         //if fading is enabled
         if (fading_)
         {
@@ -1116,14 +1117,13 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
                 inet::units::values::m dist = inet::units::values::m(sourceCoord.distance(destCoord));
                 fadingAttenuation = nkgmf->computePathLoss(speed, freq, dist);
             }
+            fadingAttenuation = dBToLinear(fadingAttenuation);
+            // add fading contribution to the received pwr
+            finalRecvPower = finalRecvPower / fadingAttenuation; // linear calculation
         }
 
-        fadingAttenuation = dBToLinear(fadingAttenuation);
-        // add fading contribution to the received pwr
-        double finalRecvPower = recvPower + fadingAttenuation; // linear calculation
-
         // Convert PSD [W/Hz] to linear power [W]
-        finalRecvPower = (finalRecvPower * 180000.0) / 12.0;
+        finalRecvPower = finalRecvPower / 12.0;
 
         double rsrp = linearToDBm(finalRecvPower);
 
