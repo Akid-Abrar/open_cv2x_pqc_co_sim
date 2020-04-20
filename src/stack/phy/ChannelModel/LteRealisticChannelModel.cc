@@ -1001,7 +1001,29 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
 {
     AttenuationVector::iterator it;
     // Get Tx power
+    // This needs to be determined based on reduction due to the RBs used, so can't be this straight up.
     double recvPower = lteInfo_1->getD2dTxPower(); // dBm
+    double recvPowLinear = dBmToLinear(recvPower);
+    double numRbsUsed = 0;
+
+    RbMap grantedRbs = lteInfo_1->getGrantedBlocks();
+
+    RbMap::iterator jt;
+    std::map<Band, unsigned int>::iterator kt;
+    for (jt = grantedRbs.begin(); jt != grantedRbs.end(); ++jt) {
+        //for each logical band used to transmit the packet
+        for (kt = jt->second.begin(); kt != jt->second.end(); ++kt) {
+            Band band = kt->first;
+
+            if (kt->second == 0) // this Rb is not allocated
+                continue;
+            else {
+                numRbsUsed++;
+            }
+        }
+    }
+
+    recvPowLinear = recvPowLinear/numRbsUsed;
 
     // Coordinate of the Sender of the Feedback packet
     Coord sourceCoord =  lteInfo_1->getCoord();
@@ -1059,15 +1081,12 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     // attenuation for the desired signal
     double attenuation = getAttenuation_D2D(sourceId, dir, sourceCoord, destId, destCoord); // dB
 
-    //compute attenuation (PATHLOSS + SHADOWING)
-    recvPower -= attenuation; // (dBm-dB)=dBm
+    attenuation -= antennaGainTx;
+    attenuation -= antennaGainRx;
 
-    //add antenna gain
-    recvPower += antennaGainTx; // (dBm+dB)=dBm
-    recvPower += antennaGainRx; // (dBm+dB)=dBm
+    double attenuationLinear = dBToLinear(-attenuation);
 
-    //sub cable loss
-    recvPower -= cableLoss_; // (dBm-dB)=dBm
+    recvPowLinear *= attenuationLinear;
 
     // compute and add interference due to fading
     // Apply fading for each band
@@ -1098,30 +1117,18 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
                 fadingAttenuation = nkgmf->computePathLoss(speed, freq, dist);
             }
         }
+
+        fadingAttenuation = dBToLinear(fadingAttenuation);
         // add fading contribution to the received pwr
-        double finalRecvPower = recvPower + fadingAttenuation; // (dBm+dB)=dBm
+        double finalRecvPower = recvPower + fadingAttenuation; // linear calculation
 
-        //if txmode is multi user the tx power is dived by the number of paired user
-        // in db divede by 2 means -3db
-        if (lteInfo_1->getTxMode() == MULTI_USER)
-        {
-            finalRecvPower -= 3;
-        }
+        // Convert PSD [W/Hz] to linear power [W]
+        finalRecvPower = (finalRecvPower * 180000.0) / 12.0;
 
-        EV << " LteRealisticChannelModel::getRSRP_D2D node " << sourceId
-           << ((lteInfo_1->getFrameType() == FEEDBACKPKT) ?
-            " FEEDBACK PACKET " : " NORMAL PACKET ")
-           << " band " << i << " recvPower " << recvPower
-           << " direction " << dirToA(dir) << " antenna gain tx "
-           << antennaGainTx << " antenna gain rx " << antennaGainRx
-           << " noise figure " << noiseFigure
-           << " cable loss   " << cableLoss_
-           << " attenuation (pathloss + shadowing) " << attenuation
-           << " speed " << speed << " thermal noise " << thermalNoise_
-           << " fading attenuation " << fadingAttenuation << endl;
+        double rsrp = linearToDBm(finalRecvPower);
 
         // Store the calculated receive power
-        rsrpVector.push_back(finalRecvPower);
+        rsrpVector.push_back(rsrp);
     }
     //============ END PATH LOSS + SHADOWING + FADING ===============
 
