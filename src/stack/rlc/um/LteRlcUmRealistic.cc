@@ -102,6 +102,15 @@ void LteRlcUmRealistic::handleUpperMessage(cPacket *pkt)
     // Fix the size of the packets ensures we don't have issues with packet size varying extensively
     if (packetSize_ > 0)
         pkt->setByteLength(packetSize_ - RLC_HEADER_UM - MAC_HEADER);
+    if (scenario3gpp_){
+        if (counter3gpp_ == 4){
+            pkt->setByteLength(300 - RLC_HEADER_UM - MAC_HEADER);
+            counter3gpp_ = 0;
+        } else {
+            pkt->setByteLength(190 - RLC_HEADER_UM - MAC_HEADER);
+            counter3gpp_++;
+        }
+    }
 
     EV << "LteRlcUmRealistic::handleUpperMessage - Received packet " << pkt->getName() << " from upper layer, size " << pkt->getByteLength() << "\n";
 

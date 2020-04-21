@@ -90,6 +90,8 @@ class LteRlcUm : public cSimpleModule
   protected:
 
     int packetSize_;
+    bool scenario3gpp_;
+    int counter3gpp_;
 
     cGate* up_[2];
     cGate* down_[2];
