@@ -3542,14 +3542,14 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
         // Compute attenuation using data structures within the Macro Cell.
         att = getAttenuation_D2D(interferringId, dir, ltePhy->getCoord(), destId, destCoord); // dB
 
-        txPwr = ltePhy->getTxPwr(dir) - cableLoss_ + 2 * antennaGainUe_;
-        EV << "NodeId [" << interferringId << "] - attenuation [" << att << "]" << endl;
-
         // The antenna set in computeTxParams is always "MACRO". Here create a fake set with MACRO as the only element
         std::set<Remote> antennas;
         antennas.insert(MACRO);
         std::set<Remote>::const_iterator antenna_it = antennas.begin();
         std::set<Remote>::const_iterator antenna_et = antennas.end();
+
+        int rbsUsed = 0;
+        std::vector<unsigned int> bandsUsed;
 
         // CQI computation. We need to check the slot occupation of the actual TTI
         if(isCqi)
@@ -3580,19 +3580,26 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
                     // Compute interference only if the band was occupied by an interfering Node
                     if( temp!=0 )
                     {
-                        // Add the interference
-                        (*interference)[i] += dBmToLinear(txPwr-att);
+                        // log this band
+                        bandsUsed.push_back(i);
+                        rbsUsed++;
                     }
                 }
             }
         }
     }
 
-    // Debug Output
-    EV<<NOW<<"LteRealisticChannelModel::computeInCellD2DInterference() Final Band Interference Status: "<<endl;
     for(unsigned int i=0;i<band_;i++)
     {
-        EV << "\t band " << i << " int[" << (*interference)[i] << "]" << endl;
+        // Update the interference at each band.
+        txPwr = dBmToLinear(ltePhy->getTxPwr(dir));
+        txPwr = linearToDBm(txPwr/rbsUsed);
+        txPwr = txPwr - cableLoss_ + 2 * antennaGainUe_;
+
+        std::vector<unsigned int>::iterator it;
+        for (it = bandsUsed.begin(); it != bandsUsed.end(); it++) {
+            (*interference)[(*it)] += dBmToLinear(txPwr-att);
+        }
     }
 
     return true;
