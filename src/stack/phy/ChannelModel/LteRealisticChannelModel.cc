@@ -1102,7 +1102,6 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
                 inet::units::values::m dist = inet::units::values::m(sourceCoord.distance(destCoord));
                 fadingAttenuation = nkgmf->computePathLoss(speed, freq, dist);
             }
-            fadingAttenuation = dBToLinear(fadingAttenuation);
             // add fading contribution to the received pwr
             finalRecvPower = finalRecvPower / fadingAttenuation; // linear calculation
         }
@@ -2170,7 +2169,7 @@ double LteRealisticChannelModel::computeWinnerB1 (Coord destCoord, Coord sourceC
     // WINNER II Channel Models, D1.1.2 V1.2., Equation (4.24) p.43, available at
     // http://www.cept.org/files/1050/documents/winner2%20-%20final%20report.pdf
 
-    loss = 20 * std::log10 (dist) + 46.6 + 20 * std::log10 (fc / 5.0);
+    loss = 20 * std::log10 (dist) + 46.4 + 20 * std::log10 (fc / 5.0);
 //    NS_LOG_INFO (this << "Outdoor , the free space loss = " << loss);
 
     // WINNER II channel model for Urban Microcell scenario (UMi) : B1
@@ -2179,8 +2178,8 @@ double LteRealisticChannelModel::computeWinnerB1 (Coord destCoord, Coord sourceC
     double hms = hUe_;
     double hbs = hUe_;
     // Effective antenna heights (0.8 m for UEs)
-    double hbs1 = hbs - 1;
-    double hms1 = hms - 0.7;
+    double hbs1 = hbs;
+    double hms1 = hms;
     // Propagation velocity in free space
     double c = 3 * std::pow (10, 8);
     // LOS offset = LOS loss to add to the computed pathloss
@@ -2203,19 +2202,19 @@ double LteRealisticChannelModel::computeWinnerB1 (Coord destCoord, Coord sourceC
     double r = uniform(getEnvir()->getRNG(0), 0.0, 1.0);
 
     // This model is only valid to a minimum distance of 3 meters
-    if (dist >= 3)
+    if (dist >= 10)
     {
         if (losMap_[nodeId])
         {
             // LOS
             if (dist <= d1)
             {
-                pl_b1 = 22.7 * std::log10 (dist) + 27.0 + 20.0 * std::log10 (fc) + los;
+                pl_b1 = 22.7 * std::log10 (dist) + 41.0 + 20.0 * std::log10 (fc/5) + los;
 //                NS_LOG_INFO (this << "Outdoor LOS (Distance <= " << d1 << ") : the WINNER B1 loss = " << pl_b1);
             }
             else
             {
-                pl_b1 = 40 * std::log10 (dist) + 7.56 - 17.3 * std::log10 (hbs1) - 17.3 * std::log10 (hms1) + 2.7 * std::log10 (fc) + los;
+                pl_b1 = 40 * std::log10 (dist) + 9.45 - 17.3 * std::log10 (hbs1) - 17.3 * std::log10 (hms1) + 2.7 * std::log10 (fc/5) + los;
 //                NS_LOG_INFO (this << "Outdoor LOS (Distance > " << d1 << ") : the WINNER B1 loss = " << pl_b1);
             }
         }
