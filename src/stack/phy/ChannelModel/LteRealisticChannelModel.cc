@@ -1102,10 +1102,10 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
 
         double attenuationLinear = dBToLinear(-attenuation);
 
-        txPowerDensity *= attenuationLinear;
+        double rsrp = txPowerDensity * attenuationLinear;
 
         // Convert PSD [W/Hz] to linear power [W]
-        double rsrp = (txPowerDensity) * 180000.0) / 12.0; // convert PSD [W/Hz] to linear power [W]
+        rsrp = (rsrp) * 180000.0 / 12.0; // convert PSD [W/Hz] to linear power [W]
 
         rsrp = linearToDBm(rsrp);
 
@@ -3585,18 +3585,17 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
                 }
             }
         }
-    }
 
-    for(unsigned int i=0;i<band_;i++)
-    {
-        // Update the interference at each band.
-        txPwr = dBmToLinear(ltePhy->getTxPwr(dir));
-        txPwr = linearToDBm(txPwr/rbsUsed);
-        txPwr = txPwr - cableLoss_ + 2 * antennaGainUe_;
+        for(unsigned int i=0;i<band_;i++) {
+            // Update the interference at each band.
+            txPwr = dBmToLinear(ltePhy->getTxPwr(dir));
+            txPwr = linearToDBm(txPwr / rbsUsed);
+            txPwr = txPwr - cableLoss_ + 2 * antennaGainUe_;
 
-        std::vector<unsigned int>::iterator it;
-        for (it = bandsUsed.begin(); it != bandsUsed.end(); it++) {
-            (*interference)[(*it)] += dBmToLinear(txPwr-att);
+            std::vector<unsigned int>::iterator it;
+            for (it = bandsUsed.begin(); it != bandsUsed.end(); it++) {
+                (*interference)[(*it)] += dBmToLinear(txPwr - att);
+            }
         }
     }
 
