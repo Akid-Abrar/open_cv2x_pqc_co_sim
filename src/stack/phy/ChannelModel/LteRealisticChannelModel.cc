@@ -1048,19 +1048,9 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     // Compute speed
     speed = computeSpeed(sourceId, sourceCoord);
 
-    EV << "LteRealisticChannelModel::getRSRP_D2D - srcId=" << sourceId
-       << " - destId=" << destId
-       << " - DIR=" << dirToA(dir)
-       << " - frameType=" << ((lteInfo_1->getFrameType()==FEEDBACKPKT)?"feedback":"other")
-       << endl
-       << " - txPwr " << recvPower
-       << " - ue1_Coord[" << sourceCoord << "] - ue2_Coord[" << destCoord << "] - ue1_Id[" << sourceId << "] - ue2_Id[" << destId << "]" <<
-    endl;
     //=================== END PARAMETERS SETUP =======================
 
     //=============== PATH LOSS + SHADOWING + FADING =================
-    EV << "\t using parameters - noiseFigure=" << noiseFigure << " - antennaGainTx=" << antennaGainTx << " - antennaGainRx=" << antennaGainRx <<
-    " - txPwr=" << recvPower << " - for ueId=" << sourceId << endl;
 
     // attenuation for the desired signal
     double attenuation = getAttenuation_D2D(sourceId, dir, sourceCoord, destId, destCoord); // dB
@@ -1896,10 +1886,7 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
             rssiVector[i] = rssi;
 
             //                   (      mW            +    mW                     +        mW            )
-            denSinr = linearToDBm(extCellInterference + noisePowerSpectralDensity + inCellInterference[i]);
-
-            EV << "\t ext[" << extCellInterference << "] - in[" << inCellInterference[i] << "] - recvPwr["
-               << dBmToLinear(snrVector[i]) << "] - sinr[" << snrVector[i]-denSinr << "]\n";
+            denSinr = linearToDBm(noisePowerSpectralDensity + inCellInterference[i]);
 
             // compute final SINR. Subtraction in dB is equivalent to linear division
             snrVector[i] -= denSinr;
@@ -3585,13 +3572,13 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
 
         for(unsigned int i=0;i<band_;i++) {
             // Update the interference at each band.
-            txPwr = dBmToLinear(ltePhy->getTxPwr(dir));
-            txPwr = linearToDBm(txPwr / rbsUsed);
-            txPwr = txPwr - cableLoss_ + 2 * antennaGainUe_;
+            double recvPower = ltePhy->getTxPwr(dir) - cableLoss_ + 2 * antennaGainUe_; // dBm
+            double recvPowLinear = dBmToLinear(recvPower);
+            double interferencePSD = (recvPowLinear / (rbsUsed * 180000));
 
             std::vector<unsigned int>::iterator it;
             for (it = bandsUsed.begin(); it != bandsUsed.end(); it++) {
-                (*interference)[(*it)] += dBmToLinear(txPwr - att);
+                (*interference)[(*it)] += interferencePSD;
             }
         }
     }
