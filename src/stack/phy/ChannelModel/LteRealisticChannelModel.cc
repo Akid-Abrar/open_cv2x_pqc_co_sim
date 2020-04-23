@@ -1880,16 +1880,18 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
             denRssi = (denRssi * 180000.0) / 12.0;
 
             double rsrpPerReLinear = dBmToLinear(rssiVector[i]);
+
             double linearRSSI = 2 * (denRssi + rsrpPerReLinear);
             double rssi = linearToDBm(linearRSSI);
 
             rssiVector[i] = rssi;
 
-            //                   (      mW            +    mW                     +        mW            )
-            denSinr = linearToDBm(noisePowerSpectralDensity + inCellInterference[i]);
+            //        (      mW                  +        mW            )
+            denSinr = noisePowerSpectralDensity + inCellInterference[i];
+            denSinr = rsrpPerReLinear / denSinr;
 
-            // compute final SINR. Subtraction in dB is equivalent to linear division
-            snrVector[i] -= denSinr;
+            // compute final SINR
+            snrVector[i] = linearToDb(denSinr);
         }
     }
         // compute rssi with no incellD2D interference
