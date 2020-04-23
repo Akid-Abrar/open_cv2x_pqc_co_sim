@@ -1004,11 +1004,10 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     // This needs to be determined based on reduction due to the RBs used, so can't be this straight up.
     double recvPower = lteInfo_1->getD2dTxPower(); // dBm
     double recvPowLinear = dBmToLinear(recvPower);
-    double numRbsUsed = 0;
 
     unsigned int totalGrantedBlocks = lteInfo_1->getTotalGrantedBlocks();
 
-    recvPowLinear = recvPowLinear/totalGrantedBlocks;
+    double txPowerDensity = (recvPowLinear / (totalGrantedBlocks * 180000));
 
     // Coordinate of the Sender of the Feedback packet
     Coord sourceCoord =  lteInfo_1->getCoord();
@@ -1069,10 +1068,6 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     attenuation -= antennaGainTx;
     attenuation -= antennaGainRx;
 
-    double attenuationLinear = dBToLinear(-attenuation);
-
-    recvPowLinear *= attenuationLinear;
-
     // compute and add interference due to fading
     // Apply fading for each band
     // if the phy layer is localized we can assume that for each logical band we have different fading attenuation
@@ -1082,7 +1077,6 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     for (unsigned int i = 0; i < band_; i++)
     {
         fadingAttenuation = 0;
-        double finalRecvPower = recvPowLinear;
         //if fading is enabled
         if (fading_)
         {
@@ -1102,14 +1096,18 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
                 inet::units::values::m dist = inet::units::values::m(sourceCoord.distance(destCoord));
                 fadingAttenuation = nkgmf->computePathLoss(speed, freq, dist);
             }
-            // add fading contribution to the received pwr
-            finalRecvPower = finalRecvPower / fadingAttenuation; // linear calculation
         }
 
-        // Convert PSD [W/Hz] to linear power [W]
-        finalRecvPower = finalRecvPower / 12.0;
+        attenuation -= fadingAttenuation;
 
-        double rsrp = linearToDBm(finalRecvPower);
+        double attenuationLinear = dBToLinear(-attenuation);
+
+        txPowerDensity *= attenuationLinear;
+
+        // Convert PSD [W/Hz] to linear power [W]
+        double rsrp = (txPowerDensity) * 180000.0) / 12.0; // convert PSD [W/Hz] to linear power [W]
+
+        rsrp = linearToDBm(rsrp);
 
         // Store the calculated receive power
         rsrpVector.push_back(rsrp);
