@@ -1815,7 +1815,6 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
     dir = D2D;
 
     double noiseFigure = 0.0;
-    double extCellInterference = 0.0;
     if( dir == UL || dir==DL)
     {
         //consistency check
@@ -1870,18 +1869,13 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
     //===================== SINR COMPUTATION ========================
     if( enableD2DInCellInterference_ && dir==D2D  )
     {
-        double thermalDBm = thermalNoise_ + 10 * log10(180000); // Thermal noise broken down by RE
-        double thermalLinear = pow(10, (thermalDBm - 30 + noiseFigure)/10);
-
-        // total noise linear
-        double totNRssi = thermalLinear;
+        double thermalNoiseLinear = std::pow (10.0, (thermalNoise_ - 30) / 10.0);
+        double noiseFigureLinear = std::pow (10.0, ueNoiseFigure_ / 10.0);
+        double noisePowerSpectralDensity =  thermalNoiseLinear * noiseFigureLinear;
 
         // denominator expressed in dBm as (N+extCell+inCell)
         double denRssi;
         EV << "LteRealisticChannelModel::getRSSI - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir)  << endl;
-
-        // compute and linearize total noise
-        double totNSinr = dBmToLinear(thermalNoise_ + noiseFigure);
 
         // denominator expressed in dBm as (N+extCell+inCell)
         double denSinr;
@@ -1890,16 +1884,19 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
         // Add interference for each band
         for (unsigned int i = 0; i < band_; i++)
         {
-            //        (      mW           +    mW    +        mW            )
-            denRssi = extCellInterference + totNRssi + inCellInterference[i];
+            //        (        mW               +        mW            )
+            denRssi = noisePowerSpectralDensity + inCellInterference[i];
+            // Convert PSD [W/Hz] to linear power [W] for the single RE
+            denRssi = (denRssi * 180000.0) / 12.0;
+
             double rsrpPerReLinear = dBmToLinear(rssiVector[i]);
             double linearRSSI = 2 * (denRssi + rsrpPerReLinear);
             double rssi = linearToDBm(linearRSSI);
 
             rssiVector[i] = rssi;
 
-            //                   (      mW            +    mW    +        mW            )
-            denSinr = linearToDBm(extCellInterference + totNSinr + inCellInterference[i]);
+            //                   (      mW            +    mW                     +        mW            )
+            denSinr = linearToDBm(extCellInterference + noisePowerSpectralDensity + inCellInterference[i]);
 
             EV << "\t ext[" << extCellInterference << "] - in[" << inCellInterference[i] << "] - recvPwr["
                << dBmToLinear(snrVector[i]) << "] - sinr[" << snrVector[i]-denSinr << "]\n";
