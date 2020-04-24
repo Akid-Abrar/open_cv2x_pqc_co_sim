@@ -1888,6 +1888,8 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
 
             //        (      mW                  +        mW            )
             denSinr = noisePowerSpectralDensity + inCellInterference[i];
+
+            denSinr = (denSinr * 180000.0);
             denSinr = rsrpPerReLinear / denSinr;
 
             // compute final SINR
