@@ -3569,8 +3569,8 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
                     if( temp!=0 )
                     {
                         // log this band
-                        double recvPower = ltePhy->getTxPwr(dir) - cableLoss_ + 2 * antennaGainUe_; // dBm
-                        double recvPowLinear = dBmToLinear(recvPower);
+                        double recvPower = ltePhy->getTxPwr(dir) + 2 * antennaGainUe_; // dBm
+                        double recvPowLinear = dBmToLinear(recvPower-att);
                         double interferencePSD = (recvPowLinear / (usedRbCount * 180000));
 
                         // Add the interference
