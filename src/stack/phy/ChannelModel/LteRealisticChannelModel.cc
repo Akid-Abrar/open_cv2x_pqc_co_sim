@@ -3532,8 +3532,12 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
         std::set<Remote>::const_iterator antenna_it = antennas.begin();
         std::set<Remote>::const_iterator antenna_et = antennas.end();
 
-        int rbsUsed = 0;
-        std::vector<unsigned int> bandsUsed;
+        double usedRbCount = 0.0;
+
+        for (antenna_it = antennas.begin(); antenna_it != antenna_et; ++antenna_it)
+        {
+            usedRbCount = check_and_cast<LtePhyUe*>(ltePhy)->getPrevUsedNumberOfRbs(*antenna_it, band_);
+        }
 
         // CQI computation. We need to check the slot occupation of the actual TTI
         if(isCqi)
@@ -3565,22 +3569,14 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
                     if( temp!=0 )
                     {
                         // log this band
-                        bandsUsed.push_back(i);
-                        rbsUsed++;
+                        double recvPower = ltePhy->getTxPwr(dir) - cableLoss_ + 2 * antennaGainUe_; // dBm
+                        double recvPowLinear = dBmToLinear(recvPower);
+                        double interferencePSD = (recvPowLinear / (usedRbCount * 180000));
+
+                        // Add the interference
+                        (*interference)[i] += interferencePSD;
                     }
                 }
-            }
-        }
-
-        for(unsigned int i=0;i<band_;i++) {
-            // Update the interference at each band.
-            double recvPower = ltePhy->getTxPwr(dir) - cableLoss_ + 2 * antennaGainUe_; // dBm
-            double recvPowLinear = dBmToLinear(recvPower);
-            double interferencePSD = (recvPowLinear / (rbsUsed * 180000));
-
-            std::vector<unsigned int>::iterator it;
-            for (it = bandsUsed.begin(); it != bandsUsed.end(); it++) {
-                (*interference)[(*it)] += interferencePSD;
             }
         }
     }
