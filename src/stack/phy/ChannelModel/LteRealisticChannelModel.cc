@@ -1889,7 +1889,7 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
             //        (      mW                  +        mW            )
             denSinr = noisePowerSpectralDensity + inCellInterference[i];
 
-            denSinr = (denSinr * 180000.0);
+            denSinr = (denSinr * 180000.0)/12;
             denSinr = rsrpPerReLinear / denSinr;
 
             // compute final SINR
@@ -2110,7 +2110,7 @@ double LteRealisticChannelModel::computeAnalyticalPathloss(Coord destCoord, Coor
     double pathLoss = 0;
     double pathLossFree = 0;
 
-    double environmentHeight = 0;
+    double environmentHeight = 1;
 
     double fc = carrierFrequency_;
 
@@ -2699,19 +2699,18 @@ bool LteRealisticChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlIn
     }
 
     double bler = 0;
-    double usedRbs = 0;
-    double averageSINR;
-
-    //Get the resource Block id used to transmit this packet
+    std::vector<double> totalbler;
+    double finalSuccess = 1;
     RbMap rbmap = lteInfo->getGrantedBlocks();
-
     RbMap::iterator it;
     std::map<Band, unsigned int>::iterator jt;
 
     //for each Remote unit used to transmit the packet
-    for (it = rbmap.begin(); it != rbmap.end(); ++it) {
+    for (it = rbmap.begin(); it != rbmap.end(); ++it)
+    {
         //for each logical band used to transmit the packet
-        for (jt = it->second.begin(); jt != it->second.end(); ++jt) {
+        for (jt = it->second.begin(); jt != it->second.end(); ++jt)
+        {
             //this Rb is not allocated
             if (jt->second == 0) continue;
 
@@ -2719,37 +2718,44 @@ bool LteRealisticChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlIn
             if ((lteInfo->getTxMode() == CL_SPATIAL_MULTIPLEXING
                  || lteInfo->getTxMode() == OL_SPATIAL_MULTIPLEXING)
                 && rbmap.size() > 1)
+                //we consider only the snr associated to the LB used
+                if (it->first != lteInfo->getCw()) continue;
 
-            //we consider only the snr associated to the LB used
-            if (it->first != lteInfo->getCw()) continue;
+            //Get the Bler
+            double snr = sinrVector[jt->first];//XXX because jt->first is a Band (=unsigned short)
 
-            
-            averageSINR += dBToLinear(sinrVector[jt->first]);//XXX because jt->first is a Band (=unsigned short)
-            usedRbs += 1;
+            if (snr > binder_->phyPisaData.maxSnr())
+                bler = 0;
+            else
+            if (lteInfo->getFrameType() == SCIPKT)
+            {
+                // TODO: Make this slightly tidier.
+                bler = binder_->phyPisaData.GetPscchBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, snr);
+            }
+            else
+            {
+                if (analytical_)
+                    bler = binder_->phyPisaData.GetBlerAnalytical(mcs, snr);
+                else
+                    bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, snr);
+            }
+
+            double success = 1 - bler;
+            //compute the success probability according to the number of RB used
+            double successPacket = pow(success, (double)jt->second);
+
+            // compute the success probability according to the number of LB used
+            finalSuccess *= successPacket;
         }
     }
-
-    averageSINR = linearToDb(averageSINR / usedRbs);
-
-    if (averageSINR > binder_->phyPisaData.maxSnr())
-        bler = 0;
-    else
-        if (lteInfo->getFrameType() == SCIPKT)
-        {
-            // TODO: Make this slightly tidier.
-            bler = binder_->phyPisaData.GetPscchBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, averageSINR);
-        }
-        else
-        {
-            if (analytical_)
-                bler = binder_->phyPisaData.GetBlerAnalytical(mcs, averageSINR);
-            else
-                bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, averageSINR);
-        }
+    // Compute total error probability
+    double per = 1 - finalSuccess;
+    // Harq Reduction
+    double totalPer = per * pow(harqReduction_, nTx - 1);
 
     double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
 
-    if (er <= bler)
+    if (er <= totalPer)
     {
         // Signal too weak, we can't receive it
         return false;

@@ -1018,12 +1018,12 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
 
     std::vector<double> rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
 
-    double averageRSRP;
-    for (int i = 0; i <= rsrpVector.size(); i++){
-        averageRSRP += rsrpVector[i];
-    }
-
-    averageRSRP = averageRSRP/rsrpVector.size();
+//    double averageRSRP;
+//    for (int i = 0; i <= rsrpVector.size(); i++){
+//        averageRSRP += rsrpVector[i];
+//    }
+//
+//    averageRSRP = averageRSRP/rsrpVector.size();
 
 //    if (averageRSRP < -90.5){
 //        double pkt_dist = getCoord().distance(newInfo->getCoord());
@@ -1050,7 +1050,7 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
 //            emit(posY, getCoord().y);
 //        }
 //        // Ensure we don't continue to store an already deleted frame.
-////        delete newInfo;
+//        delete newInfo;
 //        delete newFrame;
 //        return;
 //    }
