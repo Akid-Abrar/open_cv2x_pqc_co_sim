@@ -1024,7 +1024,7 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
     double erfParam = (newInfo->getD2dTxPower() - attenuation - -90.5) / (3 * sqrt(2));
     double erfValue = erf(erfParam);
     double chanceUnsensed = 0.5 * (1 - erfValue);
-    double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
+    double er = dblrand(1);;
 
     if (er){
         double pkt_dist = getCoord().distance(newInfo->getCoord());
