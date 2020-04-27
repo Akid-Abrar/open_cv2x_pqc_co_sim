@@ -997,7 +997,7 @@ std::vector<double> LteRealisticChannelModel::getSINR(LteAirFrame *frame, UserCo
     return snrVector;
 }
 
-std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, Coord destCoord)
+std::tuple<std::vector<double>, double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, Coord destCoord)
 {
     AttenuationVector::iterator it;
     // Get Tx power
@@ -1054,6 +1054,7 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
 
     // attenuation for the desired signal
     double attenuation = getAttenuation_D2D(sourceId, dir, sourceCoord, destId, destCoord); // dB
+    double originalAttenuation = attenuation;
 
     attenuation -= antennaGainTx;
     attenuation -= antennaGainRx;
@@ -1104,7 +1105,7 @@ std::vector<double> LteRealisticChannelModel::getRSRP_D2D(LteAirFrame *frame, Us
     }
     //============ END PATH LOSS + SHADOWING + FADING ===============
 
-    return rsrpVector;
+    return std::make_tuple(rsrpVector, originalAttenuation);
 }
 
 std::vector<double> LteRealisticChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo, MacNodeId destId, Coord destCoord, MacNodeId enbId)
@@ -2110,7 +2111,7 @@ double LteRealisticChannelModel::computeAnalyticalPathloss(Coord destCoord, Coor
     double pathLoss = 0;
     double pathLossFree = 0;
 
-    double environmentHeight = 1;
+    double environmentHeight = 0;
 
     double fc = carrierFrequency_;
 

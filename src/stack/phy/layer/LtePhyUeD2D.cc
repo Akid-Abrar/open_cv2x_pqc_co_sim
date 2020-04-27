@@ -320,7 +320,7 @@ void LtePhyUeD2D::storeAirFrame(LteAirFrame* newFrame)
 
         double sum = 0.0;
         unsigned int allocatedRbs = 0;
-        rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
+//        rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
 
         // get the average RSRP on the RBs allocated for the transmission
         RbMap rbmap = newInfo->getGrantedBlocks();

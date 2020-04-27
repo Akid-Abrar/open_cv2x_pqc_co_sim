@@ -48,11 +48,12 @@ std::vector<double> LteDummyChannelModel::getSINR(LteAirFrame *frame, UserContro
     return tmp;
 }
 
-std::vector<double> LteDummyChannelModel::getRSRP_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord)
+std::tuple<std::vector<double>, double>  LteDummyChannelModel::getRSRP_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord)
 {
-    std::vector<double> tmp;
-    tmp.push_back(10000);
-    return tmp;
+    std::vector<double> tmp1;
+    double tmp2 = 0.0;
+    tmp1.push_back(10000);
+    return std::make_tuple(tmp1, tmp2);
 }
 
 std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId)

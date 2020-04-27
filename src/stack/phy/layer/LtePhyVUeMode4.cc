@@ -1016,44 +1016,44 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
     UserControlInfo* newInfo = check_and_cast<UserControlInfo*>(newFrame->getControlInfo());
     Coord myCoord = getCoord();
 
-    std::vector<double> rsrpVector = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
+    std::tuple<std::vector<double>, double> rsrpAttenuation = channelModel_->getRSRP_D2D(newFrame, newInfo, nodeId_, myCoord);
+    std::vector<double> rsrpVector = get<0>(rsrpAttenuation);
+    double attenuation = get<1>(rsrpAttenuation);
 
-//    double averageRSRP;
-//    for (int i = 0; i <= rsrpVector.size(); i++){
-//        averageRSRP += rsrpVector[i];
-//    }
-//
-//    averageRSRP = averageRSRP/rsrpVector.size();
+    bool notSensed = false;
+    double erfParam = (newInfo->getD2dTxPower() - attenuation - -90.5) / (3 * sqrt(2));
+    double erfValue = erf(erfParam);
+    double chanceUnsensed = 0.5 * (1 - erfValue);
+    double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
 
-//    if (averageRSRP < -90.5){
-//        double pkt_dist = getCoord().distance(newInfo->getCoord());
-//        if (newInfo->getFrameType() == SCIPKT){
-//            emit(txRxDistanceSCI, pkt_dist);
-//            emit(sciUnsensed, 1);
-//            emit(sciReceived, 1);
-//            emit(sciDecoded, 0);
-//            emit(sciFailedDueToProp, 0);
-//            emit(sciFailedDueToInterference, 0);
-//            emit(sciFailedHalfDuplex, 0);
-//            emit(subchannelReceived, 0);
-//            emit(subchannelsUsed, 0);
-//        }
-//        else{
-//            emit(txRxDistanceTB, pkt_dist);
-//            emit(tbReceived, 1);
-//            emit(tbDecoded, 0);
-//            emit(tbFailedDueToNoSCI, 0);
-//            emit(tbFailedButSCIReceived, 0);
-//            emit(tbFailedHalfDuplex, 0);
-//            emit(tbUnsensed, 1);
-//            emit(posX, getCoord().x);
-//            emit(posY, getCoord().y);
-//        }
-//        // Ensure we don't continue to store an already deleted frame.
-//        delete newInfo;
-//        delete newFrame;
-//        return;
-//    }
+    if (er){
+        double pkt_dist = getCoord().distance(newInfo->getCoord());
+        if (newInfo->getFrameType() == SCIPKT){
+            emit(txRxDistanceSCI, pkt_dist);
+            emit(sciUnsensed, 1);
+            emit(sciReceived, 1);
+            emit(sciDecoded, 0);
+            emit(sciFailedDueToProp, 0);
+            emit(sciFailedDueToInterference, 0);
+            emit(sciFailedHalfDuplex, 0);
+            emit(subchannelReceived, 0);
+            emit(subchannelsUsed, 0);
+        }
+        else{
+            emit(txRxDistanceTB, pkt_dist);
+            emit(tbReceived, 1);
+            emit(tbDecoded, 0);
+            emit(tbFailedDueToNoSCI, 0);
+            emit(tbFailedButSCIReceived, 0);
+            emit(tbFailedHalfDuplex, 0);
+            emit(tbUnsensed, 1);
+            emit(posX, getCoord().x);
+            emit(posY, getCoord().y);
+        }
+        // Ensure we don't continue to store an already deleted frame.
+        delete newFrame;
+        return;
+    }
 
     // Seems we don't really actually need the enbId, I have set it to 0 as it is referenced but never used for calc
     std::tuple<std::vector<double>, std::vector<double>> rssiSinrVectors = channelModel_->getRSSI_SINR(newFrame, newInfo, nodeId_, myCoord, 0, rsrpVector);

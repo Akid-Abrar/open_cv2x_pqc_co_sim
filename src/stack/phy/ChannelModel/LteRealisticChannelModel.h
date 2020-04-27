@@ -186,7 +186,7 @@ class LteRealisticChannelModel : public LteChannelModel
     /*
      * Compute Received useful signal for D2D transmissions
      */
-    virtual std::vector<double> getRSRP_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord);
+    virtual std::tuple<std::vector<double>, double> getRSRP_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord);
     /*
      * Compute sinr (D2D) for each band for user nodeId according to pathloss, shadowing (optional) and multipath fading
      *
