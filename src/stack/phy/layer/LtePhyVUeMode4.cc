@@ -1026,7 +1026,7 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
     double chanceUnsensed = 0.5 * (1 - erfValue);
     double er = dblrand(1);;
 
-    if (er){
+    if (er < chanceUnsensed){
         double pkt_dist = getCoord().distance(newInfo->getCoord());
         if (newInfo->getFrameType() == SCIPKT){
             emit(txRxDistanceSCI, pkt_dist);
