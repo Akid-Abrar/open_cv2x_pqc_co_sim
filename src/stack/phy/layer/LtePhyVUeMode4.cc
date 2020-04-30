@@ -1023,10 +1023,10 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
     bool notSensed = false;
     double erfParam = (newInfo->getD2dTxPower() - attenuation - -90.5) / (3 * sqrt(2));
     double erfValue = erf(erfParam);
-    double chanceUnsensed = 0.5 * (1 - erfValue);
-    double er = dblrand(1);;
+    double packetSensingRatio = 0.5 * (1 + erfValue);
+    double er = dblrand(1);
 
-    if (er < chanceUnsensed){
+    if (er >= packetSensingRatio){
         double pkt_dist = getCoord().distance(newInfo->getCoord());
         if (newInfo->getFrameType() == SCIPKT){
             emit(txRxDistanceSCI, pkt_dist);
