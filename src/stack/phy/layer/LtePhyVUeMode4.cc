@@ -113,6 +113,9 @@ void LtePhyVUeMode4::initialize(int stage)
         sciFailedDueToProp_ = 0;
         sciFailedDueToInterference_ = 0;
 
+        sciUnsensed_ = 0;
+        tbUnsensed_ = 0;
+
         sensingWindowFront_ = 0; // Will ensure when we first update the sensing window we don't skip over the first element
     }
     else if (stage == INITSTAGE_NETWORK_LAYER_2)
@@ -174,7 +177,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector, attenuation);
 
             emit(sciReceived, sciReceived_);
-            emit(sciUnsensed, 0);
+            emit(sciUnsensed, sciUnsensed_);
             emit(sciDecoded, sciDecoded_);
             emit(sciFailedDueToProp, sciFailedDueToProp_);
             emit(sciFailedDueToInterference, sciFailedDueToInterference_);
@@ -189,6 +192,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             sciFailedDueToProp_ = 0;
             subchannelReceived_ = 0;
             subchannelsUsed_ = 0;
+            sciUnsensed_ = 0;
         }
         int countTbs = 0;
         if (tbFrames_.empty()){
@@ -1092,6 +1096,9 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
         if (!transmitting_)
         {
+
+            sciReceived_ += 1;
+
             bool notSensed = false;
             double erfParam = (lteInfo->getD2dTxPower() - attenuation - -90.5) / (3 * sqrt(2));
             double erfValue = erf(erfParam);
@@ -1100,22 +1107,13 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
             if (er >= packetSensingRatio){
                 // Packet was not sensed so mark as such and delete it.
-                emit(sciReceived, 1);
-                emit(sciUnsensed, 1);
-                emit(sciDecoded, 0);
-                emit(sciFailedDueToProp, 0);
-                emit(sciFailedDueToInterference, 0);
-                emit(sciFailedHalfDuplex, 0);
-                emit(subchannelReceived, 0);
-                emit(subchannelsUsed, 0);
+                sciUnsensed_ += 1;
                 delete lteInfo;
                 delete pkt;
             } else {
 
                 prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0, false);
                 interference_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, 0);
-
-                sciReceived_ += 1;
 
                 SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation *>(pkt);
                 std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);

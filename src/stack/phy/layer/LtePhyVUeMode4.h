@@ -103,6 +103,9 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int sciFailedDueToProp_;
     int sciFailedDueToInterference_;
 
+    int sciUnsensed_;
+    int tbUnsensed_;
+
     RbMap availableRBs_;
 
     LteAllocationModule* allocator_;
