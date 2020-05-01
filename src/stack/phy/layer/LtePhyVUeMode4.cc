@@ -160,6 +160,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             std::vector<double> rsrpVector = sciRsrpVectors_.back();
             std::vector<double> rssiVector = sciRssiVectors_.back();
             std::vector<double> sinrVector = sciSinrVectors_.back();
+            double attenuation = sciAttenuations_.back();
 
             // Remove it from the vector
             sciFrames_.pop_back();
@@ -170,7 +171,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(frame->removeControlInfo());
 
             // decode the selected frame
-            decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector);
+            decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector, attenuation);
 
             emit(sciReceived, sciReceived_);
             emit(sciUnsensed, 0);
@@ -194,11 +195,13 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             for(countTbs; countTbs<missingTbs.size(); countTbs++){
                 emit(txRxDistanceTB, -1);
                 emit(tbReceived, -1);
+                emit(tbUnsensed, -1);
                 emit(tbDecoded, -1);
                 emit(tbFailedDueToNoSCI, -1);
+                emit(tbFailedDueToProp, -1);
+                emit(tbFailedDueToInterference, -1);
                 emit(tbFailedButSCIReceived, -1);
                 emit(tbFailedHalfDuplex, -1);
-                emit(tbUnsensed, -1);
             }
         }
         while (!tbFrames_.empty())
@@ -207,16 +210,19 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 // This corresponds to where we are missing a TB, record results as being negative to identify this.
                 emit(txRxDistanceTB, -1);
                 emit(tbReceived, -1);
+                emit(tbUnsensed, -1);
                 emit(tbDecoded, -1);
                 emit(tbFailedDueToNoSCI, -1);
+                emit(tbFailedDueToProp, -1);
+                emit(tbFailedDueToInterference, -1);
                 emit(tbFailedButSCIReceived, -1);
                 emit(tbFailedHalfDuplex, -1);
-                emit(tbUnsensed, -1);
             } else {
                 LteAirFrame *frame = tbFrames_.back();
                 std::vector<double> rsrpVector = tbRsrpVectors_.back();
                 std::vector<double> rssiVector = tbRssiVectors_.back();
                 std::vector<double> sinrVector = tbSinrVectors_.back();
+                double attenuation = tbAttenuations_.back();
 
                 tbFrames_.pop_back();
                 tbRsrpVectors_.pop_back();
@@ -226,7 +232,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 UserControlInfo *lteInfo = check_and_cast<UserControlInfo *>(frame->removeControlInfo());
 
                 // decode the selected frame
-                decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector);
+                decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector, attenuation);
 
                 emit(tbReceived, tbReceived_);
                 emit(tbUnsensed, 0);
@@ -1020,41 +1026,6 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
     std::vector<double> rsrpVector = get<0>(rsrpAttenuation);
     double attenuation = get<1>(rsrpAttenuation);
 
-    bool notSensed = false;
-    double erfParam = (newInfo->getD2dTxPower() - attenuation - -90.5) / (3 * sqrt(2));
-    double erfValue = erf(erfParam);
-    double packetSensingRatio = 0.5 * (1 + erfValue);
-    double er = dblrand(1);
-
-    if (er >= packetSensingRatio){
-        double pkt_dist = getCoord().distance(newInfo->getCoord());
-        if (newInfo->getFrameType() == SCIPKT){
-            emit(txRxDistanceSCI, pkt_dist);
-            emit(sciUnsensed, 1);
-            emit(sciReceived, 1);
-            emit(sciDecoded, 0);
-            emit(sciFailedDueToProp, 0);
-            emit(sciFailedDueToInterference, 0);
-            emit(sciFailedHalfDuplex, 0);
-            emit(subchannelReceived, 0);
-            emit(subchannelsUsed, 0);
-        }
-        else{
-            emit(txRxDistanceTB, pkt_dist);
-            emit(tbReceived, 1);
-            emit(tbDecoded, 0);
-            emit(tbFailedDueToNoSCI, 0);
-            emit(tbFailedButSCIReceived, 0);
-            emit(tbFailedHalfDuplex, 0);
-            emit(tbUnsensed, 1);
-            emit(posX, getCoord().x);
-            emit(posY, getCoord().y);
-        }
-        // Ensure we don't continue to store an already deleted frame.
-        delete newFrame;
-        return;
-    }
-
     // Seems we don't really actually need the enbId, I have set it to 0 as it is referenced but never used for calc
     std::tuple<std::vector<double>, std::vector<double>> rssiSinrVectors = channelModel_->getRSSI_SINR(newFrame, newInfo, nodeId_, myCoord, 0, rsrpVector);
 
@@ -1067,16 +1038,18 @@ void LtePhyVUeMode4::storeAirFrame(LteAirFrame* newFrame)
         sciRsrpVectors_.push_back(rsrpVector);
         sciRssiVectors_.push_back(rssiVector);
         sciSinrVectors_.push_back(sinrVector);
+        sciAttenuations_.push_back(attenuation);
     }
     else{
         tbFrames_.push_back(newFrame);
         tbRsrpVectors_.push_back(rsrpVector);
         tbRssiVectors_.push_back(rssiVector);
         tbSinrVectors_.push_back(sinrVector);
+        tbAttenuations_.push_back(attenuation);
     }
 }
 
-void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector, std::vector<double> &sinrVector)
+void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector, std::vector<double> &sinrVector, double &attenuation)
 {
     EV << NOW << " LtePhyVUeMode4::decodeAirFrame - Start decoding..." << endl;
 
@@ -1119,55 +1092,73 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
         if (!transmitting_)
         {
-            prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0, false);
-            interference_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, 0);
+            bool notSensed = false;
+            double erfParam = (lteInfo->getD2dTxPower() - attenuation - -90.5) / (3 * sqrt(2));
+            double erfValue = erf(erfParam);
+            double packetSensingRatio = 0.5 * (1 + erfValue);
+            double er = dblrand(1);
 
-            sciReceived_ += 1;
+            if (er >= packetSensingRatio){
+                // Packet was not sensed so mark as such and delete it.
+                emit(sciReceived, 1);
+                emit(sciUnsensed, 1);
+                emit(sciDecoded, 0);
+                emit(sciFailedDueToProp, 0);
+                emit(sciFailedDueToInterference, 0);
+                emit(sciFailedHalfDuplex, 0);
+                emit(subchannelReceived, 0);
+                emit(subchannelsUsed, 0);
+                delete lteInfo;
+                delete pkt;
+            } else {
 
-            SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation*>(pkt);
-            std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);
-            int subchannelIndex = std::get<0>(indexAndLength);
-            int lengthInSubchannels = std::get<1>(indexAndLength);
+                prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0, false);
+                interference_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, 0);
 
-            subchannelReceived_ = subchannelIndex;
-            subchannelsUsed_ = lengthInSubchannels;
-            emit(senderID, lteInfo->getSourceId());
+                sciReceived_ += 1;
 
-            if (interference_result) {
+                SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation *>(pkt);
+                std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);
+                int subchannelIndex = std::get<0>(indexAndLength);
+                int lengthInSubchannels = std::get<1>(indexAndLength);
 
-                std::vector <Subchannel *> currentSubframe = sensingWindow_[sensingWindowFront_];
-                for (int i = subchannelIndex; i < subchannelIndex + lengthInSubchannels; i++) {
-                    Subchannel* currentSubchannel = currentSubframe[i];
-                    // Record the SCI info in the subchannel.
-                    currentSubchannel->setPriority(sci->getPriority());
-                    currentSubchannel->setResourceReservationInterval(sci->getResourceReservationInterval());
-                    currentSubchannel->setFrequencyResourceLocation(sci->getFrequencyResourceLocation());
-                    currentSubchannel->setTimeGapRetrans(sci->getTimeGapRetrans());
-                    currentSubchannel->setMcs(sci->getMcs());
-                    currentSubchannel->setRetransmissionIndex(sci->getRetransmissionIndex());
-                    currentSubchannel->setSciSubchannelIndex(subchannelIndex);
-                    currentSubchannel->setSciLength(lengthInSubchannels);
-                    currentSubchannel->setReserved(true);
+                subchannelReceived_ = subchannelIndex;
+                subchannelsUsed_ = lengthInSubchannels;
+                emit(senderID, lteInfo->getSourceId());
+
+                if (interference_result) {
+
+                    std::vector < Subchannel * > currentSubframe = sensingWindow_[sensingWindowFront_];
+                    for (int i = subchannelIndex; i < subchannelIndex + lengthInSubchannels; i++) {
+                        Subchannel *currentSubchannel = currentSubframe[i];
+                        // Record the SCI info in the subchannel.
+                        currentSubchannel->setPriority(sci->getPriority());
+                        currentSubchannel->setResourceReservationInterval(sci->getResourceReservationInterval());
+                        currentSubchannel->setFrequencyResourceLocation(sci->getFrequencyResourceLocation());
+                        currentSubchannel->setTimeGapRetrans(sci->getTimeGapRetrans());
+                        currentSubchannel->setMcs(sci->getMcs());
+                        currentSubchannel->setRetransmissionIndex(sci->getRetransmissionIndex());
+                        currentSubchannel->setSciSubchannelIndex(subchannelIndex);
+                        currentSubchannel->setSciLength(lengthInSubchannels);
+                        currentSubchannel->setReserved(true);
+                    }
+                    lteInfo->setDeciderResult(true);
+                    pkt->setControlInfo(lteInfo);
+                    scis_.push_back(pkt);
+                    sciDecoded_ += 1;
+                } else if (!prop_result) {
+                    sciFailedDueToProp_ += 1;
+                    delete lteInfo;
+                    delete pkt;
+                } else if (!interference_result) {
+                    sciFailedDueToInterference_ += 1;
+                    delete lteInfo;
+                    delete pkt;
+                } else {
+                    lteInfo->setDeciderResult(false);
+                    pkt->setControlInfo(lteInfo);
+                    scis_.push_back(pkt);
                 }
-                lteInfo->setDeciderResult(true);
-                pkt->setControlInfo(lteInfo);
-                scis_.push_back(pkt);
-                sciDecoded_ += 1;
-            }
-            else if (!prop_result){
-                sciFailedDueToProp_ += 1;
-                delete lteInfo;
-                delete pkt;
-            } else if (!interference_result) {
-                sciFailedDueToInterference_ += 1;
-                delete lteInfo;
-                delete pkt;
-            }
-            else
-            {
-                lteInfo->setDeciderResult(false);
-                pkt->setControlInfo(lteInfo);
-                scis_.push_back(pkt);
             }
         }
         else

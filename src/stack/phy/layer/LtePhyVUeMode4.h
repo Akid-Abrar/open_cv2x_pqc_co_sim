@@ -43,6 +43,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     std::vector<std::vector<double>> tbRsrpVectors_;
     std::vector<std::vector<double>> tbRssiVectors_;
     std::vector<std::vector<double>> tbSinrVectors_;
+    std::vector<double> tbAttenuations_;
 
     std::vector<std::vector<Subchannel*>> sensingWindow_;
     int sensingWindowFront_;
@@ -50,6 +51,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     std::vector<std::vector<double>> sciRsrpVectors_;
     std::vector<std::vector<double>> sciRssiVectors_;
     std::vector<std::vector<double>> sciSinrVectors_;
+    std::vector<double> sciAttenuations_;
     std::vector<LteAirFrame*> sciFrames_;
     std::vector<cPacket*> scis_;
 
@@ -107,7 +109,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame();
-    void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector, std::vector<double> &sinrVector);
+    void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector, std::vector<double> &sinrVector, double &attenuation);
     // ---------------------------------------------------------------- //
 
     virtual void initialize(int stage);
