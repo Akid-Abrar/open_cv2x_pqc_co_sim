@@ -83,7 +83,6 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t tbFailedDueToInterference;
     simsignal_t sciFailedDueToProp;
     simsignal_t sciFailedDueToInterference;
-    simsignal_t tbUnsensed;
     simsignal_t sciUnsensed;
 
     int sciReceived_;
@@ -104,7 +103,6 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int sciFailedDueToInterference_;
 
     int sciUnsensed_;
-    int tbUnsensed_;
 
     RbMap availableRBs_;
 

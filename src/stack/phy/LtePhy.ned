@@ -144,8 +144,6 @@ simple LtePhyVUeMode4 extends LtePhyUeD2D {
         @signal[sciFailedDueToInterference];
         @statistic[sciFailedDueToInterference](title="Number of failed SCIs due to interference"; source="sciFailedDueToInterference"; record=sum,vector);
 
-        @signal[tbUnsensed];
-        @statistic[tbUnsensed](title="Number of failed TBs due to RSRP below threshold"; source="sciUnsensed"; record=sum,vector);
         @signal[sciUnsensed];
         @statistic[sciUnsensed](title="Number of failed SCIs due to RSRP below threshold"; source="sciUnsensed"; record=sum,vector);
 

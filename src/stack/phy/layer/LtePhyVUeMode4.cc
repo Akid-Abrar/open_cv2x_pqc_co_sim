@@ -83,7 +83,7 @@ void LtePhyVUeMode4::initialize(int stage)
         tbFailedHalfDuplex          = registerSignal("tbFailedHalfDuplex");
         tbFailedDueToProp           = registerSignal("tbFailedDueToProp");
         tbFailedDueToInterference   = registerSignal("tbFailedDueToInterference");
-        tbUnsensed                  = registerSignal("tbUnsensed");
+        tbFailedDueToInterference   = registerSignal("tbFailedDueToInterference");
         sciFailedDueToProp          = registerSignal("sciFailedDueToProp");
         sciFailedDueToInterference  = registerSignal("sciFailedDueToInterference");
         sciUnsensed                 = registerSignal("sciUnsensed");
@@ -114,7 +114,6 @@ void LtePhyVUeMode4::initialize(int stage)
         sciFailedDueToInterference_ = 0;
 
         sciUnsensed_ = 0;
-        tbUnsensed_ = 0;
 
         sensingWindowFront_ = 0; // Will ensure when we first update the sensing window we don't skip over the first element
     }
@@ -170,6 +169,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             sciRsrpVectors_.pop_back();
             sciRssiVectors_.pop_back();
             sciSinrVectors_.pop_back();
+            sciAttenuations_.pop_back();
 
             UserControlInfo* lteInfo = check_and_cast<UserControlInfo*>(frame->removeControlInfo());
 
@@ -199,7 +199,6 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
             for(countTbs; countTbs<missingTbs.size(); countTbs++){
                 emit(txRxDistanceTB, -1);
                 emit(tbReceived, -1);
-                emit(tbUnsensed, -1);
                 emit(tbDecoded, -1);
                 emit(tbFailedDueToNoSCI, -1);
                 emit(tbFailedDueToProp, -1);
@@ -214,7 +213,6 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 // This corresponds to where we are missing a TB, record results as being negative to identify this.
                 emit(txRxDistanceTB, -1);
                 emit(tbReceived, -1);
-                emit(tbUnsensed, -1);
                 emit(tbDecoded, -1);
                 emit(tbFailedDueToNoSCI, -1);
                 emit(tbFailedDueToProp, -1);
@@ -232,6 +230,7 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 tbRsrpVectors_.pop_back();
                 tbRssiVectors_.pop_back();
                 tbSinrVectors_.pop_back();
+                tbAttenuations_.pop_back();
 
                 UserControlInfo *lteInfo = check_and_cast<UserControlInfo *>(frame->removeControlInfo());
 
@@ -239,7 +238,6 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 decodeAirFrame(frame, lteInfo, rsrpVector, rssiVector, sinrVector, attenuation);
 
                 emit(tbReceived, tbReceived_);
-                emit(tbUnsensed, 0);
                 emit(tbDecoded, tbDecoded_);
                 emit(tbFailedDueToNoSCI, tbFailedDueToNoSCI_);
                 emit(tbFailedDueToProp, tbFailedDueToProp_);
