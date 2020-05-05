@@ -128,9 +128,9 @@ class Subchannel
                 std::map<Band, double>::iterator it;
                 for(it=rssiValues.begin(); it!=rssiValues.end(); it++)
                 {
-                    sum += it->second;
+                    sum += dBmToLinear(it->second);
                 }
-                return sum/numRbs;
+                return linearToDBm(sum);
             } else {
                 return - std::numeric_limits<double>::infinity();
             }

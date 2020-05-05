@@ -857,7 +857,7 @@ std::vector<std::tuple<double, int, int>> LtePhyVUeMode4::selectBestRSSIs(std::u
                 {
                     if (sensingWindow_[translatedSubframeIndex][subchannelCounter]->getSensed())
                     {
-                        double averageRSSI = sensingWindow_[translatedSubframeIndex][subchannelCounter]->getAverageRSSI();
+                        double averageRSSI = dBmToLinear(sensingWindow_[translatedSubframeIndex][subchannelCounter]->getAverageRSSI());
                         if (averageRSSI != -std::numeric_limits<double>::infinity()){
                             totalRSSI += averageRSSI;
                             ++numSubchannels;
@@ -876,7 +876,7 @@ std::vector<std::tuple<double, int, int>> LtePhyVUeMode4::selectBestRSSIs(std::u
                 // Can be the case when the sensing window is not full that we don't find the historic CSRs
                 averageRSSI = totalRSSI / numSubchannels;
                 int transIndex = subframe - (10 * pStep_);
-                orderedCSRs.push_back(std::make_tuple(averageRSSI, transIndex, initialSubchannelIndex));
+                orderedCSRs.push_back(std::make_tuple(linearToDBm(averageRSSI), transIndex, initialSubchannelIndex));
             }
             else {
                 // Subchannel has never been reserved and thus has negative infinite RSSI.

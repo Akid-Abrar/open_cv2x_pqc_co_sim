@@ -1882,7 +1882,7 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
 
             double rsrpPerReLinear = dBmToLinear(rssiVector[i]);
 
-            double linearRSSI = 2 * (denRssi + rsrpPerReLinear);
+            double linearRSSI = 12 * (denRssi + rsrpPerReLinear);
             double rssi = linearToDBm(linearRSSI);
 
             rssiVector[i] = rssi;
