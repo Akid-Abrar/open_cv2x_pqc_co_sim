@@ -12,6 +12,7 @@
 
 
 #include <math.h>
+#include <numeric>
 #include <assert.h>
 #include <algorithm>
 #include <iterator>
@@ -1106,8 +1107,9 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
             if (er >= packetSensingRatio){
                 // Packet was not sensed so mark as such and delete it.
                 sciUnsensed_ += 1;
-                delete lteInfo;
-                delete pkt;
+                lteInfo->setDeciderResult(false);
+                pkt->setControlInfo(lteInfo);
+                scis_.push_back(pkt);
             } else {
 
                 prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0, false);
@@ -1144,13 +1146,11 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                     sciDecoded_ += 1;
                 } else if (!prop_result) {
                     sciFailedDueToProp_ += 1;
-                    delete lteInfo;
-                    delete pkt;
-                } else if (!interference_result) {
-                    sciFailedDueToInterference_ += 1;
-                    delete lteInfo;
-                    delete pkt;
+                    lteInfo->setDeciderResult(false);
+                    pkt->setControlInfo(lteInfo);
+                    scis_.push_back(pkt);
                 } else {
+                    sciFailedDueToInterference_ += 1;
                     lteInfo->setDeciderResult(false);
                     pkt->setControlInfo(lteInfo);
                     scis_.push_back(pkt);
@@ -1234,24 +1234,32 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 int subchannelIndex = std::get<0>(indexAndLength);
                 int lengthInSubchannels = std::get<1>(indexAndLength);
 
+                auto n = rsrpVector.size();
+                double averageRSRP = 0.0;
+                if ( n != 0) {
+                    averageRSRP = std::accumulate( rsrpVector.begin(), rsrpVector.end(), 0.0) / n;
+                }
+
                 std::vector <Subchannel *> currentSubframe = sensingWindow_[sensingWindowFront_];
                 for (int i = subchannelIndex; i < subchannelIndex + lengthInSubchannels; i++) {
                     Subchannel *currentSubchannel = currentSubframe[i];
-                    std::vector<Band>::iterator lt;
-                    std::vector <Band> allocatedBands = currentSubchannel->getOccupiedBands();
-                    for (lt = allocatedBands.begin(); lt != allocatedBands.end(); lt++) {
-                        // Record RSRP and RSSI for this band depending if it was used or not
-                        bool used = false;
+                    if (averageRSRP > currentSubchannel->getAverageRSRP()){
+                        std::vector<Band>::iterator lt;
+                        std::vector <Band> allocatedBands = currentSubchannel->getOccupiedBands();
+                        for (lt = allocatedBands.begin(); lt != allocatedBands.end(); lt++) {
+                            // Record RSRP and RSSI for this band depending if it was used or not
+                            bool used = false;
 
-                        //for each Remote unit used to transmit the packet
-                        for (mt = usedRbs.begin(); mt != usedRbs.end(); ++mt) {
-                            //for each logical band used to transmit the packet
-                            for (nt = mt->second.begin(); nt != mt->second.end(); ++nt) {
-                                if (nt->first == *lt) {
-                                    currentSubchannel->addRsrpValue(rsrpVector[(*lt)], (*lt));
-                                    currentSubchannel->addRssiValue(rssiVector[(*lt)], (*lt));
-                                    used = true;
-                                    break;
+                            //for each Remote unit used to transmit the packet
+                            for (mt = usedRbs.begin(); mt != usedRbs.end(); ++mt) {
+                                //for each logical band used to transmit the packet
+                                for (nt = mt->second.begin(); nt != mt->second.end(); ++nt) {
+                                    if (nt->first == *lt) {
+                                        currentSubchannel->addRsrpValue(rsrpVector[(*lt)], (*lt));
+                                        currentSubchannel->addRssiValue(rssiVector[(*lt)], (*lt));
+                                        used = true;
+                                        break;
+                                    }
                                 }
                             }
                         }
