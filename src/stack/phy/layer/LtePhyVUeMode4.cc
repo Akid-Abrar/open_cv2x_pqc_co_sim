@@ -116,6 +116,8 @@ void LtePhyVUeMode4::initialize(int stage)
         sciUnsensed_ = 0;
 
         sensingWindowFront_ = 0; // Will ensure when we first update the sensing window we don't skip over the first element
+
+        cbrCountDown_ = intuniform(0, 1000);
     }
     else if (stage == INITSTAGE_NETWORK_LAYER_2)
     {
@@ -268,7 +270,13 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
     {
         transmitting_ = false;
         updateSubframe();
-        updateCBR();
+        if (cbrCountDown_ == 0) {
+            // Ensures we update CBR every 100ms
+            updateCBR();
+            cbrCountDown_ = 99;
+        } else {
+            cbrCountDown_ --;
+        }
         delete msg;
     }
     else

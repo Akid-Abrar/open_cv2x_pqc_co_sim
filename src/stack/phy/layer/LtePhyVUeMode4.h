@@ -30,6 +30,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int subchannelSize_ ;
     int selectionWindowStartingSubframe_;
     int thresholdRSSI_;
+    int cbrCountDown_;
 
     bool transmitting_;
 
