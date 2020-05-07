@@ -65,34 +65,7 @@ std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserCo
     return tmp;
 }
 
-std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector)
-{
-  std::vector<double> tmp;
-  tmp.push_back(10000);
-  // fake SINR is needed by das (to decide which antenna set are used by the terminal)
-  // and handhover function to decide if the terminal should trigger the hanhover
-  return tmp;
-}
-
-std::vector<double> LteDummyChannelModel::getRSSI(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId)
-{
-    std::vector<double> tmp;
-    tmp.push_back(10000);
-    // fake SINR is needed by das (to decide which antenna set are used by the terminal)
-    // and handhover function to decide if the terminal should trigger the hanhover
-    return tmp;
-}
-
-std::vector<double> LteDummyChannelModel::getRSSI(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector)
-{
-    std::vector<double> tmp;
-    tmp.push_back(10000);
-    // fake SINR is needed by das (to decide which antenna set are used by the terminal)
-    // and handhover function to decide if the terminal should trigger the hanhover
-    return tmp;
-}
-
-std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector, bool interference)
+std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector, bool interference=true)
 {
     std::vector<double> tmp;
     tmp.push_back(10000);
@@ -174,61 +147,7 @@ bool LteDummyChannelModel::error_D2D(LteAirFrame *frame, UserControlInfo* lteInf
     return true;
 }
 
-bool LteDummyChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo,std::vector<double> rsrpVector, int mcs, bool interference)
-{
-    // Number of RTX
-    unsigned char nTx = lteInfo->getTxNumber();
-    //Consistency check
-    if (nTx == 0)
-        throw cRuntimeError("Number of tx should not be 0");
-
-    // compute packet error rate according to number of retransmission
-    // and the harq reduction parameter
-    double totalPer = per_ * pow(harqReduction_, nTx - 1);
-    //Throw random variable
-    double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
-
-    if (er <= totalPer)
-    {
-        EV << "This is NOT your lucky day (" << er << " < " << totalPer
-           << ") -> do not receive." << endl;
-        // Signal too weak, we can't receive it
-        return false;
-    }
-        // Signal is strong enough, receive this Signal
-    EV << "This is your lucky day (" << er << " > " << totalPer
-       << ") -> Receive AirFrame." << endl;
-    return true;
-}
-
-bool LteDummyChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo,std::vector<double> rsrpVector, int mcs)
-{
-    // Number of RTX
-    unsigned char nTx = lteInfo->getTxNumber();
-    //Consistency check
-    if (nTx == 0)
-        throw cRuntimeError("Number of tx should not be 0");
-
-    // compute packet error rate according to number of retransmission
-    // and the harq reduction parameter
-    double totalPer = per_ * pow(harqReduction_, nTx - 1);
-    //Throw random variable
-    double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
-
-    if (er <= totalPer)
-    {
-        EV << "This is NOT your lucky day (" << er << " < " << totalPer
-           << ") -> do not receive." << endl;
-        // Signal too weak, we can't receive it
-        return false;
-    }
-    // Signal is strong enough, receive this Signal
-    EV << "This is your lucky day (" << er << " > " << totalPer
-       << ") -> Receive AirFrame." << endl;
-    return true;
-}
-
-bool LteDummyChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo,std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs)
+bool LteDummyChannelModel::error_Mode4(LteAirFrame *frame, UserControlInfo* lteInfo,std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs, bool interference=true)
 {
     // Number of RTX
     unsigned char nTx = lteInfo->getTxNumber();

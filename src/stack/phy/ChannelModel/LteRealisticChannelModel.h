@@ -195,7 +195,6 @@ class LteRealisticChannelModel : public LteChannelModel
      */
     virtual std::vector<double> getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId);
     virtual std::vector<double> getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector, bool interference);
-    virtual std::vector<double> getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector);
 
     /**
      *
@@ -207,8 +206,6 @@ class LteRealisticChannelModel : public LteChannelModel
      * @param rsrpVector previously recorded RSRP vector
      * @return
      */
-    virtual std::vector<double> getRSSI(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId);
-    virtual std::vector<double> getRSSI(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector);
     virtual std::tuple<std::vector<double>, std::vector<double>> getRSSI_SINR(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector);
 
     /*
@@ -229,9 +226,7 @@ class LteRealisticChannelModel : public LteChannelModel
      * @param rsrpVector the received signal for each RB, if it has already been computed
      * @param mcs the modulation and coding scheme used in sending the message.
      */
-    virtual bool error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo, std::vector<double> rsrpVector, int mcs, bool interference);
-    virtual bool error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo, std::vector<double> rsrpVector, int mcs);
-    virtual bool error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo, std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs);
+    virtual bool error_Mode4(LteAirFrame *frame, UserControlInfo* lteInfo, std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs, bool interference);
     /*
      * Compute the error probability of the transmitted packet according to cqi used, txmode, and the received power
      * after that it throws a random number in order to check if this packet will be corrupted or not
@@ -312,7 +307,6 @@ class LteRealisticChannelModel : public LteChannelModel
 
     double computeAnalyticalPathloss(const inet::Coord destCoord, const inet::Coord sourceCoord, MacNodeId nodeId);
 
-    double computeWinnerB1(const inet::Coord destCoord, const inet::Coord sourceCoord, MacNodeId nodeId);
     /*
      * Compute LOS probability
      *

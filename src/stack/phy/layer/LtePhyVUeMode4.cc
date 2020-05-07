@@ -1120,8 +1120,8 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 delete pkt;
             } else {
 
-                prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, 0, false);
-                interference_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, 0);
+                prop_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0, false);
+                interference_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0, true);
 
                 SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation *>(pkt);
                 std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);
@@ -1156,14 +1156,10 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                     sciFailedDueToProp_ += 1;
                     delete lteInfo;
                     delete pkt;
-                } else if (!interference_result) {
+                } else {
                     sciFailedDueToInterference_ += 1;
                     delete lteInfo;
                     delete pkt;
-                } else {
-                    lteInfo->setDeciderResult(false);
-                    pkt->setControlInfo(lteInfo);
-                    scis_.push_back(pkt);
                 }
             }
         }
@@ -1205,9 +1201,8 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                         //RELAY and NORMAL
                         sciDecodedSuccessfully = true;
                         if (lteInfo->getDirection() == D2D_MULTI)
-                            prop_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, correspondingSCI->getMcs(), false);
-                            interference_result = channelModel_->error_Mode4_D2D(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs());
-
+                            prop_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs(), false);
+                            interference_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs(), true);
                     }
                     // Remove the SCI
                     scis_.erase(it);
