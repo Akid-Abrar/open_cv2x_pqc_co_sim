@@ -1103,15 +1103,6 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
             cbrMaxSubchannelNum = maxSubchannelNumberPSSCH_;
         else
             cbrMaxSubchannelNum = (int)got->second;
-        // May be the case that allowing this is not the solution, may cause unfairness as some may select high
-        // rris and not be allowed into lower ones even if they possibly could (not allowing you to go below your
-        // original RRI as this probably does impact on the reservation system. Really you should always be in multiples
-        // of the original RRI but this works fine for 100ms as all are multiples of it. Something to consider.
-//        got = cbrMap.find("allowedRRI");
-//        if ( got == cbrMap.end() )
-//            resourceReservationInterval = resourceReservationInterval_;
-//        else
-//            resourceReservationInterval = (int)got->second;
 
         /**
          * Need to pick the number of subchannels for this reservation
