@@ -30,6 +30,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int subchannelSize_ ;
     int selectionWindowStartingSubframe_;
     int thresholdRSSI_;
+    int cbrCountDown_;
 
     bool transmitting_;
 
@@ -42,19 +43,22 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     std::vector<std::vector<double>> tbRsrpVectors_;
     std::vector<std::vector<double>> tbRssiVectors_;
+    std::vector<std::vector<double>> tbSinrVectors_;
+    std::vector<double> tbAttenuations_;
 
     std::vector<std::vector<Subchannel*>> sensingWindow_;
     int sensingWindowFront_;
     LteMode4SchedulingGrant* sciGrant_;
     std::vector<std::vector<double>> sciRsrpVectors_;
     std::vector<std::vector<double>> sciRssiVectors_;
+    std::vector<std::vector<double>> sciSinrVectors_;
+    std::vector<double> sciAttenuations_;
     std::vector<LteAirFrame*> sciFrames_;
     std::vector<cPacket*> scis_;
 
     simsignal_t cbr;
     simsignal_t sciReceived;
     simsignal_t sciDecoded;
-    simsignal_t sciNotDecoded;
     simsignal_t sciSent;
     simsignal_t tbSent;
     simsignal_t tbReceived;
@@ -76,9 +80,14 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t posX;
     simsignal_t posY;
 
+    simsignal_t tbFailedDueToProp;
+    simsignal_t tbFailedDueToInterference;
+    simsignal_t sciFailedDueToProp;
+    simsignal_t sciFailedDueToInterference;
+    simsignal_t sciUnsensed;
+
     int sciReceived_;
     int sciDecoded_;
-    int sciNotDecoded_;
     int sciFailedHalfDuplex_;
     int tbReceived_;
     int tbDecoded_;
@@ -89,13 +98,20 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int subchannelReceived_;
     int subchannelsUsed_;
 
+    int tbFailedDueToProp_;
+    int tbFailedDueToInterference_;
+    int sciFailedDueToProp_;
+    int sciFailedDueToInterference_;
+
+    int sciUnsensed_;
+
     RbMap availableRBs_;
 
     LteAllocationModule* allocator_;
 
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame();
-    void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector);
+    void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector, std::vector<double> &sinrVector, double &attenuation);
     // ---------------------------------------------------------------- //
 
     virtual void initialize(int stage);

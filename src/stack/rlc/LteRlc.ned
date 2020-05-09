@@ -113,6 +113,7 @@ simple LteRlcUm like ILteRlcUm {
         @display("i=block/wheelbarrow");
 
         int packetSize = default(0);
+        bool scenario3gpp = default(false);
         
         @signal[rlcDelayDl];
         @statistic[rlcDelayDl](title="Delay at the rlc layer UL"; unit="s"; source="rlcDelayDl"; record=mean);

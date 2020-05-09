@@ -44,7 +44,7 @@ protected:
 
    // All of the following should be configurable by the OMNet++ ini file and maybe even taken from higher layers if that's possible.
    double probResourceKeep_;
-   int resourceReservationInterval_;
+   double resourceReservationInterval_;
    int minSubchannelNumberPSSCH_;
    int maxSubchannelNumberPSSCH_;
    int maximumLatency_;
@@ -61,6 +61,10 @@ protected:
    double cbr_;
    bool useCBR_;
    bool packetDropping_;
+   bool rriLookup_;
+   bool crLimit_;
+   bool dccMechanism_;
+   bool adjacencyPSCCHPSSCH_;
    int missedTransmissions_;
 
    double remainingTime_;
@@ -72,6 +76,10 @@ protected:
 
    std::vector<std::unordered_map<std::string, double>> cbrPSSCHTxConfigList_;
    std::vector<std::unordered_map<std::string, double>> cbrLevels_;
+
+   std::vector<std::tuple<simtime_t, int>> cbrUpwardTransitions_;
+   std::vector<std::tuple<simtime_t, int>> cbrDownwardTransitions_;
+
    std::unordered_map<double, int> previousTransmissions_;
    std::vector<double> validResourceReservationIntervals_;
 
@@ -134,6 +142,8 @@ protected:
      * Reads MAC parameters for ue and performs initialization.
      */
     virtual void initialize(int stage);
+
+    virtual double calculateChannelOccupancyRatio(int period);
 
     /**
      * Analyze gate of incoming packet

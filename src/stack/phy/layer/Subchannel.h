@@ -128,9 +128,9 @@ class Subchannel
                 std::map<Band, double>::iterator it;
                 for(it=rssiValues.begin(); it!=rssiValues.end(); it++)
                 {
-                    sum += it->second;
+                    sum += dBmToLinear(it->second);
                 }
-                return sum/numRbs;
+                return linearToDBm(sum);
             } else {
                 return - std::numeric_limits<double>::infinity();
             }
@@ -139,7 +139,7 @@ class Subchannel
         {
             auto it = rsrpValues.find(band);
             if (it != rsrpValues.end()) {
-                if (it->second > rsrpValue){
+                if (it->second < rsrpValue){
                     it->second = rsrpValue;
                 }
             } else {
@@ -150,7 +150,7 @@ class Subchannel
         {
             auto it = rssiValues.find(band);
             if (it != rssiValues.end()) {
-                if (it->second > rssiValue){
+                if (it->second < rssiValue){
                     it->second = rssiValue;
                 }
             } else {

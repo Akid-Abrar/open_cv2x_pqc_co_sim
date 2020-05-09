@@ -1,0 +1,7 @@
+<launch>
+  <basedir path="UPDATE-WITH-YOUR-PATH"/>
+  <copy file="slow.net.xml"/>
+  <copy file="slow.rou.xml"/>
+  <copy file="rerouters.add.xml"/>
+  <copy file="slow.sumo.cfg" type="config"/>
+</launch>

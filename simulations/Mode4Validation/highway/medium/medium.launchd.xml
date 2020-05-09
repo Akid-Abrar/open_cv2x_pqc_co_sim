@@ -1,0 +1,7 @@
+<launch>
+  <basedir path="UPDATE-WITH-YOUR-PATH"/>
+  <copy file="medium.net.xml"/>
+  <copy file="medium.rou.xml"/>
+  <copy file="rerouters.add.xml"/>
+  <copy file="medium.sumo.cfg" type="config"/>
+</launch>
