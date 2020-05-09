@@ -44,7 +44,7 @@ protected:
 
    // All of the following should be configurable by the OMNet++ ini file and maybe even taken from higher layers if that's possible.
    double probResourceKeep_;
-   int resourceReservationInterval_;
+   double resourceReservationInterval_;
    int minSubchannelNumberPSSCH_;
    int maxSubchannelNumberPSSCH_;
    int maximumLatency_;
