@@ -1,5 +1,5 @@
 <launch>
-  <basedir path="/home/brian/git_repos/simulte/simulations/Mode4Validation/highway/slow"/>
+  <basedir path="UPDATE-WITH-YOUR-PATH"/>
   <copy file="slow.net.xml"/>
   <copy file="slow.rou.xml"/>
   <copy file="rerouters.add.xml"/>

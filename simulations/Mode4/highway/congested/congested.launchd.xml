@@ -1,5 +1,5 @@
 <launch>
-  <basedir path="/home/brian/git_repos/simulte/simulations/Mode4/highway/congested"/>
+  <basedir path="UPDATE-WITH-YOUR-PATH"/>
   <copy file="congested.net.xml"/>
   <copy file="congested.rou.xml"/>
   <copy file="rerouters.add.xml"/>

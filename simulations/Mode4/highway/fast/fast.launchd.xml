@@ -1,5 +1,5 @@
 <launch>
-  <basedir path="/home/brian/git_repos/simulte/simulations/Mode4/highway/fast"/>
+  <basedir path="UPDATE-WITH-YOUR-PATH"/>
   <copy file="fast.net.xml"/>
   <copy file="fast.rou.xml"/>
   <copy file="rerouters.add.xml"/>
