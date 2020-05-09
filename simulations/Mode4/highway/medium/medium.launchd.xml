@@ -1,0 +1,7 @@
+<launch>
+  <basedir path="/home/brian/git_repos/simulte/simulations/Mode4/highway/medium"/>
+  <copy file="medium.net.xml"/>
+  <copy file="medium.rou.xml"/>
+  <copy file="rerouters.add.xml"/>
+  <copy file="medium.sumo.cfg" type="config"/>
+</launch>
