@@ -554,7 +554,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
     // If we don't have RRIs greater than 100ms then any subframe which is older than 100ms is not relevant for this part
     // of the selection process, thus we can skip a majority of the sensing window saving time.
     // Only in the case of RRIs of 1000ms will the whole sensing window need to be searched.
-    int maxRRI = *std::max_element(allowedRRIs.begin(), allowedRRIs.end());
+    double maxRRI = *std::max_element(allowedRRIs.begin(), allowedRRIs.end());
     int fallBack = 100 * maxRRI;
 
     if (fallBack >= 10 * pStep_)
