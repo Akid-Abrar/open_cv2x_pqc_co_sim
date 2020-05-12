@@ -812,7 +812,14 @@ void LteMacVUeMode4::handleSelfMessage()
             double randomReReserve = dblrand(1);
             if (randomReReserve < probResourceKeep_)
             {
-                int expiration = intuniform(5, 15, 3);
+                int expiration = 0;
+                if (resourceReservationInterval_ == 0.5){
+                    expiration = intuniform(10, 30, 3);
+                } else if (resourceReservationInterval_ == 0.2){
+                    expiration = intuniform(25, 75, 3);
+                } else {
+                    expiration = intuniform(5, 15, 3);
+                }
                 mode4Grant -> setResourceReselectionCounter(expiration);
                 mode4Grant -> setFirstTransmission(true);
                 expirationCounter_ = expiration * mode4Grant->getPeriod();
@@ -1126,7 +1133,15 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
 
     // Based on restrictResourceReservation interval But will be between 1 and 15
     // Again technically this needs to reconfigurable as well. But all of that needs to come in through ini and such.
-    int resourceReselectionCounter = intuniform(5, 15, 3);
+    int resourceReselectionCounter = 0;
+
+    if (resourceReservationInterval_ == 0.5){
+        resourceReselectionCounter = intuniform(10, 30, 3);
+    } else if (resourceReservationInterval_ == 0.2){
+        resourceReselectionCounter = intuniform(25, 75, 3);
+    } else {
+        resourceReselectionCounter = intuniform(5, 15, 3);
+    }
 
     mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
     mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
@@ -1242,7 +1257,21 @@ void LteMacVUeMode4::flushHarqBuffers()
                                 // Gotten to the point of the final transmission must determine if we reselect or not.
                                 double randomReReserve = dblrand(1);
                                 if (randomReReserve > probResourceKeep_) {
-                                    int expiration = intuniform(rri/100, 15, 3);
+                                    int expiration = 0;
+                                    if (resourceReservationInterval_ == 0.5){
+                                        expiration = intuniform(10, 30, 3);
+                                    } else if (resourceReservationInterval_ == 0.2){
+                                        expiration = intuniform(25, 75, 3);
+                                    } else {
+                                        if (rri / 100 > 5){
+                                            // This ensures that in the case that our rri is higher than the minimum 5
+                                            // that we ensure we send at least one more transmission
+                                            expiration = intuniform(rri/100, 15, 3);
+                                        } else {
+                                            expiration = intuniform(5, 15, 3);
+                                        }
+                                    }
+
                                     mode4Grant->setResourceReselectionCounter(expiration);
                                     // This remains at the default RRI this ensures that grants don't live overly long if they return to lower RRIs
                                     expirationCounter_ = expiration * resourceReservationInterval_ * 100;
