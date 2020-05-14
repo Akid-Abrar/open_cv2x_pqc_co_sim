@@ -484,7 +484,7 @@ double LteRealisticChannelModel::getAttenuation(MacNodeId nodeId, Direction dir,
     return attenuation;
 }
 
-double LteRealisticChannelModel::getAttenuation_D2D(MacNodeId nodeId, Direction dir, Coord coord,MacNodeId node2_Id, Coord coord_2)
+std::tuple<double, double> LteRealisticChannelModel::getAttenuation_D2D(MacNodeId nodeId, Direction dir, Coord coord,MacNodeId node2_Id, Coord coord_2)
 {
     double movement = .0;
     double speed = .0;
@@ -508,6 +508,7 @@ double LteRealisticChannelModel::getAttenuation_D2D(MacNodeId nodeId, Direction 
 
     //compute attenuation based on selected scenario and based on LOS or NLOS
     double attenuation = 0;
+    double noShadowingAttenuation = 0;
     double dbp = 0;
     switch (scenario_)
     {
@@ -534,6 +535,7 @@ double LteRealisticChannelModel::getAttenuation_D2D(MacNodeId nodeId, Direction 
     }
     //    Applying shadowing only if it is enabled by configuration
     //    log-normal shadowing
+    noShadowingAttenuation = attenuation;
     if (shadowing_)
     {
         double mean = 0;
@@ -608,7 +610,7 @@ double LteRealisticChannelModel::getAttenuation_D2D(MacNodeId nodeId, Direction 
 
     EV << "LteRealisticChannelModel::getAttenuation - computed attenuation at distance " << sqrDistance << " for UE2 is " << attenuation << endl;
 
-    return attenuation;
+    return std::make_tuple(noShadowingAttenuation, attenuation);
 }
 
 void LteRealisticChannelModel::updatePositionHistory(const MacNodeId nodeId,
@@ -1050,8 +1052,9 @@ std::tuple<std::vector<double>, double> LteRealisticChannelModel::getRSRP_D2D(Lt
     //=============== PATH LOSS + SHADOWING + FADING =================
 
     // attenuation for the desired signal
-    double attenuation = getAttenuation_D2D(sourceId, dir, sourceCoord, destId, destCoord); // dB
-    double originalAttenuation = attenuation;
+    std::tuple<double, double> attenuations = getAttenuation_D2D(sourceId, dir, sourceCoord, destId, destCoord); // dB
+    double noShadowingAttenuation = get<0>(attenuations);
+    double attenuation = get<1>(attenuations);
 
     attenuation -= antennaGainTx;
     attenuation -= antennaGainRx;
@@ -1102,7 +1105,7 @@ std::tuple<std::vector<double>, double> LteRealisticChannelModel::getRSRP_D2D(Lt
     }
     //============ END PATH LOSS + SHADOWING + FADING ===============
 
-    return std::make_tuple(rsrpVector, originalAttenuation);
+    return std::make_tuple(rsrpVector, noShadowingAttenuation);
 }
 
 std::vector<double> LteRealisticChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo, MacNodeId destId, Coord destCoord, MacNodeId enbId)
@@ -1167,7 +1170,8 @@ std::vector<double> LteRealisticChannelModel::getSINR_D2D(LteAirFrame *frame, Us
     " - txPwr=" << recvPower << " - for ueId=" << sourceId << endl;
 
     // attenuation for the desired signal
-    double attenuation = getAttenuation_D2D(sourceId, dir, sourceCoord, destId, destCoord); // dB
+    std::tuple<double, double> attenuations = getAttenuation_D2D(sourceId, dir, sourceCoord, destId, destCoord); // dB
+    double attenuation = get<1>(attenuations);
 
     //compute attenuation (PATHLOSS + SHADOWING)
     recvPower -= attenuation; // (dBm-dB)=dBm
@@ -1481,6 +1485,7 @@ std::tuple<std::vector<double>, std::vector<double>> LteRealisticChannelModel::g
         for (unsigned int i = 0; i < band_; i++)
         {
             //        (        mW               +        mW            )
+            double interference = linearToDBm(inCellInterference[i]);
             denRssi = noisePowerSpectralDensity + inCellInterference[i];
             // Convert PSD [W/Hz] to linear power [W] for the single RE
             denRssi = (denRssi * 180000.0) / 12.0;
@@ -2777,10 +2782,14 @@ bool LteRealisticChannelModel::computeInCellD2DInterference(MacNodeId eNbId, Mac
         if (interferringId == destId || interferringId == senderId)
             continue;
 
+        if (destCoord.distance(ltePhy->getCoord()) > 1500)
+            continue;
+
         EV<<NOW<<" ComputeInCellD2DInterference.Interference from Node: "<<interferringId<<endl;
 
         // Compute attenuation using data structures within the Macro Cell.
-        att = getAttenuation_D2D(interferringId, dir, ltePhy->getCoord(), destId, destCoord); // dB
+        std::tuple<double, double> attenuations = getAttenuation_D2D(interferringId, dir, ltePhy->getCoord(), destId, destCoord); // dB
+        att = get<1>(attenuations);
 
         // The antenna set in computeTxParams is always "MACRO". Here create a fake set with MACRO as the only element
         std::set<Remote> antennas;

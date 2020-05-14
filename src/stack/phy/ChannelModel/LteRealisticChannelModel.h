@@ -168,7 +168,7 @@ class LteRealisticChannelModel : public LteChannelModel
      * @param dir traffic direction
      * @param coord position of end point comunication (if dir==UL is the position of UE else is the position of eNodeB)
      */
-    virtual double getAttenuation_D2D(MacNodeId nodeId, Direction dir, inet::Coord coord,MacNodeId node2_Id, inet::Coord coord_2);
+    virtual std::tuple<double, double> getAttenuation_D2D(MacNodeId nodeId, Direction dir, inet::Coord coord,MacNodeId node2_Id, inet::Coord coord_2);
     /*
      * Compute sir for each band for user nodeId according to multipath fading
      *
