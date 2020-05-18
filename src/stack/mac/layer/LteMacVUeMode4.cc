@@ -1085,7 +1085,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
 
     int minSubchannelNumberPSSCH = minSubchannelNumberPSSCH_;
     int maxSubchannelNumberPSSCH = maxSubchannelNumberPSSCH_;
-    int resourceReservationInterval = resourceReservationInterval_;
+    double resourceReservationInterval = resourceReservationInterval_;
 
     if (useCBR_)
     {

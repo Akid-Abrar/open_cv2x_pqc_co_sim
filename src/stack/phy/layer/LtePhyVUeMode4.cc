@@ -623,7 +623,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
             int j = 0;
             while (j < numSubchannels_) {
                 /**
-                 *  RSRP based calculation FIX THIS
+                 *  RSRP based calculation
                  *
                  *  y + j * P'rsvpRx = tSLm + q * Pstep * PrsvpRx
                  *
@@ -647,7 +647,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                 // An SCI and record the information for each independently for the later calculation
                 std::vector<double> averageRSRPs;
                 std::vector<int> priorities;
-                std::vector<int> rris;
+                std::vector<double> rris;
 
                 bool subchannelReserved = false;
                 bool subchannelUsed = false;
@@ -660,11 +660,18 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
                 while (k < j + grantLength) {
                     if (sensingWindow_[translatedZ][k]->getReserved()) {
                         // If RRI = 0 then we know the next resource is not reserved.
-                        if (sensingWindow_[translatedZ][k]->getResourceReservationInterval() > 0) {
+                        int rri = sensingWindow_[translatedZ][k]->getResourceReservationInterval();
+                        if (rri > 0) {
                             subchannelReserved = true;
 
                             priorities.push_back(sensingWindow_[translatedZ][k]->getPriority());
-                            rris.push_back(sensingWindow_[translatedZ][k]->getResourceReservationInterval());
+                            if (rri == 11) {
+                                rris.push_back(0.5);
+                            } else if (rri == 12) {
+                                rris.push_back(0.2);
+                            } else {
+                                rris.push_back(rri);
+                            }
                             double totalRSRPLinear = 0;
                             // Specifically the average should be for the part of the subchannel we will end up using
                             for (int l = j; l < j + grantLength; l++) {
@@ -687,14 +694,14 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
 
                     int highestThreshold = 0;
                     bool thresholdBreach = false;
-                    int pRsvpRx;
+                    double pRsvpRx;
 
                     // Get the priorities of both messages
                     int messagePriority = grant->getSpsPriority();
                     for (int l = 0; l < averageRSRPs.size(); l++) {
                         double averageRSRP = averageRSRPs[l];
                         int receivedPriority = priorities[l];
-                        int receivedRri = rris[l];
+                        double receivedRri = rris[l];
 
                         // Get the threshold for the corresponding priorities
                         int index = messagePriority * 8 + receivedPriority + 1;
@@ -940,7 +947,13 @@ SidelinkControlInformation* LtePhyVUeMode4::createSCIMessage()
      */
     if (sciGrant_->getExpiration() != 0)
     {
-        sci->setResourceReservationInterval(sciGrant_->getPeriod()/100);
+        if (sciGrant_->getPeriod() == 50){
+            sci->setResourceReservationInterval(11);
+        } else if (sciGrant_->getPeriod() == 20) {
+            sci->setResourceReservationInterval(12);
+        } else {
+            sci->setResourceReservationInterval(sciGrant_->getPeriod() / 100);
+        }
     }
     else
     {
@@ -1115,9 +1128,8 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
             if (er >= packetSensingRatio){
                 // Packet was not sensed so mark as such and delete it.
+                lteInfo->setDeciderResult(false);
                 sciUnsensed_ += 1;
-                delete lteInfo;
-                delete pkt;
             } else {
 
                 prop_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0, false);
@@ -1149,19 +1161,17 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                         currentSubchannel->setReserved(true);
                     }
                     lteInfo->setDeciderResult(true);
-                    pkt->setControlInfo(lteInfo);
-                    scis_.push_back(pkt);
                     sciDecoded_ += 1;
                 } else if (!prop_result) {
+                    lteInfo->setDeciderResult(false);
                     sciFailedDueToProp_ += 1;
-                    delete lteInfo;
-                    delete pkt;
                 } else {
+                    lteInfo->setDeciderResult(false);
                     sciFailedDueToInterference_ += 1;
-                    delete lteInfo;
-                    delete pkt;
                 }
             }
+            pkt->setControlInfo(lteInfo);
+            scis_.push_back(pkt);
         }
         else
         {
