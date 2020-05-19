@@ -1389,10 +1389,22 @@ std::vector<double> LteRealisticChannelModel::getSINR_D2D(LteAirFrame *frame, Us
     {
         for (unsigned int i = 0; i < band_; i++)
         {
-            // compute final SINR
-            snrVector[i] -=  (noiseFigure + thermalNoise_);
+            {
+                // compute final SINR
+                double thermalNoiseLinear = std::pow (10.0, (thermalNoise_ - 30) / 10.0);
+                double noiseFigureLinear = std::pow (10.0, ueNoiseFigure_ / 10.0);
+                double noisePowerSpectralDensity =  thermalNoiseLinear * noiseFigureLinear;
 
-            EV << "LteRealisticChannelModel::getSINR_D2D - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir) << " - snr[" << snrVector[i] << "]\n";
+                double rsrpPerReLinear = dBmToLinear(rsrpVector[i]);
+
+                double denSinr = (noisePowerSpectralDensity * 180000.0)/12;
+                denSinr = rsrpPerReLinear / denSinr;
+
+                // compute final SINR
+                snrVector[i] = linearToDb(denSinr);
+
+                EV << "LteRealisticChannelModel::getSINR_D2D - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir) << " - snr[" << snrVector[i] << "]\n";
+            }
         }
     }
 
