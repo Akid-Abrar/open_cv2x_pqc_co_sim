@@ -163,6 +163,13 @@ simple LtePhyVUeMode4 extends LtePhyUeD2D {
         @statistic[posX](title="X position of node (at reception time)"; source="posX"; record=mean, vector);
         @signal[posY];
         @statistic[posY](title="Y position of node (at reception time)"; source="posY"; record=mean, vector);
+
+        @signal[tbFailedDueToPropIgnoreSCI];
+        @statistic[tbFailedDueToPropIgnoreSCI](title="Number of failed TBs due to propogation"; source="tbFailedDueToPropIgnoreSCI"; record=sum,vector);
+        @signal[tbFailedDueToInterferenceIgnoreSCI];
+        @statistic[tbFailedDueToInterferenceIgnoreSCI](title="Number of failed TBs due to interference"; source="tbFailedDueToInterferenceIgnoreSCI"; record=sum,vector);
+        @signal[tbDecodedIgnoreSCI];
+        @statistic[tbDecodedIgnoreSCI](title="Number of failed TBs due to interference"; source="tbDecodedIgnoreSCI"; record=sum,vector);
 }
 
 // 

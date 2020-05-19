@@ -83,7 +83,6 @@ void LtePhyVUeMode4::initialize(int stage)
         tbFailedHalfDuplex          = registerSignal("tbFailedHalfDuplex");
         tbFailedDueToProp           = registerSignal("tbFailedDueToProp");
         tbFailedDueToInterference   = registerSignal("tbFailedDueToInterference");
-        tbFailedDueToInterference   = registerSignal("tbFailedDueToInterference");
         sciFailedDueToProp          = registerSignal("sciFailedDueToProp");
         sciFailedDueToInterference  = registerSignal("sciFailedDueToInterference");
         sciUnsensed                 = registerSignal("sciUnsensed");
@@ -95,6 +94,10 @@ void LtePhyVUeMode4::initialize(int stage)
         interPacketDelay            = registerSignal("interPacketDelay");
         posX                        = registerSignal("posX");
         posY                        = registerSignal("posY");
+
+        tbFailedDueToPropIgnoreSCI         = registerSignal("tbFailedDueToPropIgnoreSCI");
+        tbFailedDueToInterferenceIgnoreSCI = registerSignal("tbFailedDueToInterferenceIgnoreSCI");
+        tbDecodedIgnoreSCI                 = registerSignal("tbDecodedIgnoreSCI");
 
         sciReceived_ = 0;
         sciDecoded_ = 0;
@@ -112,6 +115,10 @@ void LtePhyVUeMode4::initialize(int stage)
         tbFailedDueToInterference_ = 0;
         sciFailedDueToProp_ = 0;
         sciFailedDueToInterference_ = 0;
+
+        tbFailedDueToPropIgnoreSCI_ = 0;
+        tbFailedDueToInterferenceIgnoreSCI_ = 0;
+        tbDecodedIgnoreSCI_ = 0;
 
         sciUnsensed_ = 0;
 
@@ -207,6 +214,10 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 emit(tbFailedDueToInterference, -1);
                 emit(tbFailedButSCIReceived, -1);
                 emit(tbFailedHalfDuplex, -1);
+
+                emit(tbFailedDueToPropIgnoreSCI ,-1);
+                emit(tbFailedDueToInterferenceIgnoreSCI ,-1);
+                emit(tbDecodedIgnoreSCI ,-1);
             }
         }
         while (!tbFrames_.empty())
@@ -221,6 +232,10 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 emit(tbFailedDueToInterference, -1);
                 emit(tbFailedButSCIReceived, -1);
                 emit(tbFailedHalfDuplex, -1);
+
+                emit(tbFailedDueToPropIgnoreSCI ,-1);
+                emit(tbFailedDueToInterferenceIgnoreSCI ,-1);
+                emit(tbDecodedIgnoreSCI ,-1);
             } else {
                 LteAirFrame *frame = tbFrames_.back();
                 std::vector<double> rsrpVector = tbRsrpVectors_.back();
@@ -247,6 +262,10 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 emit(tbFailedButSCIReceived, tbFailedButSCIReceived_);
                 emit(tbFailedHalfDuplex, tbFailedHalfDuplex_);
 
+                emit(tbFailedDueToPropIgnoreSCI ,tbFailedDueToPropIgnoreSCI_);
+                emit(tbFailedDueToInterferenceIgnoreSCI ,tbFailedDueToInterferenceIgnoreSCI_);
+                emit(tbDecodedIgnoreSCI ,tbDecodedIgnoreSCI_);
+
                 tbReceived_ = 0;
                 tbDecoded_ = 0;
                 tbFailedDueToNoSCI_ = 0;
@@ -254,6 +273,10 @@ void LtePhyVUeMode4::handleSelfMessage(cMessage *msg)
                 tbFailedHalfDuplex_ = 0;
                 tbFailedDueToProp_ = 0;
                 tbFailedDueToInterference_ = 0;
+
+                tbFailedDueToPropIgnoreSCI_ = 0;
+                tbFailedDueToInterferenceIgnoreSCI_ = 0;
+                tbDecodedIgnoreSCI_ = 0;
             }
             countTbs++;
         }
@@ -1133,7 +1156,8 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
             } else {
 
                 prop_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0, false);
-                interference_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0, true);
+                if (prop_result)
+                    interference_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0, true);
 
                 SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation *>(pkt);
                 std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);
@@ -1207,13 +1231,15 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
                     correspondingSCI = check_and_cast<SidelinkControlInformation*>(*it);
 
-                    if (sciInfo->getDeciderResult()){
-                        //RELAY and NORMAL
+                    if (sciInfo->getDeciderResult()) {
                         sciDecodedSuccessfully = true;
-                        if (lteInfo->getDirection() == D2D_MULTI)
-                            prop_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs(), false);
-                            interference_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs(), true);
                     }
+
+                    if (lteInfo->getDirection() == D2D_MULTI)
+                        prop_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs(), false);
+                        if (prop_result)
+                            interference_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs(), true);
+
                     // Remove the SCI
                     scis_.erase(it);
                     break;
@@ -1223,6 +1249,14 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
             }
             if (!foundCorrespondingSci || !sciDecodedSuccessfully) {
                 tbFailedDueToNoSCI_ += 1;
+                if (!prop_result) {
+                    tbFailedDueToPropIgnoreSCI_ += 1;
+                } else if (!interference_result) {
+                    tbFailedDueToInterferenceIgnoreSCI_ += 1;
+                } else {
+                    tbDecodedIgnoreSCI_ += 1;
+                }
+
             } else if (!prop_result) {
                 tbFailedDueToProp_ += 1;
             } else if (!interference_result) {
@@ -1230,6 +1264,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 tbFailedDueToInterference_ += 1;
             } else {
                 tbDecoded_ += 1;
+                tbDecodedIgnoreSCI_ += 1;
                 std::map<MacNodeId, simtime_t>::iterator jt = previousTransmissionTimes_.find(lteInfo->getSourceId());
                 if ( jt != previousTransmissionTimes_.end() ) {
                     simtime_t elapsed_time = NOW - jt->second;

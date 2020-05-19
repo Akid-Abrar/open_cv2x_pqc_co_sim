@@ -86,6 +86,10 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     simsignal_t sciFailedDueToInterference;
     simsignal_t sciUnsensed;
 
+    simsignal_t tbFailedDueToPropIgnoreSCI;
+    simsignal_t tbFailedDueToInterferenceIgnoreSCI;
+    simsignal_t tbDecodedIgnoreSCI;
+
     int sciReceived_;
     int sciDecoded_;
     int sciFailedHalfDuplex_;
@@ -102,6 +106,10 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int tbFailedDueToInterference_;
     int sciFailedDueToProp_;
     int sciFailedDueToInterference_;
+
+    int tbFailedDueToPropIgnoreSCI_;
+    int tbFailedDueToInterferenceIgnoreSCI_;
+    int tbDecodedIgnoreSCI_;
 
     int sciUnsensed_;
 
