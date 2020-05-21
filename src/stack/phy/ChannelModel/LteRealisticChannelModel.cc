@@ -2129,12 +2129,33 @@ bool LteRealisticChannelModel::error_Mode4(LteAirFrame *frame, UserControlInfo* 
 
     double bler = 0;
     double averageSnr = 0;
-    std::vector<double>::iterator it;
-    for(it=snrV.begin(); it!=snrV.end(); it++){
-        averageSnr += dBToLinear(*it);
+    double countUsedRbs = 0;
+
+    RbMap rbmap = lteInfo->getGrantedBlocks();
+    RbMap::iterator it;
+    std::map<Band, unsigned int>::iterator jt;
+
+    //for each Remote unit used to transmit the packet
+    for (it = rbmap.begin(); it != rbmap.end(); ++it) {
+        //for each logical band used to transmit the packet
+        for (jt = it->second.begin(); jt != it->second.end(); ++jt) {
+            //this Rb is not allocated
+            if (jt->second == 0) continue;
+
+            //check the antenna used in Das
+            if ((lteInfo->getTxMode() == CL_SPATIAL_MULTIPLEXING
+                 || lteInfo->getTxMode() == OL_SPATIAL_MULTIPLEXING)
+                && rbmap.size() > 1)
+                //we consider only the snr associated to the LB used
+                if (it->first != lteInfo->getCw()) continue;
+
+            //Get the Bler
+            averageSnr += dBToLinear(snrV[jt->first]);
+            countUsedRbs += 1;
+        }
     }
 
-    averageSnr = linearToDb(averageSnr/snrV.size());
+    averageSnr = linearToDb(averageSnr/countUsedRbs);
 
     if (averageSnr > binder_->phyPisaData.maxSnr())
         bler = 0;
