@@ -2128,63 +2128,33 @@ bool LteRealisticChannelModel::error_Mode4(LteAirFrame *frame, UserControlInfo* 
     }
 
     double bler = 0;
-    std::vector<double> totalbler;
-    double finalSuccess = 1;
-    RbMap rbmap = lteInfo->getGrantedBlocks();
-    RbMap::iterator it;
-    std::map<Band, unsigned int>::iterator jt;
-
-    //for each Remote unit used to transmit the packet
-    for (it = rbmap.begin(); it != rbmap.end(); ++it)
-    {
-        //for each logical band used to transmit the packet
-        for (jt = it->second.begin(); jt != it->second.end(); ++jt)
-        {
-            //this Rb is not allocated
-            if (jt->second == 0) continue;
-
-            //check the antenna used in Das
-            if ((lteInfo->getTxMode() == CL_SPATIAL_MULTIPLEXING
-                 || lteInfo->getTxMode() == OL_SPATIAL_MULTIPLEXING)
-                && rbmap.size() > 1)
-                //we consider only the snr associated to the LB used
-                if (it->first != lteInfo->getCw()) continue;
-
-            //Get the Bler
-            double snr = snrV[jt->first];//XXX because jt->first is a Band (=unsigned short)
-
-            if (snr > binder_->phyPisaData.maxSnr())
-                bler = 0;
-            else
-            if (lteInfo->getFrameType() == SCIPKT)
-            {
-                // TODO: Make this slightly tidier.
-                bler = binder_->phyPisaData.GetPscchBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, snr);
-            }
-            else
-            {
-                if (analytical_)
-                    bler = binder_->phyPisaData.GetBlerAnalytical(mcs, snr);
-                else
-                    bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, snr);
-            }
-
-            double success = 1 - bler;
-            //compute the success probability according to the number of RB used
-            double successPacket = pow(success, (double)jt->second);
-
-            // compute the success probability according to the number of LB used
-            finalSuccess *= successPacket;
-        }
+    double averageSnr = 0;
+    std::vector<double>::iterator it;
+    for(it=snrV.begin(); it!=snrV.end(); it++){
+        averageSnr += dBToLinear(*it);
     }
-    // Compute total error probability
-    double per = 1 - finalSuccess;
-    // Harq Reduction
-    double totalPer = per * pow(harqReduction_, nTx - 1);
+
+    averageSnr = linearToDb(averageSnr/snrV.size());
+
+    if (averageSnr > binder_->phyPisaData.maxSnr())
+        bler = 0;
+    else
+    if (lteInfo->getFrameType() == SCIPKT)
+    {
+        // TODO: Make this slightly tidier.
+        bler = binder_->phyPisaData.GetPscchBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, averageSnr);
+    }
+    else
+    {
+        if (analytical_)
+            bler = binder_->phyPisaData.GetBlerAnalytical(mcs, averageSnr);
+        else
+            bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, averageSnr);
+    }
 
     double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
 
-    if (er <= totalPer)
+    if (er <= bler)
     {
         // Signal too weak, we can't receive it
         return false;
