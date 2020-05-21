@@ -1258,10 +1258,13 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 }
 
             } else if (!prop_result) {
+                tbFailedButSCIReceived_ += 1;
                 tbFailedDueToProp_ += 1;
+                tbFailedDueToPropIgnoreSCI_ += 1;
             } else if (!interference_result) {
                 tbFailedButSCIReceived_ += 1;
                 tbFailedDueToInterference_ += 1;
+                tbFailedDueToInterferenceIgnoreSCI_ += 1;
             } else {
                 tbDecoded_ += 1;
                 tbDecodedIgnoreSCI_ += 1;
