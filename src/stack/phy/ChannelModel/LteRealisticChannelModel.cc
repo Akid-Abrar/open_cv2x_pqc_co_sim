@@ -1105,7 +1105,7 @@ std::tuple<std::vector<double>, double> LteRealisticChannelModel::getRSRP_D2D(Lt
     }
     //============ END PATH LOSS + SHADOWING + FADING ===============
 
-    return std::make_tuple(rsrpVector, attenuation);
+    return std::make_tuple(rsrpVector, noShadowingAttenuation);
 }
 
 std::vector<double> LteRealisticChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo, MacNodeId destId, Coord destCoord, MacNodeId enbId)
