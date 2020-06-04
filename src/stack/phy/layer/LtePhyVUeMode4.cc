@@ -532,8 +532,14 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
 void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
     EV << NOW << " LtePhyVUeMode4::computeCSRs - going through sensing window to compute CSRS..." << endl;
     // Determine the total number of possible CSRs
-    if (grant->getMaximumLatency() > 100) {
-        grant->setMaximumLatency(100);
+    if (grant->getMaximumLatency() >= 100) {
+        if (grant->getPeriod() == 50){
+            grant->setMaximumLatency(50);
+        } else if (grant->getPeriod() == 20){
+            grant->setMaximumLatency(20);
+        } else {
+            grant->setMaximumLatency(100);
+        }
     }
 
     EV << NOW
