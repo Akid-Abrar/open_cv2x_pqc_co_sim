@@ -48,6 +48,8 @@ void LtePhyVUeMode4::initialize(int stage)
         subchannelSize_ = par("subchannelSize");
         d2dDecodingTimer_ = NULL;
         transmitting_ = false;
+        rssiFiltering_ = par("rssiFiltering");
+        rsrpFiltering_ = par("rsrpFiltering");
 
         int thresholdRSSI = par("thresholdRSSI");
 
@@ -848,7 +850,38 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
      */
     std::vector<std::tuple<double, int, int>> optimalCSRs;
 
-    optimalCSRs = selectBestRSSIs(possibleCSRs, grant, totalPossibleCSRs);
+    if (rssiFiltering_) {
+        optimalCSRs = selectBestRSSIs(possibleCSRs, grant, totalPossibleCSRs);
+    } else if (rsrpFiltering_) {
+        optimalCSRs = selectBestRSRPs(possibleCSRs, grant, totalPossibleCSRs);
+    } else {
+        // Simply convert the possible CSRs to the correct format and shuffle them and return 20% of them as normal.
+        std::vector<std::tuple<double, int, int>> orderedCSRs;
+        std::unordered_map<int, std::set<int>>::iterator it;
+
+        for (it=possibleCSRs.begin(); it!=possibleCSRs.end(); it++)
+        {
+            int subframe = it->first;
+            std::set<int>::iterator jt;
+            for (jt=it->second.begin(); jt!=it->second.end(); jt++)
+            {
+                int sensingSubframeIndex = subframe;
+                int initialSubchannelIndex = *jt;
+                int finalSubchannelIndex = *jt + grantLength;
+
+                // Subchannel has never been reserved and thus has negative infinite RSSI.
+                int transIndex = subframe - (pStep_ * 10);
+                orderedCSRs.push_back(std::make_tuple(-std::numeric_limits<double>::infinity(), transIndex, initialSubchannelIndex));
+            }
+        }
+        // Shuffle ensures that the subframes and subchannels appear in a random order, making the selections more balanced
+        // throughout the selection window.
+        std::random_shuffle (orderedCSRs.begin(), orderedCSRs.end());
+
+        int minSize = std::round(totalPossibleCSRs * .2);
+        orderedCSRs.resize(minSize);
+        optimalCSRs = orderedCSRs;
+    }
 
     // Send the packet up to the MAC layer where it will choose the CSR and the retransmission if that is specified
     // Need to generate the message that is to be sent to the upper layers.
@@ -926,6 +959,95 @@ std::vector<std::tuple<double, int, int>> LtePhyVUeMode4::selectBestRSSIs(std::u
             }
             else {
                 // Subchannel has never been reserved and thus has negative infinite RSSI.
+                int transIndex = subframe - (10 * pStep_);
+                orderedCSRs.push_back(std::make_tuple(-std::numeric_limits<double>::infinity(), transIndex, initialSubchannelIndex));
+            }
+        }
+    }
+
+    // Shuffle ensures that the subframes and subchannels appear in a random order, making the selections more balanced
+    // throughout the selection window.
+    std::random_shuffle (orderedCSRs.begin(), orderedCSRs.end());
+
+    std::sort(begin(orderedCSRs), end(orderedCSRs), [](const std::tuple<double, int, int> &t1, const std::tuple<double, int, int> &t2) {
+        return get<0>(t1) < get<0>(t2); // or use a custom compare function
+    });
+
+    int minSize = std::round(totalPossibleCSRs * .2);
+    orderedCSRs.resize(minSize);
+
+    return orderedCSRs;
+}
+
+std::vector<std::tuple<double, int, int>> LtePhyVUeMode4::selectBestRSRPs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs)
+{
+    EV << NOW << " LtePhyVUeMode4::selectBestRSSIs - Selecting best CSRs from possible CSRs..." << endl;
+    int decrease = pStep_;
+    if (grant->getPeriod() < 100)
+    {
+        // Same as pPrimeRsvpTx from other parts of the function
+        decrease = (pStep_ * grant->getPeriod())/100;
+    }
+
+    int maxLatency = grant->getMaximumLatency();
+
+    // Start and end of Selection Window.
+    int minSelectionIndex = (10 * pStep_) + selectionWindowStartingSubframe_;
+    int maxSelectionIndex = (10 * pStep_) + maxLatency;
+
+    unsigned int grantLength = grant->getNumSubchannels();
+
+    // This will be avgRSSI -> (subframeIndex, subchannelIndex)
+    std::vector<std::tuple<double, int, int>> orderedCSRs;
+    std::unordered_map<int, std::set<int>>::iterator it;
+
+    for (it=possibleCSRs.begin(); it!=possibleCSRs.end(); it++)
+    {
+        int subframe = it->first;
+        std::set<int>::iterator jt;
+        for (jt=it->second.begin(); jt!=it->second.end(); jt++)
+        {
+            int sensingSubframeIndex = subframe;
+            int initialSubchannelIndex = *jt;
+            int finalSubchannelIndex = *jt + grantLength;
+
+            while (sensingSubframeIndex > (10 * pStep_)){
+                // decrease the subframe index until we are within the sensing window.
+                sensingSubframeIndex -= decrease;
+            }
+
+            double totalRSRP = 0;
+            int numSubchannels = 0;
+            while (sensingSubframeIndex > 0)
+            {
+                int translatedSubframeIndex = translateIndex((10 * pStep_) - sensingSubframeIndex);
+                for (int subchannelCounter = initialSubchannelIndex; subchannelCounter < finalSubchannelIndex; subchannelCounter++)
+                {
+                    if (sensingWindow_[translatedSubframeIndex][subchannelCounter]->getSensed())
+                    {
+                        double averageRSRP = dBmToLinear(sensingWindow_[translatedSubframeIndex][subchannelCounter]->getAverageRSRP());
+                        if (averageRSRP != -std::numeric_limits<double>::infinity()){
+                            totalRSRP += averageRSRP;
+                            ++numSubchannels;
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                sensingSubframeIndex -= decrease;
+            }
+            double averageRSRP = 0;
+            if (numSubchannels != 0)
+            {
+                // Can be the case when the sensing window is not full that we don't find the historic CSRs
+                averageRSRP = totalRSRP / numSubchannels;
+                int transIndex = subframe - (10 * pStep_);
+                orderedCSRs.push_back(std::make_tuple(linearToDBm(averageRSRP), transIndex, initialSubchannelIndex));
+            }
+            else {
+                // Subchannel has never been reserved and thus has negative infinite RSRP.
                 int transIndex = subframe - (10 * pStep_);
                 orderedCSRs.push_back(std::make_tuple(-std::numeric_limits<double>::infinity(), transIndex, initialSubchannelIndex));
             }

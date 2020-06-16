@@ -34,6 +34,9 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     bool transmitting_;
 
+    bool rssiFiltering_;
+    bool rsrpFiltering_;
+
     std::map<MacNodeId, simtime_t> previousTransmissionTimes_;
 
     std::vector<int> ThresPSSCHRSRPvector_;
@@ -140,6 +143,8 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     virtual void updateSubframe();
 
     virtual std::vector<std::tuple<double, int, int>> selectBestRSSIs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs);
+
+    virtual std::vector<std::tuple<double, int, int>> selectBestRSRPs(std::unordered_map<int, std::set<int>> possibleCSRs, LteMode4SchedulingGrant* &grant, int totalPossibleCSRs);
 
     virtual std::tuple<int,int> decodeRivValue(SidelinkControlInformation* sci, UserControlInfo* sciInfo);
 
