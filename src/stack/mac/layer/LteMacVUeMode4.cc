@@ -1014,7 +1014,6 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
         // Start at subchannel numsubchannels.
         // Remove 1 subchannel from each grant.
         // Account for the two blocks taken for the SCI
-        totalGrantedBlocks += 2;
         int initialBand;
         if (initiailSubchannel == 0){
             // If first subchannel to use need to make sure to add the number of subchannels for the SCI messages
@@ -1022,7 +1021,7 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
         } else {
             initialBand = (numSubchannels_ * 2) + (initiailSubchannel * (subchannelSize_ - 2));
         }
-        for (Band b = initialBand; b < (initialBand + subchannelSize_ - 2) * mode4Grant->getNumSubchannels() ; b++) {
+        for (Band b = initialBand; b < initialBand + (subchannelSize_ * mode4Grant->getNumSubchannels()) ; b++) {
             grantedBlocks[MACRO][b] = 1;
             ++totalGrantedBlocks;
         }
@@ -1031,7 +1030,7 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     mode4Grant->setStartTime(selectedStartTime);
     mode4Grant->setPeriodic(true);
     mode4Grant->setGrantedBlocks(grantedBlocks);
-    mode4Grant->setTotalGrantedBlocks(totalGrantedBlocks);
+    mode4Grant->setTotalGrantedBlocks(totalGrantedBlocks - 2); // account for the 2 RBs used for the sci message
     mode4Grant->setDirection(D2D_MULTI);
     mode4Grant->setCodewords(1);
     mode4Grant->setStartingSubchannel(initiailSubchannel);
