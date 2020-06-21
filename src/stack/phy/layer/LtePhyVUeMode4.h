@@ -33,6 +33,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int cbrCountDown_;
 
     bool transmitting_;
+    bool randomScheduling_;
 
     std::map<MacNodeId, simtime_t> previousTransmissionTimes_;
 
@@ -136,6 +137,8 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     // Compute Candidate Single Subframe Resources which the MAC layer can use for transmission
     virtual void computeCSRs(LteMode4SchedulingGrant* &grant);
+
+    virtual void computeRandomCSRs(LteMode4SchedulingGrant* &grant);
 
     virtual void updateSubframe();
 

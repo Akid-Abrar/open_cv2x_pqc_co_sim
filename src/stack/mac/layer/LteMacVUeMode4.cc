@@ -69,6 +69,7 @@ void LteMacVUeMode4::initialize(int stage)
         crLimit_ = par("crLimit");
         dccMechanism_ = par("dccMechanism");
         adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
+        randomScheduling_ = par("randomScheduling");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -1129,21 +1130,28 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     int numSubchannels = intuniform(minSubchannelNumberPSSCH, maxSubchannelNumberPSSCH, 2);
 
     mode4Grant -> setNumberSubchannels(numSubchannels);
-
-    // Based on restrictResourceReservation interval But will be between 1 and 15
-    // Again technically this needs to reconfigurable as well. But all of that needs to come in through ini and such.
-    int resourceReselectionCounter = 0;
-
-    if (resourceReservationInterval_ == 0.5){
-        resourceReselectionCounter = intuniform(10, 30, 3);
-    } else if (resourceReservationInterval_ == 0.2){
-        resourceReselectionCounter = intuniform(25, 75, 3);
+    if (randomScheduling_){
+        mode4Grant -> setResourceReselectionCounter(0);
+        mode4Grant -> setExpiration(0);
     } else {
-        resourceReselectionCounter = intuniform(5, 15, 3);
+
+        // Based on restrictResourceReservation interval But will be between 1 and 15
+        // Again technically this needs to reconfigurable as well. But all of that needs to come in through ini and such.
+        int resourceReselectionCounter = 0;
+
+        if (resourceReservationInterval_ == 0.5) {
+            resourceReselectionCounter = intuniform(10, 30, 3);
+        } else if (resourceReservationInterval_ == 0.2) {
+            resourceReselectionCounter = intuniform(25, 75, 3);
+        } else {
+            resourceReselectionCounter = intuniform(5, 15, 3);
+        }
+
+        mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
+        mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
+
     }
 
-    mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
-    mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
 
     LteMode4SchedulingGrant* phyGrant = mode4Grant->dup();
 
