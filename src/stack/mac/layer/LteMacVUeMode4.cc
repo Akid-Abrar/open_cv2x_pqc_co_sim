@@ -70,6 +70,7 @@ void LteMacVUeMode4::initialize(int stage)
         dccMechanism_ = par("dccMechanism");
         adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
         randomScheduling_ = par("randomScheduling");
+        nonPeriodic_ = par("nonPeriodic");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -1130,7 +1131,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     int numSubchannels = intuniform(minSubchannelNumberPSSCH, maxSubchannelNumberPSSCH, 2);
 
     mode4Grant -> setNumberSubchannels(numSubchannels);
-    if (randomScheduling_){
+    if ((randomScheduling_) || (nonPeriodic_) ){
         mode4Grant -> setResourceReselectionCounter(0);
         mode4Grant -> setExpiration(0);
     } else {
