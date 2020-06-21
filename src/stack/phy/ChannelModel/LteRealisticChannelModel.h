@@ -114,6 +114,8 @@ class LteRealisticChannelModel : public LteChannelModel
     //avg delay spred in jakes fading
     double delayRMS_;
 
+    double shapeFactor_;
+
     bool tolerateMaxDistViolation_;
 
     //Struct used to store information about jakes fading

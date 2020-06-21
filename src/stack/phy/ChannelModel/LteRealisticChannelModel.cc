@@ -15,7 +15,6 @@
 #include "common/LteCommon.h"
 #include "corenetwork/nodes/ExtCell.h"
 #include "stack/phy/layer/LtePhyUe.h"
-#include "inet/physicallayer/pathloss/NakagamiFading.h"
 
 // attenuation value to be returned if max. distance of a scenario has been violated
 // and tolerating the maximum distance violation is enabled
@@ -283,6 +282,15 @@ LteRealisticChannelModel::LteRealisticChannelModel(ParameterMap& params,
     else
         fading_ = true;
 
+    //get shape factor
+    it = params.find("shape-factor");
+    if (it != params.end())
+    {
+        shapeFactor_ = it->second.doubleValue();
+    }
+    else
+        shapeFactor_ = 1.0;
+
     //get fading type
     it = params.find("fading-type");
     if (it != params.end())
@@ -343,8 +351,6 @@ LteRealisticChannelModel::LteRealisticChannelModel(ParameterMap& params,
     binder_ = getBinder();
     //clear jakes fading map structure
     jakesFadingMap_.clear();
-
-    nkgmf = new inet::physicallayer::NakagamiFading();
 }
 
 LteRealisticChannelModel::~LteRealisticChannelModel()
@@ -1082,10 +1088,10 @@ std::tuple<std::vector<double>, double> LteRealisticChannelModel::getRSRP_D2D(Lt
             }
             else if (fadingType_ == NAKAGAMI)
             {
-                inet::units::values::mps speed = inet::units::values::mps(SPEED_OF_LIGHT);
-                inet::units::values::Hz freq = inet::units::values::Hz(carrierFrequency_ * 1000000000);
-                inet::units::values::m dist = inet::units::values::m(sourceCoord.distance(destCoord));
-                fadingAttenuation = nkgmf->computePathLoss(speed, freq, dist);
+                int distance = sourceCoord.distance(destCoord);
+                double pathLossFree = 20*std::log10(distance) + 46.4 + 20*std::log10(carrierFrequency_ * 1e-9 / 5);
+
+                fadingAttenuation = gamma_d(getEnvir()->getRNG(0), shapeFactor_, pathLossFree / 1000.0 / shapeFactor_) * 1000.0;
             }
         }
 
