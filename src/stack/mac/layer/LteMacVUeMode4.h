@@ -65,6 +65,8 @@ protected:
    bool crLimit_;
    bool dccMechanism_;
    bool adjacencyPSCCHPSSCH_;
+   bool randomScheduling_;
+   bool nonPeriodic_;
    int missedTransmissions_;
 
    double remainingTime_;

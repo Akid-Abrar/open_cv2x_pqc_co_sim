@@ -69,6 +69,8 @@ void LteMacVUeMode4::initialize(int stage)
         crLimit_ = par("crLimit");
         dccMechanism_ = par("dccMechanism");
         adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
+        randomScheduling_ = par("randomScheduling");
+        nonPeriodic_ = par("nonPeriodic");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -1014,7 +1016,6 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
         // Start at subchannel numsubchannels.
         // Remove 1 subchannel from each grant.
         // Account for the two blocks taken for the SCI
-        totalGrantedBlocks += 2;
         int initialBand;
         if (initiailSubchannel == 0){
             // If first subchannel to use need to make sure to add the number of subchannels for the SCI messages
@@ -1022,7 +1023,7 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
         } else {
             initialBand = (numSubchannels_ * 2) + (initiailSubchannel * (subchannelSize_ - 2));
         }
-        for (Band b = initialBand; b < (initialBand + subchannelSize_ - 2) * mode4Grant->getNumSubchannels() ; b++) {
+        for (Band b = initialBand; b < initialBand + (subchannelSize_ * mode4Grant->getNumSubchannels()) ; b++) {
             grantedBlocks[MACRO][b] = 1;
             ++totalGrantedBlocks;
         }
@@ -1031,7 +1032,7 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     mode4Grant->setStartTime(selectedStartTime);
     mode4Grant->setPeriodic(true);
     mode4Grant->setGrantedBlocks(grantedBlocks);
-    mode4Grant->setTotalGrantedBlocks(totalGrantedBlocks);
+    mode4Grant->setTotalGrantedBlocks(totalGrantedBlocks - 2); // account for the 2 RBs used for the sci message
     mode4Grant->setDirection(D2D_MULTI);
     mode4Grant->setCodewords(1);
     mode4Grant->setStartingSubchannel(initiailSubchannel);
@@ -1130,21 +1131,28 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     int numSubchannels = intuniform(minSubchannelNumberPSSCH, maxSubchannelNumberPSSCH, 2);
 
     mode4Grant -> setNumberSubchannels(numSubchannels);
-
-    // Based on restrictResourceReservation interval But will be between 1 and 15
-    // Again technically this needs to reconfigurable as well. But all of that needs to come in through ini and such.
-    int resourceReselectionCounter = 0;
-
-    if (resourceReservationInterval_ == 0.5){
-        resourceReselectionCounter = intuniform(10, 30, 3);
-    } else if (resourceReservationInterval_ == 0.2){
-        resourceReselectionCounter = intuniform(25, 75, 3);
+    if ((randomScheduling_) || (nonPeriodic_) ){
+        mode4Grant -> setResourceReselectionCounter(0);
+        mode4Grant -> setExpiration(0);
     } else {
-        resourceReselectionCounter = intuniform(5, 15, 3);
+
+        // Based on restrictResourceReservation interval But will be between 1 and 15
+        // Again technically this needs to reconfigurable as well. But all of that needs to come in through ini and such.
+        int resourceReselectionCounter = 0;
+
+        if (resourceReservationInterval_ == 0.5) {
+            resourceReselectionCounter = intuniform(10, 30, 3);
+        } else if (resourceReservationInterval_ == 0.2) {
+            resourceReselectionCounter = intuniform(25, 75, 3);
+        } else {
+            resourceReselectionCounter = intuniform(5, 15, 3);
+        }
+
+        mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
+        mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
+
     }
 
-    mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
-    mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
 
     LteMode4SchedulingGrant* phyGrant = mode4Grant->dup();
 
