@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on Tue 28 Apr 2020 15:17:55 IST by Eclipse SUMO netedit Version 1.4.0
+<!-- generated on Fri 08 May 2020 12:12:03 IST by Eclipse SUMO netedit Version 1.4.0
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
 
     <input>
-        <sumo-net-file value="slow.net.xml"/>
+        <sumo-net-file value="medium.net.xml"/>
     </input>
 
     <output>
-        <output-file value="slow.net.xml"/>
+        <output-file value="medium.net.xml"/>
     </output>
 
     <processing>
@@ -42,74 +42,74 @@
     <location netOffset="0.00,0.00" convBoundary="-100.00,-50.00,2100.00,50.00" origBoundary="-10000000000.000000,-10000000000.000000,10000000000.000000,10000000000.000000" projParameter="+proj=tmerc +lat_0=48.78407 +lon_0=11.47258 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"/>
 
     <edge id="LE" from="LS" to="LE" priority="-1">
-        <lane id="LE_0" index="0" speed="19.44" length="500.00" width="4.00" shape="500.00,10.00 6.63,10.00"/>
-        <lane id="LE_1" index="1" speed="19.44" length="500.00" width="4.00" shape="500.00,6.00 6.63,6.00"/>
-        <lane id="LE_2" index="2" speed="19.44" length="500.00" width="4.00" shape="500.00,2.00 6.63,2.00"/>
+        <lane id="LE_0" index="0" speed="27.78" length="500.00" width="4.00" shape="500.00,10.00 6.63,10.00"/>
+        <lane id="LE_1" index="1" speed="27.78" length="500.00" width="4.00" shape="500.00,6.00 6.63,6.00"/>
+        <lane id="LE_2" index="2" speed="27.78" length="500.00" width="4.00" shape="500.00,2.00 6.63,2.00"/>
     </edge>
     <edge id="LE1" from="LE" to="gneJ10" priority="-1" length="0.10">
-        <lane id="LE1_0" index="0" speed="19.44" length="0.10" width="4.00" shape="2.38,11.76 -42.93,57.07"/>
-        <lane id="LE1_1" index="1" speed="19.44" length="0.10" width="4.00" shape="-0.44,8.93 -45.76,54.24"/>
-        <lane id="LE1_2" index="2" speed="19.44" length="0.10" width="4.00" shape="-3.27,6.10 -48.59,51.41"/>
+        <lane id="LE1_0" index="0" speed="27.78" length="0.10" width="4.00" shape="2.38,11.76 -42.93,57.07"/>
+        <lane id="LE1_1" index="1" speed="27.78" length="0.10" width="4.00" shape="-0.44,8.93 -45.76,54.24"/>
+        <lane id="LE1_2" index="2" speed="27.78" length="0.10" width="4.00" shape="-3.27,6.10 -48.59,51.41"/>
     </edge>
     <edge id="LE2" from="gneJ10" to="gneJ11" priority="-1" length="0.10">
-        <lane id="LE2_0" index="0" speed="19.44" length="0.10" width="4.00" shape="-57.07,57.07 -107.07,7.07"/>
-        <lane id="LE2_1" index="1" speed="19.44" length="0.10" width="4.00" shape="-54.24,54.24 -104.24,4.24"/>
-        <lane id="LE2_2" index="2" speed="19.44" length="0.10" width="4.00" shape="-51.41,51.41 -101.41,1.41"/>
+        <lane id="LE2_0" index="0" speed="27.78" length="0.10" width="4.00" shape="-57.07,57.07 -107.07,7.07"/>
+        <lane id="LE2_1" index="1" speed="27.78" length="0.10" width="4.00" shape="-54.24,54.24 -104.24,4.24"/>
+        <lane id="LE2_2" index="2" speed="27.78" length="0.10" width="4.00" shape="-51.41,51.41 -101.41,1.41"/>
     </edge>
     <edge id="LE3" from="gneJ11" to="gneJ12" priority="-1" length="0.10">
-        <lane id="LE3_0" index="0" speed="19.44" length="0.10" width="4.00" shape="-107.07,-7.07 -57.07,-57.07"/>
-        <lane id="LE3_1" index="1" speed="19.44" length="0.10" width="4.00" shape="-104.24,-4.24 -54.24,-54.24"/>
-        <lane id="LE3_2" index="2" speed="19.44" length="0.10" width="4.00" shape="-101.41,-1.41 -51.41,-51.41"/>
+        <lane id="LE3_0" index="0" speed="27.78" length="0.10" width="4.00" shape="-107.07,-7.07 -57.07,-57.07"/>
+        <lane id="LE3_1" index="1" speed="27.78" length="0.10" width="4.00" shape="-104.24,-4.24 -54.24,-54.24"/>
+        <lane id="LE3_2" index="2" speed="27.78" length="0.10" width="4.00" shape="-101.41,-1.41 -51.41,-51.41"/>
     </edge>
     <edge id="LE4" from="gneJ12" to="LE" priority="-1" length="0.10">
-        <lane id="LE4_0" index="0" speed="19.44" length="0.10" width="4.00" shape="-42.93,-57.07 2.38,-11.76"/>
-        <lane id="LE4_1" index="1" speed="19.44" length="0.10" width="4.00" shape="-45.76,-54.24 -0.44,-8.93"/>
-        <lane id="LE4_2" index="2" speed="19.44" length="0.10" width="4.00" shape="-48.59,-51.41 -3.27,-6.10"/>
+        <lane id="LE4_0" index="0" speed="27.78" length="0.10" width="4.00" shape="-42.93,-57.07 2.38,-11.76"/>
+        <lane id="LE4_1" index="1" speed="27.78" length="0.10" width="4.00" shape="-45.76,-54.24 -0.44,-8.93"/>
+        <lane id="LE4_2" index="2" speed="27.78" length="0.10" width="4.00" shape="-48.59,-51.41 -3.27,-6.10"/>
     </edge>
     <edge id="LS" from="LE" to="LS" priority="-1">
-        <lane id="LS_0" index="0" speed="19.44" length="500.00" width="4.00" shape="6.63,-10.00 500.00,-10.00"/>
-        <lane id="LS_1" index="1" speed="19.44" length="500.00" width="4.00" shape="6.63,-6.00 500.00,-6.00"/>
-        <lane id="LS_2" index="2" speed="19.44" length="500.00" width="4.00" shape="6.63,-2.00 500.00,-2.00"/>
+        <lane id="LS_0" index="0" speed="27.78" length="500.00" width="4.00" shape="6.63,-10.00 500.00,-10.00"/>
+        <lane id="LS_1" index="1" speed="27.78" length="500.00" width="4.00" shape="6.63,-6.00 500.00,-6.00"/>
+        <lane id="LS_2" index="2" speed="27.78" length="500.00" width="4.00" shape="6.63,-2.00 500.00,-2.00"/>
     </edge>
     <edge id="LSRE" from="LS" to="RS" priority="-1">
-        <lane id="LSRE_0" index="0" speed="19.44" length="1000.00" width="4.00" shape="500.00,-10.00 1500.00,-10.00"/>
-        <lane id="LSRE_1" index="1" speed="19.44" length="1000.00" width="4.00" shape="500.00,-6.00 1500.00,-6.00"/>
-        <lane id="LSRE_2" index="2" speed="19.44" length="1000.00" width="4.00" shape="500.00,-2.00 1500.00,-2.00"/>
+        <lane id="LSRE_0" index="0" speed="27.78" length="1000.00" width="4.00" shape="500.00,-10.00 1500.00,-10.00"/>
+        <lane id="LSRE_1" index="1" speed="27.78" length="1000.00" width="4.00" shape="500.00,-6.00 1500.00,-6.00"/>
+        <lane id="LSRE_2" index="2" speed="27.78" length="1000.00" width="4.00" shape="500.00,-2.00 1500.00,-2.00"/>
     </edge>
     <edge id="RE" from="RS" to="RE" priority="-1">
-        <lane id="RE_0" index="0" speed="19.44" length="500.00" width="4.00" shape="1500.00,-10.00 1993.37,-10.00"/>
-        <lane id="RE_1" index="1" speed="19.44" length="500.00" width="4.00" shape="1500.00,-6.00 1993.37,-6.00"/>
-        <lane id="RE_2" index="2" speed="19.44" length="500.00" width="4.00" shape="1500.00,-2.00 1993.37,-2.00"/>
+        <lane id="RE_0" index="0" speed="27.78" length="500.00" width="4.00" shape="1500.00,-10.00 1993.37,-10.00"/>
+        <lane id="RE_1" index="1" speed="27.78" length="500.00" width="4.00" shape="1500.00,-6.00 1993.37,-6.00"/>
+        <lane id="RE_2" index="2" speed="27.78" length="500.00" width="4.00" shape="1500.00,-2.00 1993.37,-2.00"/>
     </edge>
     <edge id="RE1" from="RE" to="gneJ9" priority="-1" length="0.10">
-        <lane id="RE1_0" index="0" speed="19.44" length="0.10" width="4.00" shape="1997.62,-11.76 2042.93,-57.07"/>
-        <lane id="RE1_1" index="1" speed="19.44" length="0.10" width="4.00" shape="2000.44,-8.93 2045.76,-54.24"/>
-        <lane id="RE1_2" index="2" speed="19.44" length="0.10" width="4.00" shape="2003.27,-6.10 2048.59,-51.41"/>
+        <lane id="RE1_0" index="0" speed="27.78" length="0.10" width="4.00" shape="1997.62,-11.76 2042.93,-57.07"/>
+        <lane id="RE1_1" index="1" speed="27.78" length="0.10" width="4.00" shape="2000.44,-8.93 2045.76,-54.24"/>
+        <lane id="RE1_2" index="2" speed="27.78" length="0.10" width="4.00" shape="2003.27,-6.10 2048.59,-51.41"/>
     </edge>
     <edge id="RE2" from="gneJ9" to="gneJ7" priority="-1" length="0.10">
-        <lane id="RE2_0" index="0" speed="19.44" length="0.10" width="4.00" shape="2057.07,-57.07 2107.07,-7.07"/>
-        <lane id="RE2_1" index="1" speed="19.44" length="0.10" width="4.00" shape="2054.24,-54.24 2104.24,-4.24"/>
-        <lane id="RE2_2" index="2" speed="19.44" length="0.10" width="4.00" shape="2051.41,-51.41 2101.41,-1.41"/>
+        <lane id="RE2_0" index="0" speed="27.78" length="0.10" width="4.00" shape="2057.07,-57.07 2107.07,-7.07"/>
+        <lane id="RE2_1" index="1" speed="27.78" length="0.10" width="4.00" shape="2054.24,-54.24 2104.24,-4.24"/>
+        <lane id="RE2_2" index="2" speed="27.78" length="0.10" width="4.00" shape="2051.41,-51.41 2101.41,-1.41"/>
     </edge>
     <edge id="RE3" from="gneJ7" to="gneJ8" priority="-1" length="0.10">
-        <lane id="RE3_0" index="0" speed="19.44" length="0.10" width="4.00" shape="2107.07,7.07 2057.07,57.07"/>
-        <lane id="RE3_1" index="1" speed="19.44" length="0.10" width="4.00" shape="2104.24,4.24 2054.24,54.24"/>
-        <lane id="RE3_2" index="2" speed="19.44" length="0.10" width="4.00" shape="2101.41,1.41 2051.41,51.41"/>
+        <lane id="RE3_0" index="0" speed="27.78" length="0.10" width="4.00" shape="2107.07,7.07 2057.07,57.07"/>
+        <lane id="RE3_1" index="1" speed="27.78" length="0.10" width="4.00" shape="2104.24,4.24 2054.24,54.24"/>
+        <lane id="RE3_2" index="2" speed="27.78" length="0.10" width="4.00" shape="2101.41,1.41 2051.41,51.41"/>
     </edge>
     <edge id="RE4" from="gneJ8" to="RE" priority="-1" length="0.10">
-        <lane id="RE4_0" index="0" speed="19.44" length="0.10" width="4.00" shape="2042.93,57.07 1997.62,11.76"/>
-        <lane id="RE4_1" index="1" speed="19.44" length="0.10" width="4.00" shape="2045.76,54.24 2000.44,8.93"/>
-        <lane id="RE4_2" index="2" speed="19.44" length="0.10" width="4.00" shape="2048.59,51.41 2003.27,6.10"/>
+        <lane id="RE4_0" index="0" speed="27.78" length="0.10" width="4.00" shape="2042.93,57.07 1997.62,11.76"/>
+        <lane id="RE4_1" index="1" speed="27.78" length="0.10" width="4.00" shape="2045.76,54.24 2000.44,8.93"/>
+        <lane id="RE4_2" index="2" speed="27.78" length="0.10" width="4.00" shape="2048.59,51.41 2003.27,6.10"/>
     </edge>
     <edge id="RS" from="RE" to="RS" priority="-1">
-        <lane id="RS_0" index="0" speed="19.44" length="500.00" width="4.00" shape="1993.37,10.00 1500.00,10.00"/>
-        <lane id="RS_1" index="1" speed="19.44" length="500.00" width="4.00" shape="1993.37,6.00 1500.00,6.00"/>
-        <lane id="RS_2" index="2" speed="19.44" length="500.00" width="4.00" shape="1993.37,2.00 1500.00,2.00"/>
+        <lane id="RS_0" index="0" speed="27.78" length="500.00" width="4.00" shape="1993.37,10.00 1500.00,10.00"/>
+        <lane id="RS_1" index="1" speed="27.78" length="500.00" width="4.00" shape="1993.37,6.00 1500.00,6.00"/>
+        <lane id="RS_2" index="2" speed="27.78" length="500.00" width="4.00" shape="1993.37,2.00 1500.00,2.00"/>
     </edge>
     <edge id="RSLE" from="RS" to="LS" priority="-1">
-        <lane id="RSLE_0" index="0" speed="19.44" length="1000.00" width="4.00" shape="1500.00,10.00 500.00,10.00"/>
-        <lane id="RSLE_1" index="1" speed="19.44" length="1000.00" width="4.00" shape="1500.00,6.00 500.00,6.00"/>
-        <lane id="RSLE_2" index="2" speed="19.44" length="1000.00" width="4.00" shape="1500.00,2.00 500.00,2.00"/>
+        <lane id="RSLE_0" index="0" speed="27.78" length="1000.00" width="4.00" shape="1500.00,10.00 500.00,10.00"/>
+        <lane id="RSLE_1" index="1" speed="27.78" length="1000.00" width="4.00" shape="1500.00,6.00 500.00,6.00"/>
+        <lane id="RSLE_2" index="2" speed="27.78" length="1000.00" width="4.00" shape="1500.00,2.00 500.00,2.00"/>
     </edge>
 
     <junction id="LE" type="priority" x="0.00" y="0.00" incLanes="LE_0 LE_1 LE_2 LE4_0 LE4_1 LE4_2" intLanes="" shape="6.63,12.00 6.63,-12.00 5.58,-12.13 5.09,-12.29 4.63,-12.52 4.20,-12.81 3.80,-13.17 -4.69,-4.69 -3.38,-3.12 -2.60,-1.56 -2.34,0.00 -2.60,1.56 -3.38,3.12 -4.69,4.69 3.80,13.17 4.63,12.52 5.09,12.29 5.58,12.13 6.09,12.03">

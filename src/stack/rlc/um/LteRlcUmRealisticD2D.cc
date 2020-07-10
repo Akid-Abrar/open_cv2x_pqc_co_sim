@@ -67,6 +67,7 @@ void LteRlcUmRealisticD2D::initialize(int stage)
         std::string pdcpType = getParentModule()->getParentModule()->par("LtePdcpRrcType").stdstringValue();
 
         packetSize_ = par("packetSize");
+        scenario3gpp_ = par("scenario3gpp");
 
         if (nodeType.compare("ENODEB") == 0)
         {

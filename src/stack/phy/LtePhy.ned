@@ -95,7 +95,7 @@ simple LtePhyVUeMode4 extends LtePhyUeD2D {
 	    int selectionWindowStartingSubframe = default(1);
 	    int shapeFactor = default(6);
 	    int thresholdRSSI = default(22);
-	    
+
 	    @signal[cbr];
  		@statistic[cbr](title="Channel Busy Ratio"; source="cbr"; record=mean,vector);
  		@signal[sciReceived];
@@ -131,9 +131,21 @@ simple LtePhyVUeMode4 extends LtePhyUeD2D {
 		@statistic[senderID](title="ID of node who sent message"; source="senderID"; record=vector);
 
         @signal[sciFailedHalfDuplex];
-        @statistic[sciFailedHalfDuplex](title="Number of failed TBs with a decoded SCI"; source="sciFailedHalfDuplex"; record=sum,vector);
+        @statistic[sciFailedHalfDuplex](title="Number of failed SCIs due to Half Duplex"; source="sciFailedHalfDuplex"; record=sum,vector);
         @signal[tbFailedHalfDuplex];
-        @statistic[tbFailedHalfDuplex](title="Number of failed TBs with a failed SCI"; source="tbFailedHalfDuplex"; record=sum,vector);
+        @statistic[tbFailedHalfDuplex](title="Number of failed TBs due to Half Duplex"; source="tbFailedHalfDuplex"; record=sum,vector);
+
+        @signal[tbFailedDueToProp];
+        @statistic[tbFailedDueToProp](title="Number of failed TBs due to propogation"; source="tbFailedDueToProp"; record=sum,vector);
+        @signal[tbFailedDueToInterference];
+        @statistic[tbFailedDueToInterference](title="Number of failed TBs due to interference"; source="tbFailedDueToInterference"; record=sum,vector);
+        @signal[sciFailedDueToProp];
+        @statistic[sciFailedDueToProp](title="Number of failed SCIs due to propogation"; source="sciFailedDueToProp"; record=sum,vector);
+        @signal[sciFailedDueToInterference];
+        @statistic[sciFailedDueToInterference](title="Number of failed SCIs due to interference"; source="sciFailedDueToInterference"; record=sum,vector);
+
+        @signal[sciUnsensed];
+        @statistic[sciUnsensed](title="Number of failed SCIs due to RSRP below threshold"; source="sciUnsensed"; record=sum,vector);
 
 		@signal[txRxDistanceSCI];
 		@statistic[txRxDistanceSCI](title="Distance between transmitter and receiver"; source="txRxDistanceSCI"; record=mean,vector);

@@ -1,8 +1,7 @@
-<?xml version="1.0"?>
-<!-- debug config -->
 <launch>
-    <copy file="highway_fast.net.xml" />
-    <copy file="highway_fast.rou.xml" />
-    <copy file="highway_fast.sumo.cfg" type="config" />
+  <basedir path="UPDATE-WITH-YOUR-PATH"/>
+  <copy file="fast.net.xml"/>
+  <copy file="fast.rou.xml"/>
+  <copy file="rerouters.add.xml"/>
+  <copy file="fast.sumo.cfg" type="config"/>
 </launch>
-

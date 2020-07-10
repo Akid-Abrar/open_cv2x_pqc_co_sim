@@ -166,6 +166,21 @@ class LtePhyUe : public LtePhyBase
         }
         return 0;
     }
+    double getPrevUsedNumberOfRbs(const Remote antenna, int numBands)
+    {
+        std::vector<UsedRBs>::iterator it = usedRbs_.begin();
+        double usedRBs = 0.0;
+        for (; it != usedRbs_.end(); ++it)
+        {
+            if (it->time_ == NOW-0.001){
+                for(unsigned int i=0;i<numBands;i++) {
+                    if (it->rbMap_[antenna][i] != 0)
+                        usedRBs++;
+                }
+            }
+        }
+        return usedRBs;
+    }
 };
 
 #endif  /* _LTE_AIRPHYUE_H_ */

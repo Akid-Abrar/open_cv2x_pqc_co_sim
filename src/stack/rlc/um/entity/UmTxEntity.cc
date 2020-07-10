@@ -29,6 +29,10 @@ void UmTxEntity::enque(cPacket* pkt)
 {
     EV << NOW << " UmTxEntity::enque - bufferize new SDU  " << endl;
     // Buffer the SDU
+    if (!sduQueue_.empty()){
+        // Data still in queue but new packet available therefore we need to delete it.
+        removeDataFromQueue();
+    }
     sduQueue_.insert(pkt);
 }
 

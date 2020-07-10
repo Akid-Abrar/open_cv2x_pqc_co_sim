@@ -65,12 +65,18 @@ void LteMacVUeMode4::initialize(int stage)
         reselectAfter_ = par("reselectAfter");
         useCBR_ = par("useCBR");
         packetDropping_ = par("packetDropping");
+        rriLookup_ = par("rriLookup");
+        crLimit_ = par("crLimit");
+        dccMechanism_ = par("dccMechanism");
+        adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
         missedTransmissions_=0;
 
         expiredGrant_ = false;
+
+        currentCbrIndex_ = defaultCbrIndex_;
 
         // Register the necessary signals for this simulation
 
@@ -277,6 +283,13 @@ void LteMacVUeMode4::parseCbrTxConfig(cXMLElement* xmlConfig)
         }
         else
             cbrMap.insert({"allowedRetxNumberPSSCH",  par("allowedRetxNumberPSSCH")});
+        it = cbrParams.find("allowedRRI");
+        if (it != cbrParams.end())
+        {
+            cbrMap.insert({"allowedRRI",  it->second});
+        }
+        else
+            cbrMap.insert({"allowedRRI",  resourceReservationInterval_});
         it = cbrParams.find("cr-Limit");
         if (it != cbrParams.end())
         {
@@ -501,6 +514,43 @@ UserTxParams* LteMacVUeMode4::getPreconfiguredTxParams()
     return txParams;
 }
 
+double LteMacVUeMode4::calculateChannelOccupancyRatio(int period){
+    int b;
+    int a;
+    int subchannelsUsed = 0;
+    // CR limit calculation
+    // determine b
+    if (schedulingGrant_ != NULL){
+        LteMode4SchedulingGrant* mode4Grant = check_and_cast<LteMode4SchedulingGrant*>(schedulingGrant_);
+        if (expirationCounter_ > 499){
+            b = 499;
+        } else {
+            b = expirationCounter_;
+        }
+        subchannelsUsed += (b / period) * mode4Grant->getNumSubchannels();
+    } else {
+        b = 0;
+    }
+    // determine a
+    a = 999 - b;
+
+    // determine previous transmissions -> Need to account for if we have already done a drop. Must maintain a
+    // history of past transmissions i.e. subchannels used and subframe in which they occur. delete entries older
+    // than 1000.
+    std::unordered_map<double, int>::const_iterator it = previousTransmissions_.begin();
+    while (it != previousTransmissions_.end()){
+        if (it->first < NOW.dbl() - 1){
+            it = previousTransmissions_.erase(it);
+            continue;
+        } else if (it->first > NOW.dbl() - (0.001 * a)) {
+            subchannelsUsed += it->second;
+        }
+        it++;
+    }
+    // calculate cr
+    return subchannelsUsed /(numSubchannels_ * 1000.0);
+}
+
 void LteMacVUeMode4::handleMessage(cMessage *msg)
 {
     if (msg->isSelfMessage())
@@ -532,69 +582,139 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
             Cbr* cbrPkt = check_and_cast<Cbr*>(pkt);
             cbr_ = cbrPkt->getCbr();
 
-            currentCbrIndex_ = defaultCbrIndex_;
-            if (useCBR_)
-            {
-                std::vector<std::unordered_map<std::string, double>>::iterator it;
-                for (it = cbrLevels_.begin(); it!=cbrLevels_.end(); it++)
-                {
-                    double cbrUpper = (*it).at("cbr-upper");
-                    double cbrLower = (*it).at("cbr-lower");
-                    double index = (*it).at("cbr-PSSCH-TxConfig-Index");
-                    if (cbrLower == 0){
-                        if (cbr_< cbrUpper)
-                        {
-                            currentCbrIndex_ = (int)index;
-                            break;
+            if (useCBR_) {
+
+                if (dccMechanism_) {
+                    double cbrUpper = cbrLevels_[currentCbrIndex_].at("cbr-upper");
+                    double cbrLower = cbrLevels_[currentCbrIndex_].at("cbr-lower");
+
+                    if (cbr_ > cbrUpper) {
+
+                        cbrDownwardTransitions_.clear();
+
+                        int highest_reachable_state = -1;
+                        for (int i = 0; i < cbrUpwardTransitions_.size(); i++) {
+                            simtime_t time = std::get<0>(cbrUpwardTransitions_[i]);
+                            int index = std::get<1>(cbrUpwardTransitions_[i]);
+                            if ((NOW >= time + 1) && (currentCbrIndex_ != index)) {
+                                if (i > highest_reachable_state) {
+                                    highest_reachable_state = i;
+                                }
+                            }
                         }
-                    } else if (cbrUpper == 1){
-                        if (cbr_ > cbrLower)
-                        {
-                            currentCbrIndex_ = (int)index;
-                            break;
+                        if (highest_reachable_state != -1) {
+                            currentCbrIndex_ = std::get<1>(cbrUpwardTransitions_[highest_reachable_state]);
+                            std::vector < std::tuple < simtime_t, int
+                                    >> (cbrUpwardTransitions_.begin() + highest_reachable_state +
+                                        1, cbrUpwardTransitions_.end()).swap(cbrUpwardTransitions_);
+                        }
+
+                        std::vector < std::unordered_map < std::string, double >> ::iterator
+                        it;
+                        for (it = cbrLevels_.begin(); it != cbrLevels_.end(); it++) {
+                            double levelUpper = (*it).at("cbr-upper");
+                            double levelLower = (*it).at("cbr-lower");
+                            double index = (*it).at("cbr-PSSCH-TxConfig-Index");
+                            // Check if multiple levels up i.e. is it higher again thus need to record second transition
+                            if (index != currentCbrIndex_ && cbr_ >= levelLower && cbr_ < levelUpper) {
+                                bool new_record = true;
+                                if (cbrUpwardTransitions_.size() != 0) {
+                                    for (int j = 0; j < cbrUpwardTransitions_.size(); j++) {
+                                        if (std::get<1>(cbrUpwardTransitions_[j]) == index) {
+                                            new_record = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (new_record) {
+                                    std::tuple<simtime_t, int> transition = std::make_tuple(NOW, index);
+                                    cbrUpwardTransitions_.push_back(transition);
+                                }
+                            }
+                        }
+                    } else if (cbr_ <= cbrLower && cbr_ != 0) {
+
+                        cbrUpwardTransitions_.clear();
+
+                        int lowest_reachable_state = -1;
+                        for (int i = 0; i < cbrDownwardTransitions_.size(); i++) {
+                            simtime_t time = std::get<0>(cbrDownwardTransitions_[i]);
+                            int index = std::get<1>(cbrDownwardTransitions_[i]);
+                            if ((NOW >= time + 5) && (currentCbrIndex_ != index)) {
+                                if (i > lowest_reachable_state) {
+                                    lowest_reachable_state = i;
+                                }
+                            }
+                        }
+                        if (lowest_reachable_state != -1) {
+                            currentCbrIndex_ = std::get<1>(cbrDownwardTransitions_[lowest_reachable_state]);
+                            std::vector < std::tuple < simtime_t, int
+                                    >> (cbrDownwardTransitions_.begin() + lowest_reachable_state +
+                                        1, cbrDownwardTransitions_.end()).swap(cbrDownwardTransitions_);
+                        }
+
+                        std::vector < std::unordered_map < std::string, double >> ::reverse_iterator it;
+                        for (it = cbrLevels_.rbegin(); it != cbrLevels_.rend(); it++) {
+                            double levelUpper = (*it).at("cbr-upper");
+                            double levelLower = (*it).at("cbr-lower");
+                            double index = (*it).at("cbr-PSSCH-TxConfig-Index");
+                            // Check if multiple levels up i.e. is it higher again thus need to record second transition
+                            if (index != currentCbrIndex_ && cbr_ >= levelLower && cbr_ < levelUpper) {
+                                bool new_record = true;
+                                if (cbrDownwardTransitions_.size() != 0) {
+                                    for (int j = 0; j < cbrDownwardTransitions_.size(); j++) {
+                                        if (std::get<1>(cbrDownwardTransitions_[j]) == index) {
+                                            new_record = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (new_record) {
+                                    std::tuple<simtime_t, int> transition = std::make_tuple(NOW, index);
+                                    cbrDownwardTransitions_.push_back(transition);
+                                }
+                            }
                         }
                     } else {
-                        if (cbr_ > cbrLower && cbr_<= cbrUpper)
-                        {
-                            currentCbrIndex_ = (int)index;
-                            break;
+                        // We are still in the current range so no transitioning.
+                        cbrUpwardTransitions_.clear();
+                        cbrDownwardTransitions_.clear();
+                    }
+                } else {
+                    std::vector<std::unordered_map<std::string, double>>::iterator it;
+                    for (it = cbrLevels_.begin(); it!=cbrLevels_.end(); it++)
+                    {
+                        double cbrUpper = (*it).at("cbr-upper");
+                        double cbrLower = (*it).at("cbr-lower");
+                        double index = (*it).at("cbr-PSSCH-TxConfig-Index");
+                        if (cbrLower == 0){
+                            if (cbr_< cbrUpper)
+                            {
+                                currentCbrIndex_ = (int)index;
+                                break;
+                            }
+                        } else if (cbrUpper == 1){
+                            if (cbr_ > cbrLower)
+                            {
+                                currentCbrIndex_ = (int)index;
+                                break;
+                            }
+                        } else {
+                            if (cbr_ > cbrLower && cbr_<= cbrUpper)
+                            {
+                                currentCbrIndex_ = (int)index;
+                                break;
+                            }
                         }
                     }
                 }
             }
 
-            int b;
-            int a;
-            int subchannelsUsed = 0;
-            // CR limit calculation
-            // determine b
+            int period = 0;
             if (schedulingGrant_ != NULL){
-                if (expirationCounter_ > 499){
-                    b = 499;
-                } else {
-                    b = expirationCounter_;
-                }
-                subchannelsUsed += b / schedulingGrant_->getPeriod();
-            } else {
-                b = 0;
+                period = schedulingGrant_->getPeriod();
             }
-            // determine a
-            a = 999 - b;
-
-            // determine previous transmissions -> Need to account for if we have already done a drop. Must maintain a
-            // history of past transmissions i.e. subchannels used and subframe in which they occur. delete entries older
-            // than 1000.
-            std::unordered_map<double, int>::const_iterator it = previousTransmissions_.begin();
-            while (it != previousTransmissions_.end()){
-                if (it->first < NOW.dbl() - 1){
-                    it = previousTransmissions_.erase(it);
-                } else if (it->first > NOW.dbl() - (0.1 * a)) {
-                    subchannelsUsed += it->second;
-                    it++;
-                }
-            }
-            // calculate cr
-            channelOccupancyRatio_ = subchannelsUsed /(numSubchannels_ * 1000.0);
+            channelOccupancyRatio_ = calculateChannelOccupancyRatio(period);
 
             // message from PHY_to_MAC gate (from lower layer)
             emit(receivedPacketFromLowerLayer, pkt);
@@ -690,7 +810,7 @@ void LteMacVUeMode4::handleSelfMessage()
         {
             // Gotten to the point of the final tranmission must determine if we reselect or not.
             double randomReReserve = dblrand(1);
-            if (randomReReserve > probResourceKeep_)
+            if (randomReReserve < probResourceKeep_)
             {
                 int expiration = intuniform(5, 15, 3);
                 mode4Grant -> setResourceReselectionCounter(expiration);
@@ -786,7 +906,6 @@ void LteMacVUeMode4::handleSelfMessage()
 
             if (!sent)
             {
-                // no data to send, but if bsrTriggered is set, send a BSR
                 macPduMake();
             }
 
@@ -872,11 +991,31 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     // Determine the RBs on which we will send our message
     RbMap grantedBlocks;
     int totalGrantedBlocks = 0;
-    for (int i=initiailSubchannel;i<finalSubchannel;i++)
-    {
-        std::vector<Band> allocatedBands;
-        for (Band b = i * subchannelSize_; b < (i * subchannelSize_) + subchannelSize_ ; b++)
+    if (adjacencyPSCCHPSSCH_){
+        // Adjacent mode just provide the allocated bands
+
+        for (int i=initiailSubchannel;i<finalSubchannel;i++)
         {
+            int initialBand = i * subchannelSize_;
+            for (Band b = initialBand; b < initialBand + subchannelSize_ ; b++)
+            {
+                grantedBlocks[MACRO][b] = 1;
+                ++totalGrantedBlocks;
+            }
+        }
+    } else {
+        // Start at subchannel numsubchannels.
+        // Remove 1 subchannel from each grant.
+        // Account for the two blocks taken for the SCI
+        totalGrantedBlocks += 2;
+        int initialBand;
+        if (initiailSubchannel == 0){
+            // If first subchannel to use need to make sure to add the number of subchannels for the SCI messages
+            initialBand = numSubchannels_ * 2;
+        } else {
+            initialBand = (numSubchannels_ * 2) + (initiailSubchannel * (subchannelSize_ - 2));
+        }
+        for (Band b = initialBand; b < (initialBand + subchannelSize_ - 2) * mode4Grant->getNumSubchannels() ; b++) {
             grantedBlocks[MACRO][b] = 1;
             ++totalGrantedBlocks;
         }
@@ -939,6 +1078,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
 
     int minSubchannelNumberPSSCH = minSubchannelNumberPSSCH_;
     int maxSubchannelNumberPSSCH = maxSubchannelNumberPSSCH_;
+    int resourceReservationInterval = resourceReservationInterval_;
 
     if (useCBR_)
     {
@@ -989,7 +1129,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     int resourceReselectionCounter = intuniform(5, 15, 3);
 
     mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
-    mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval_);
+    mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
 
     LteMode4SchedulingGrant* phyGrant = mode4Grant->dup();
 
@@ -1016,6 +1156,14 @@ void LteMacVUeMode4::flushHarqBuffers()
     // But purge them once all messages sent.
 
     LteMode4SchedulingGrant* mode4Grant = dynamic_cast<LteMode4SchedulingGrant*>(schedulingGrant_);
+
+    int period = 0;
+    if (schedulingGrant_ != NULL){
+        period = schedulingGrant_->getPeriod();
+    }
+
+    // Ensure CR updated.
+    channelOccupancyRatio_ = calculateChannelOccupancyRatio(period);
 
     HarqTxBuffers::iterator it2;
     for(it2 = harqTxBuffers_.begin(); it2 != harqTxBuffers_.end(); it2++)
@@ -1044,7 +1192,7 @@ void LteMacVUeMode4::flushHarqBuffers()
             LteHarqProcessTx* selectedProcess = it2->second->getSelectedProcess();
             for (int cw=0; cw<MAX_CODEWORDS; cw++)
             {
-                int pduLength = selectedProcess->getPduLength(cw);
+                int pduLength = selectedProcess->getPduLength(cw) * 8;
                 int minMCS = minMCSPSSCH_;
                 int maxMCS = maxMCSPSSCH_;
                 if (pduLength > 0)
@@ -1064,6 +1212,47 @@ void LteMacVUeMode4::flushHarqBuffers()
                             cbrMaxMCS = maxMCSPSSCH_;
                         else
                             cbrMaxMCS = (int)got->second;
+
+                        int rri = mode4Grant->getPeriod();
+                        if (rriLookup_) {
+                            // RRI Adaptation based on lookup table similar to DCC
+                            got = cbrMap.find("allowedRRI");
+                            if (got != cbrMap.end()) {
+                                rri = (int) got->second * 100;
+                            }
+                        }
+                        else if (crLimit_) {
+                            got = cbrMap.find("cr-Limit");
+                            // Calculate an RRI which ensures the channelOccupancyRatio reduces to the point that
+                            // it remains within the cr-limit
+                            int i = 0;
+                            double newOccupancyRatio = channelOccupancyRatio_;
+                            rri = (int) validResourceReservationIntervals_.at(i) * 100;
+                            while (newOccupancyRatio > got->second && i < validResourceReservationIntervals_.size()){
+                                rri = (int) validResourceReservationIntervals_.at(i) * 100;
+                                newOccupancyRatio = calculateChannelOccupancyRatio(rri);
+                                i++;
+                            }
+                        }
+
+                        if (rri != mode4Grant->getPeriod()) {
+                            periodCounter_ = rri;
+
+                            if (periodCounter_ > expirationCounter_) {
+                                // Gotten to the point of the final transmission must determine if we reselect or not.
+                                double randomReReserve = dblrand(1);
+                                if (randomReReserve > probResourceKeep_) {
+                                    int expiration = intuniform(rri/100, 15, 3);
+                                    mode4Grant->setResourceReselectionCounter(expiration);
+                                    // This remains at the default RRI this ensures that grants don't live overly long if they return to lower RRIs
+                                    expirationCounter_ = expiration * resourceReservationInterval_ * 100;
+                                } else {
+                                    emit(grantBreak, 1);
+                                    mode4Grant->setExpiration(0);
+                                    expiredGrant_ = true;
+                                }
+                            }
+                        }
 
                         if (maxMCSPSSCH_ < cbrMinMCS || cbrMaxMCS < minMCSPSSCH_)
                         {

@@ -48,11 +48,12 @@ std::vector<double> LteDummyChannelModel::getSINR(LteAirFrame *frame, UserContro
     return tmp;
 }
 
-std::vector<double> LteDummyChannelModel::getRSRP_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord)
+std::tuple<std::vector<double>, double>  LteDummyChannelModel::getRSRP_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord)
 {
-    std::vector<double> tmp;
-    tmp.push_back(10000);
-    return tmp;
+    std::vector<double> tmp1;
+    double tmp2 = 0.0;
+    tmp1.push_back(10000);
+    return std::make_tuple(tmp1, tmp2);
 }
 
 std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId)
@@ -64,7 +65,7 @@ std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserCo
     return tmp;
 }
 
-std::vector<double> LteDummyChannelModel::getRSSI(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId)
+std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector, bool interference=true)
 {
     std::vector<double> tmp;
     tmp.push_back(10000);
@@ -73,22 +74,14 @@ std::vector<double> LteDummyChannelModel::getRSSI(LteAirFrame *frame, UserContro
     return tmp;
 }
 
-std::vector<double> LteDummyChannelModel::getSINR_D2D(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector)
+std::tuple<std::vector<double>, std::vector<double>> LteDummyChannelModel::getRSSI_SINR(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector)
 {
-    std::vector<double> tmp;
-    tmp.push_back(10000);
-    // fake SINR is needed by das (to decide which antenna set are used by the terminal)
-    // and handhover function to decide if the terminal should trigger the hanhover
-    return tmp;
-}
+    std::vector<double> tmp1;
+    std::vector<double> tmp2;
+    tmp1.push_back(1000);
+    tmp2.push_back(1000);
 
-std::vector<double> LteDummyChannelModel::getRSSI(LteAirFrame *frame, UserControlInfo* lteInfo_1, MacNodeId destId, inet::Coord destCoord,MacNodeId enbId,std::vector<double> rsrpVector)
-{
-    std::vector<double> tmp;
-    tmp.push_back(10000);
-    // fake SINR is needed by das (to decide which antenna set are used by the terminal)
-    // and handhover function to decide if the terminal should trigger the hanhover
-    return tmp;
+    return std::make_tuple(tmp1, tmp2);
 }
 
 std::vector<double> LteDummyChannelModel::getSIR(LteAirFrame *frame, UserControlInfo* lteInfo)
@@ -154,7 +147,7 @@ bool LteDummyChannelModel::error_D2D(LteAirFrame *frame, UserControlInfo* lteInf
     return true;
 }
 
-bool LteDummyChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* lteInfo,std::vector<double> rsrpVector, int mcs)
+bool LteDummyChannelModel::error_Mode4(LteAirFrame *frame, UserControlInfo* lteInfo,std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs, bool interference=true)
 {
     // Number of RTX
     unsigned char nTx = lteInfo->getTxNumber();
@@ -175,7 +168,7 @@ bool LteDummyChannelModel::error_Mode4_D2D(LteAirFrame *frame, UserControlInfo* 
         // Signal too weak, we can't receive it
         return false;
     }
-        // Signal is strong enough, receive this Signal
+    // Signal is strong enough, receive this Signal
     EV << "This is your lucky day (" << er << " > " << totalPer
        << ") -> Receive AirFrame." << endl;
     return true;
