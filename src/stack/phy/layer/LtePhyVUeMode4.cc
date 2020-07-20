@@ -512,7 +512,7 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
 
     SCIInfo->setFrameType(SCIPKT);
     SCIInfo->setGrantedBlocks(sciRbs);
-    SCIInfo->setTotalGrantedBlocks(2); // There are only ever 2 RBs in the sci
+    SCIInfo->setTotalGrantedBlocks(sciGrant_->getTotalGrantedBlocks());
     SCIInfo->setGrantStartTime(sciGrant_->getStartTime());
 
     /*
