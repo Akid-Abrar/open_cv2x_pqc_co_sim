@@ -1427,8 +1427,6 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
     {
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceTB, pkt_dist);
-        emit(posX, getCoord().x);
-        emit(posY, getCoord().y);
 
         if(!transmitting_){
 
@@ -1671,6 +1669,10 @@ void LtePhyVUeMode4::updateCBR()
 
 void LtePhyVUeMode4::updateSubframe()
 {
+    // Ensure for every 1ms we record the position of the vehicle
+    emit(posX, getCoord().x);
+    emit(posY, getCoord().y);
+
     int sensingWindowLength = pStep_ * 10;
     if (sensingWindowSizeOverride_ > 0){
         sensingWindowLength = sensingWindowSizeOverride_;
