@@ -71,6 +71,7 @@ void LteMacVUeMode4::initialize(int stage)
         adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
         randomScheduling_ = par("randomScheduling");
         nonPeriodic_ = par("nonPeriodic");
+        alwaysReschedule_ = par("alwaysReschedule");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -96,6 +97,8 @@ void LteMacVUeMode4::initialize(int stage)
         grantRequests           = registerSignal("grantRequests");
         packetDropDCC           = registerSignal("packetDropDCC");
         macNodeID               = registerSignal("macNodeID");
+        rrcSelected             = registerSignal("resourceReselectionCounter");
+        retainGrant             = registerSignal("retainGrant");
     }
     else if (stage == inet::INITSTAGE_NETWORK_LAYER_3)
     {
@@ -738,15 +741,15 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
             double dur = duration.dbl();
             remainingTime_ = lteInfo->getDuration() - dur;
 
-            if (schedulingGrant_ != NULL && periodCounter_ > remainingTime_)
+            if (schedulingGrant_ == NULL)
+            {
+                macGenerateSchedulingGrant(remainingTime_, lteInfo->getPriority());
+            }
+            else if ((schedulingGrant_ != NULL && periodCounter_ > remainingTime_) || alwaysReschedule_)
             {
                 emit(grantBreakTiming, 1);
                 delete schedulingGrant_;
                 schedulingGrant_ = NULL;
-                macGenerateSchedulingGrant(remainingTime_, lteInfo->getPriority());
-            }
-            else if (schedulingGrant_ == NULL)
-            {
                 macGenerateSchedulingGrant(remainingTime_, lteInfo->getPriority());
             }
             else
@@ -825,6 +828,8 @@ void LteMacVUeMode4::handleSelfMessage()
                 mode4Grant -> setResourceReselectionCounter(expiration);
                 mode4Grant -> setFirstTransmission(true);
                 expirationCounter_ = expiration * mode4Grant->getPeriod();
+                emit(rrcSelected, expiration);
+                emit(retainGrant, 1);
             }
         }
         if (--periodCounter_>0 && !mode4Grant->getFirstTransmission())
@@ -1032,7 +1037,7 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     mode4Grant->setStartTime(selectedStartTime);
     mode4Grant->setPeriodic(true);
     mode4Grant->setGrantedBlocks(grantedBlocks);
-    mode4Grant->setTotalGrantedBlocks(totalGrantedBlocks - 2); // account for the 2 RBs used for the sci message
+    mode4Grant->setTotalGrantedBlocks(totalGrantedBlocks); // account for the 2 RBs used for the sci message
     mode4Grant->setDirection(D2D_MULTI);
     mode4Grant->setCodewords(1);
     mode4Grant->setStartingSubchannel(initiailSubchannel);
@@ -1134,6 +1139,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     if ((randomScheduling_) || (nonPeriodic_) ){
         mode4Grant -> setResourceReselectionCounter(0);
         mode4Grant -> setExpiration(0);
+        emit(rrcSelected, 0);
     } else {
 
         // Based on restrictResourceReservation interval But will be between 1 and 15
@@ -1150,7 +1156,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
 
         mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
         mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
-
+        emit(rrcSelected, resourceReselectionCounter);
     }
 
 
@@ -1281,6 +1287,8 @@ void LteMacVUeMode4::flushHarqBuffers()
                                     }
 
                                     mode4Grant->setResourceReselectionCounter(expiration);
+                                    emit(rrcSelected, expiration);
+                                    emit(retainGrant, 1);
                                     // This remains at the default RRI this ensures that grants don't live overly long if they return to lower RRIs
                                     expirationCounter_ = expiration * resourceReservationInterval_ * 100;
                                 } else {
