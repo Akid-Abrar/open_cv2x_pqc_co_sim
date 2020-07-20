@@ -31,6 +31,7 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int selectionWindowStartingSubframe_;
     int thresholdRSSI_;
     int cbrCountDown_;
+    int sensingWindowSizeOverride_;
 
     bool transmitting_;
     bool randomScheduling_;

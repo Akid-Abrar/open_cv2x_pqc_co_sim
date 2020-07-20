@@ -98,6 +98,7 @@ simple LtePhyVUeMode4 extends LtePhyUeD2D {
 	    int selectionWindowStartingSubframe = default(1);
 	    int shapeFactor = default(6);
 	    int thresholdRSSI = default(22);
+	    int sensingWindowSizeOverride = default(-1);
 
 	    @signal[cbr];
  		@statistic[cbr](title="Channel Busy Ratio"; source="cbr"; record=mean,vector);
