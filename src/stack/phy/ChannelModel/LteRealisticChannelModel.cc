@@ -355,7 +355,6 @@ LteRealisticChannelModel::LteRealisticChannelModel(ParameterMap& params,
 
 LteRealisticChannelModel::~LteRealisticChannelModel()
 {
-    delete nkgmf;
 }
 
 double LteRealisticChannelModel::getTxRxDistance(UserControlInfo* lteInfo)
@@ -1095,9 +1094,9 @@ std::tuple<std::vector<double>, double> LteRealisticChannelModel::getRSRP_D2D(Lt
             }
         }
 
-        attenuation -= fadingAttenuation;
+        double attenuationFaded = attenuation - fadingAttenuation;
 
-        double attenuationLinear = dBToLinear(-attenuation);
+        double attenuationLinear = dBToLinear(-attenuationFaded);
 
         double rsrp = txPowerDensity * attenuationLinear;
 
