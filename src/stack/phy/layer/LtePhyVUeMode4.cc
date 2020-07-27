@@ -1372,10 +1372,9 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 lteInfo->setDeciderResult(false);
                 sciUnsensed_ += 1;
             } else {
-
-                prop_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0, false);
-                if (prop_result)
-                    interference_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0, true);
+                std::tuple<bool, bool> res = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, 0);
+                prop_result = get<0>(res);
+                interference_result = get<1>(res);
 
                 SidelinkControlInformation *sci = check_and_cast<SidelinkControlInformation *>(pkt);
                 std::tuple<int, int> indexAndLength = decodeRivValue(sci, lteInfo);
@@ -1451,10 +1450,11 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                         sciDecodedSuccessfully = true;
                     }
 
-                    if (lteInfo->getDirection() == D2D_MULTI)
-                        prop_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs(), false);
-                        if (prop_result)
-                            interference_result = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs(), true);
+                    if (lteInfo->getDirection() == D2D_MULTI) {
+                        std::tuple<bool, bool> res = channelModel_->error_Mode4(frame, lteInfo, rsrpVector, sinrVector, correspondingSCI->getMcs());
+                        prop_result = get<0>(res);
+                        interference_result = get<1>(res);
+                    }
 
                     // Remove the SCI
                     scis_.erase(it);
