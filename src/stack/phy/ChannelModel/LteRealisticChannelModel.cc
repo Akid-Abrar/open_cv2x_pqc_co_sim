@@ -2203,7 +2203,7 @@ std::tuple<bool, bool> LteRealisticChannelModel::error_Mode4(LteAirFrame *frame,
         resultSnr = false;
     }
 
-    if (er <= blerSnr) {
+    if (er <= blerSinr) {
         // Interference too strong, we can't decode this packet
         resultSinr = false;
     }
