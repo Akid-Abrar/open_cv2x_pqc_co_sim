@@ -2061,7 +2061,7 @@ bool LteRealisticChannelModel::error_D2D(LteAirFrame *frame, UserControlInfo* lt
     return true;
 }
 
-bool LteRealisticChannelModel::error_Mode4(LteAirFrame *frame, UserControlInfo* lteInfo, std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs, bool interference)
+std::tuple<bool, bool> LteRealisticChannelModel::error_Mode4(LteAirFrame *frame, UserControlInfo* lteInfo, std::vector<double> rsrpVector, std::vector<double> sinrVector, int mcs)
 {
     EV << "LteRealisticChannelModel::error_Mode4" << endl;
 
@@ -2107,33 +2107,29 @@ bool LteRealisticChannelModel::error_Mode4(LteAirFrame *frame, UserControlInfo* 
     {
         //compare lambda min (smaller eingenvalues of channel matrix) with the threshold used to compute the rank
         if (binder_->phyPisaData.getLambda(id, 1) < lambdaMinTh_)
-            return false;
+            return std::make_tuple(false, false);
     }
 
-    // SINR vector(one SINR value for each band)
+    // SNR vector(one SNR value for each band)
     std::vector<double> snrV;
-    if (interference){
-        // We are calculating error based on SINR not SNR
-        snrV = sinrVector;
-    } else {
-        // We are calculating based on SNR only not SINR
-        if (lteInfo->getDirection() == D2D || lteInfo->getDirection() == D2D_MULTI) {
-            MacNodeId peerUeMacNodeId = lteInfo->getDestId();
-            Coord peerCoord = myCoord_;
-            // TODO get an appropriate way to get EnbId
-            MacNodeId enbId = 1;
+    if (lteInfo->getDirection() == D2D || lteInfo->getDirection() == D2D_MULTI) {
+        MacNodeId peerUeMacNodeId = lteInfo->getDestId();
+        Coord peerCoord = myCoord_;
+        // TODO get an appropriate way to get EnbId
+        MacNodeId enbId = 1;
 
-            if (lteInfo->getDirection() == D2D) {
-                snrV = getSINR_D2D(frame, lteInfo, peerUeMacNodeId, peerCoord, enbId);
-            } else  // D2D_MULTI
-            {
-                snrV = getSINR_D2D(frame, lteInfo, peerUeMacNodeId, peerCoord, enbId, rsrpVector, interference);
-            }
+        if (lteInfo->getDirection() == D2D) {
+            snrV = getSINR_D2D(frame, lteInfo, peerUeMacNodeId, peerCoord, enbId);
+        } else  // D2D_MULTI
+        {
+            snrV = getSINR_D2D(frame, lteInfo, peerUeMacNodeId, peerCoord, enbId, rsrpVector, false);
         }
     }
 
-    double bler = 0;
+    double blerSnr = 0;
+    double blerSinr = 0;
     double averageSnr = 0;
+    double averageSinr = 0;
     double countUsedRbs = 0;
 
     RbMap rbmap = lteInfo->getGrantedBlocks();
@@ -2156,38 +2152,63 @@ bool LteRealisticChannelModel::error_Mode4(LteAirFrame *frame, UserControlInfo* 
 
             //Get the Bler
             averageSnr += dBToLinear(snrV[jt->first]);
+            averageSinr += dBToLinear(sinrVector[jt->first]);
             countUsedRbs += 1;
         }
     }
 
     averageSnr = linearToDb(averageSnr/countUsedRbs);
+    averageSinr = linearToDb(averageSinr/countUsedRbs);
 
     if (averageSnr > binder_->phyPisaData.maxSnr())
-        bler = 0;
+        blerSnr = 0;
     else
     if (lteInfo->getFrameType() == SCIPKT)
     {
         // TODO: Make this slightly tidier.
-        bler = binder_->phyPisaData.GetPscchBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, averageSnr);
+        blerSnr = binder_->phyPisaData.GetPscchBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, averageSnr);
     }
     else
     {
         if (analytical_)
-            bler = binder_->phyPisaData.GetBlerAnalytical(mcs, averageSnr);
+            blerSnr = binder_->phyPisaData.GetBlerAnalytical(mcs, averageSnr);
         else
-            bler = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, averageSnr);
+            blerSnr = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, averageSnr);
+    }
+
+    if (averageSinr > binder_->phyPisaData.maxSnr())
+        blerSinr = 0;
+    else
+    if (lteInfo->getFrameType() == SCIPKT)
+    {
+        // TODO: Make this slightly tidier.
+        blerSinr = binder_->phyPisaData.GetPscchBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, averageSinr);
+    }
+    else
+    {
+        if (analytical_)
+            blerSinr = binder_->phyPisaData.GetBlerAnalytical(mcs, averageSinr);
+        else
+            blerSinr = binder_->phyPisaData.GetPsschBler(binder_->phyPisaData.AWGN, binder_->phyPisaData.SISO, mcs, averageSinr);
     }
 
     double er = uniform(getEnvir()->getRNG(0),0.0, 1.0);
 
-    if (er <= bler)
+    bool resultSnr = true;
+    bool resultSinr = true;
+
+    if (er <= blerSnr)
     {
         // Signal too weak, we can't receive it
-        return false;
+        resultSnr = false;
     }
-    // Signal is strong enough, receive this Signal
 
-    return true;
+    if (er <= blerSinr) {
+        // Interference too strong, we can't decode this packet
+        resultSinr = false;
+    }
+
+    return std::make_tuple(resultSnr, resultSinr);
 }
 
 void LteRealisticChannelModel::computeLosProbability(double d,
