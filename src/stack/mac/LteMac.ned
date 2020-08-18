@@ -383,13 +383,7 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
 	    double probResourceKeep = default(0.4);
 	    bool useCBR = default(false);
 	    bool packetDropping = default(false);
-	    bool rriLookup = default(false);
-	    bool crLimit = default(false);
-	    bool dccMechanism = default(false);
 	    bool adjacencyPSCCHPSSCH = default(true);
-	    bool randomScheduling = default(false);
-	    bool nonPeriodic = default(false);
-	    bool alwaysReschedule = default(false);
 
 	    bool usePreconfiguredTxParams = default(false);
 	    

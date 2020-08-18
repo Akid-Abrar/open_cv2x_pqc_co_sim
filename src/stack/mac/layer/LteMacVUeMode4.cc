@@ -65,13 +65,8 @@ void LteMacVUeMode4::initialize(int stage)
         reselectAfter_ = par("reselectAfter");
         useCBR_ = par("useCBR");
         packetDropping_ = par("packetDropping");
-        rriLookup_ = par("rriLookup");
         crLimit_ = par("crLimit");
-        dccMechanism_ = par("dccMechanism");
         adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
-        randomScheduling_ = par("randomScheduling");
-        nonPeriodic_ = par("nonPeriodic");
-        alwaysReschedule_ = par("alwaysReschedule");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -95,7 +90,6 @@ void LteMacVUeMode4::initialize(int stage)
         selectedNumSubchannels  = registerSignal("selectedNumSubchannels");
         maximumCapacity         = registerSignal("maximumCapacity");
         grantRequests           = registerSignal("grantRequests");
-        packetDropDCC           = registerSignal("packetDropDCC");
         macNodeID               = registerSignal("macNodeID");
         rrcSelected             = registerSignal("resourceReselectionCounter");
         retainGrant             = registerSignal("retainGrant");
@@ -589,127 +583,29 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
 
             if (useCBR_) {
 
-                if (dccMechanism_) {
-                    double cbrUpper = cbrLevels_[currentCbrIndex_].at("cbr-upper");
-                    double cbrLower = cbrLevels_[currentCbrIndex_].at("cbr-lower");
-
-                    if (cbr_ > cbrUpper) {
-
-                        cbrDownwardTransitions_.clear();
-
-                        int highest_reachable_state = -1;
-                        for (int i = 0; i < cbrUpwardTransitions_.size(); i++) {
-                            simtime_t time = std::get<0>(cbrUpwardTransitions_[i]);
-                            int index = std::get<1>(cbrUpwardTransitions_[i]);
-                            if ((NOW >= time + 1) && (currentCbrIndex_ != index)) {
-                                if (i > highest_reachable_state) {
-                                    highest_reachable_state = i;
-                                }
-                            }
+                std::vector<std::unordered_map<std::string, double>>::iterator it;
+                for (it = cbrLevels_.begin(); it!=cbrLevels_.end(); it++)
+                {
+                    double cbrUpper = (*it).at("cbr-upper");
+                    double cbrLower = (*it).at("cbr-lower");
+                    double index = (*it).at("cbr-PSSCH-TxConfig-Index");
+                    if (cbrLower == 0){
+                        if (cbr_< cbrUpper)
+                        {
+                            currentCbrIndex_ = (int)index;
+                            break;
                         }
-                        if (highest_reachable_state != -1) {
-                            currentCbrIndex_ = std::get<1>(cbrUpwardTransitions_[highest_reachable_state]);
-                            std::vector < std::tuple < simtime_t, int
-                                    >> (cbrUpwardTransitions_.begin() + highest_reachable_state +
-                                        1, cbrUpwardTransitions_.end()).swap(cbrUpwardTransitions_);
-                        }
-
-                        std::vector < std::unordered_map < std::string, double >> ::iterator
-                        it;
-                        for (it = cbrLevels_.begin(); it != cbrLevels_.end(); it++) {
-                            double levelUpper = (*it).at("cbr-upper");
-                            double levelLower = (*it).at("cbr-lower");
-                            double index = (*it).at("cbr-PSSCH-TxConfig-Index");
-                            // Check if multiple levels up i.e. is it higher again thus need to record second transition
-                            if (index != currentCbrIndex_ && cbr_ >= levelLower && cbr_ < levelUpper) {
-                                bool new_record = true;
-                                if (cbrUpwardTransitions_.size() != 0) {
-                                    for (int j = 0; j < cbrUpwardTransitions_.size(); j++) {
-                                        if (std::get<1>(cbrUpwardTransitions_[j]) == index) {
-                                            new_record = false;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (new_record) {
-                                    std::tuple<simtime_t, int> transition = std::make_tuple(NOW, index);
-                                    cbrUpwardTransitions_.push_back(transition);
-                                }
-                            }
-                        }
-                    } else if (cbr_ <= cbrLower && cbr_ != 0) {
-
-                        cbrUpwardTransitions_.clear();
-
-                        int lowest_reachable_state = -1;
-                        for (int i = 0; i < cbrDownwardTransitions_.size(); i++) {
-                            simtime_t time = std::get<0>(cbrDownwardTransitions_[i]);
-                            int index = std::get<1>(cbrDownwardTransitions_[i]);
-                            if ((NOW >= time + 5) && (currentCbrIndex_ != index)) {
-                                if (i > lowest_reachable_state) {
-                                    lowest_reachable_state = i;
-                                }
-                            }
-                        }
-                        if (lowest_reachable_state != -1) {
-                            currentCbrIndex_ = std::get<1>(cbrDownwardTransitions_[lowest_reachable_state]);
-                            std::vector < std::tuple < simtime_t, int
-                                    >> (cbrDownwardTransitions_.begin() + lowest_reachable_state +
-                                        1, cbrDownwardTransitions_.end()).swap(cbrDownwardTransitions_);
-                        }
-
-                        std::vector < std::unordered_map < std::string, double >> ::reverse_iterator it;
-                        for (it = cbrLevels_.rbegin(); it != cbrLevels_.rend(); it++) {
-                            double levelUpper = (*it).at("cbr-upper");
-                            double levelLower = (*it).at("cbr-lower");
-                            double index = (*it).at("cbr-PSSCH-TxConfig-Index");
-                            // Check if multiple levels up i.e. is it higher again thus need to record second transition
-                            if (index != currentCbrIndex_ && cbr_ >= levelLower && cbr_ < levelUpper) {
-                                bool new_record = true;
-                                if (cbrDownwardTransitions_.size() != 0) {
-                                    for (int j = 0; j < cbrDownwardTransitions_.size(); j++) {
-                                        if (std::get<1>(cbrDownwardTransitions_[j]) == index) {
-                                            new_record = false;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (new_record) {
-                                    std::tuple<simtime_t, int> transition = std::make_tuple(NOW, index);
-                                    cbrDownwardTransitions_.push_back(transition);
-                                }
-                            }
+                    } else if (cbrUpper == 1){
+                        if (cbr_ > cbrLower)
+                        {
+                            currentCbrIndex_ = (int)index;
+                            break;
                         }
                     } else {
-                        // We are still in the current range so no transitioning.
-                        cbrUpwardTransitions_.clear();
-                        cbrDownwardTransitions_.clear();
-                    }
-                } else {
-                    std::vector<std::unordered_map<std::string, double>>::iterator it;
-                    for (it = cbrLevels_.begin(); it!=cbrLevels_.end(); it++)
-                    {
-                        double cbrUpper = (*it).at("cbr-upper");
-                        double cbrLower = (*it).at("cbr-lower");
-                        double index = (*it).at("cbr-PSSCH-TxConfig-Index");
-                        if (cbrLower == 0){
-                            if (cbr_< cbrUpper)
-                            {
-                                currentCbrIndex_ = (int)index;
-                                break;
-                            }
-                        } else if (cbrUpper == 1){
-                            if (cbr_ > cbrLower)
-                            {
-                                currentCbrIndex_ = (int)index;
-                                break;
-                            }
-                        } else {
-                            if (cbr_ > cbrLower && cbr_<= cbrUpper)
-                            {
-                                currentCbrIndex_ = (int)index;
-                                break;
-                            }
+                        if (cbr_ > cbrLower && cbr_<= cbrUpper)
+                        {
+                            currentCbrIndex_ = (int)index;
+                            break;
                         }
                     }
                 }
@@ -1136,29 +1032,22 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     int numSubchannels = intuniform(minSubchannelNumberPSSCH, maxSubchannelNumberPSSCH, 2);
 
     mode4Grant -> setNumberSubchannels(numSubchannels);
-    if ((randomScheduling_) || (nonPeriodic_) ){
-        mode4Grant -> setResourceReselectionCounter(0);
-        mode4Grant -> setExpiration(0);
-        emit(rrcSelected, 0);
+
+    // Based on restrictResourceReservation interval But will be between 1 and 15
+    // Again technically this needs to reconfigurable as well. But all of that needs to come in through ini and such.
+    int resourceReselectionCounter = 0;
+
+    if (resourceReservationInterval_ == 0.5) {
+        resourceReselectionCounter = intuniform(10, 30, 3);
+    } else if (resourceReservationInterval_ == 0.2) {
+        resourceReselectionCounter = intuniform(25, 75, 3);
     } else {
-
-        // Based on restrictResourceReservation interval But will be between 1 and 15
-        // Again technically this needs to reconfigurable as well. But all of that needs to come in through ini and such.
-        int resourceReselectionCounter = 0;
-
-        if (resourceReservationInterval_ == 0.5) {
-            resourceReselectionCounter = intuniform(10, 30, 3);
-        } else if (resourceReservationInterval_ == 0.2) {
-            resourceReselectionCounter = intuniform(25, 75, 3);
-        } else {
-            resourceReselectionCounter = intuniform(5, 15, 3);
-        }
-
-        mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
-        mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
-        emit(rrcSelected, resourceReselectionCounter);
+        resourceReselectionCounter = intuniform(5, 15, 3);
     }
 
+    mode4Grant -> setResourceReselectionCounter(resourceReselectionCounter);
+    mode4Grant -> setExpiration(resourceReselectionCounter * resourceReservationInterval);
+    emit(rrcSelected, resourceReselectionCounter);
 
     LteMode4SchedulingGrant* phyGrant = mode4Grant->dup();
 
@@ -1226,91 +1115,6 @@ void LteMacVUeMode4::flushHarqBuffers()
                 int maxMCS = maxMCSPSSCH_;
                 if (pduLength > 0)
                 {
-                    if (useCBR_){
-                        int cbrMinMCS;
-                        int cbrMaxMCS;
-
-                        got = cbrMap.find("minMCS-PSSCH");
-                        if ( got == cbrMap.end() )
-                            cbrMinMCS = minMCSPSSCH_;
-                        else
-                            cbrMinMCS = (int)got->second;
-
-                        got = cbrMap.find("maxMCS-PSSCH");
-                        if ( got == cbrMap.end() )
-                            cbrMaxMCS = maxMCSPSSCH_;
-                        else
-                            cbrMaxMCS = (int)got->second;
-
-                        int rri = mode4Grant->getPeriod();
-                        if (rriLookup_) {
-                            // RRI Adaptation based on lookup table similar to DCC
-                            got = cbrMap.find("allowedRRI");
-                            if (got != cbrMap.end()) {
-                                rri = (int) got->second * 100;
-                            }
-                        }
-                        else if (crLimit_) {
-                            got = cbrMap.find("cr-Limit");
-                            // Calculate an RRI which ensures the channelOccupancyRatio reduces to the point that
-                            // it remains within the cr-limit
-                            int i = 0;
-                            double newOccupancyRatio = channelOccupancyRatio_;
-                            rri = (int) validResourceReservationIntervals_.at(i) * 100;
-                            while (newOccupancyRatio > got->second && i < validResourceReservationIntervals_.size()){
-                                rri = (int) validResourceReservationIntervals_.at(i) * 100;
-                                newOccupancyRatio = calculateChannelOccupancyRatio(rri);
-                                i++;
-                            }
-                        }
-
-                        if (rri != mode4Grant->getPeriod()) {
-                            periodCounter_ = rri;
-
-                            if (periodCounter_ > expirationCounter_) {
-                                // Gotten to the point of the final transmission must determine if we reselect or not.
-                                double randomReReserve = dblrand(1);
-                                if (randomReReserve > probResourceKeep_) {
-                                    int expiration = 0;
-                                    if (resourceReservationInterval_ == 0.5){
-                                        expiration = intuniform(10, 30, 3);
-                                    } else if (resourceReservationInterval_ == 0.2){
-                                        expiration = intuniform(25, 75, 3);
-                                    } else {
-                                        if (rri / 100 > 5){
-                                            // This ensures that in the case that our rri is higher than the minimum 5
-                                            // that we ensure we send at least one more transmission
-                                            expiration = intuniform(rri/100, 15, 3);
-                                        } else {
-                                            expiration = intuniform(5, 15, 3);
-                                        }
-                                    }
-
-                                    mode4Grant->setResourceReselectionCounter(expiration);
-                                    emit(rrcSelected, expiration);
-                                    emit(retainGrant, 1);
-                                    // This remains at the default RRI this ensures that grants don't live overly long if they return to lower RRIs
-                                    expirationCounter_ = expiration * resourceReservationInterval_ * 100;
-                                } else {
-                                    emit(grantBreak, 1);
-                                    mode4Grant->setExpiration(0);
-                                    expiredGrant_ = true;
-                                }
-                            }
-                        }
-
-                        if (maxMCSPSSCH_ < cbrMinMCS || cbrMaxMCS < minMCSPSSCH_)
-                        {
-                            // No overlap therefore I will use the cbr values (this is left to the UE).
-                            minMCS = cbrMinMCS;
-                            maxMCS = cbrMaxMCS;
-                        }
-                        else
-                        {
-                            minMCS = max(minMCSPSSCH_, cbrMinMCS);
-                            maxMCS = min(maxMCSPSSCH_, cbrMaxMCS);
-                        }
-                    }
 
                     bool foundValidMCS = false;
                     int totalGrantedBlocks = mode4Grant->getTotalGrantedBlocks();

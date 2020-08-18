@@ -61,13 +61,8 @@ protected:
    double cbr_;
    bool useCBR_;
    bool packetDropping_;
-   bool rriLookup_;
-   bool crLimit_;
-   bool dccMechanism_;
    bool adjacencyPSCCHPSSCH_;
    bool randomScheduling_;
-   bool nonPeriodic_;
-   bool alwaysReschedule_;
    int missedTransmissions_;
 
    double remainingTime_;

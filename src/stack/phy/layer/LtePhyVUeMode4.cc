@@ -42,7 +42,6 @@ void LtePhyVUeMode4::initialize(int stage)
     if (stage == inet::INITSTAGE_LOCAL)
     {
         adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
-        randomScheduling_ = par("randomScheduling");
         sensingWindowSizeOverride_ = par("sensingWindowSizeOverride");
         pStep_ = par("pStep");
         selectionWindowStartingSubframe_ = par("selectionWindowStartingSubframe");
@@ -381,11 +380,7 @@ void LtePhyVUeMode4::handleUpperMessage(cMessage* msg)
         LteMode4SchedulingGrant* grant = check_and_cast<LteMode4SchedulingGrant*>(msg);
         if (grant->getTotalGrantedBlocks() == 0){
             // Generate a vector of CSRs and send it to the MAC layer
-            if (randomScheduling_){
-                computeRandomCSRs(grant);
-            } else {
-                computeCSRs(grant);
-            }
+            computeCSRs(grant);
             delete lteInfo;
             delete grant;
         }
@@ -535,75 +530,6 @@ RbMap LtePhyVUeMode4::sendSciMessage(cMessage* msg, UserControlInfo* lteInfo)
     delete lteInfo;
 
     return (rbMap);
-}
-
-void LtePhyVUeMode4::computeRandomCSRs(LteMode4SchedulingGrant* &grant) {
-    // Function determines all possible CSRs which fit the packet and returns this to the MAC layer
-    // Determine the total number of possible CSRs
-    if (grant->getMaximumLatency() >= 100) {
-        if (grant->getPeriod() == 50){
-            grant->setMaximumLatency(50);
-        } else if (grant->getPeriod() == 20){
-            grant->setMaximumLatency(20);
-        } else {
-            grant->setMaximumLatency(100);
-        }
-    }
-
-    int pRsvpTx = grant->getPeriod();
-    int grantLength = grant->getNumSubchannels();
-    int cResel = grant->getResourceReselectionCounter();
-    int maxLatency = grant->getMaximumLatency();
-    std::vector<double> allowedRRIs = grant->getPossibleRRIs();
-
-    int sensingWindowLength = pStep_ * 10;
-    if (sensingWindowSizeOverride_ > 0){
-        sensingWindowLength = sensingWindowSizeOverride_;
-    }
-
-    // Start and end of Selection Window.
-    int minSelectionIndex = sensingWindowLength + selectionWindowStartingSubframe_;
-    int maxSelectionIndex = sensingWindowLength + maxLatency;
-
-    int totalPossibleCSRs = ((maxSelectionIndex - minSelectionIndex) * numSubchannels_) / grantLength;
-
-    // Create a set of all the possible CSRs
-    // Each SubchannelIndex being the starting index of a CSR.
-    // Subframe -> {SubchannelIndex, SubchannelIndex}
-    std::unordered_map<int, std::set<int>> possibleCSRs;
-    for (int i = minSelectionIndex; i <= maxSelectionIndex; i++) {
-        std::set<int> subframe;
-        for (int j = 0; j <= (numSubchannels_ - grantLength); j += grantLength) {
-            subframe.insert(j);
-        }
-        possibleCSRs[i] = subframe;
-    }
-
-    // Simply convert the possible CSRs to the correct format and shuffle them and return 20% of them as normal.
-    std::vector<std::tuple<double, int, int>> orderedCSRs;
-    std::unordered_map<int, std::set<int>>::iterator it;
-
-    for (it=possibleCSRs.begin(); it!=possibleCSRs.end(); it++)
-    {
-        int subframe = it->first;
-        std::set<int>::iterator jt;
-        for (jt=it->second.begin(); jt!=it->second.end(); jt++)
-        {
-            int sensingSubframeIndex = subframe;
-            int initialSubchannelIndex = *jt;
-            int finalSubchannelIndex = *jt + grantLength;
-
-            // Subchannel has never been reserved and thus has negative infinite RSSI.
-            int transIndex = subframe - sensingWindowLength;
-            orderedCSRs.push_back(std::make_tuple(-std::numeric_limits<double>::infinity(), transIndex, initialSubchannelIndex));
-        }
-    }
-
-    // Send the packet up to the MAC layer where it will choose the CSR and the retransmission if that is specified
-    // Need to generate the message that is to be sent to the upper layers.
-    SpsCandidateResources* candidateResourcesMessage = new SpsCandidateResources("CSRs");
-    candidateResourcesMessage->setCSRs(orderedCSRs);
-    send(candidateResourcesMessage, upperGateOut_);
 }
 
 void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
