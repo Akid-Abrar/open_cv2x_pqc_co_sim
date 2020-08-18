@@ -65,7 +65,6 @@ void LteMacVUeMode4::initialize(int stage)
         reselectAfter_ = par("reselectAfter");
         useCBR_ = par("useCBR");
         packetDropping_ = par("packetDropping");
-        crLimit_ = par("crLimit");
         adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
         maximumCapacity_ = 0;
         cbr_=0;
@@ -641,7 +640,7 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
             {
                 macGenerateSchedulingGrant(remainingTime_, lteInfo->getPriority());
             }
-            else if ((schedulingGrant_ != NULL && periodCounter_ > remainingTime_) || alwaysReschedule_)
+            else if ((schedulingGrant_ != NULL && periodCounter_ > remainingTime_))
             {
                 emit(grantBreakTiming, 1);
                 delete schedulingGrant_;
