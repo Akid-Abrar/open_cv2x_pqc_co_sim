@@ -383,9 +383,6 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
 	    double probResourceKeep = default(0.4);
 	    bool useCBR = default(false);
 	    bool packetDropping = default(false);
-	    bool rriLookup = default(false);
-	    bool crLimit = default(false);
-	    bool dccMechanism = default(false);
 	    bool adjacencyPSCCHPSSCH = default(true);
 
 	    bool usePreconfiguredTxParams = default(false);
@@ -426,6 +423,10 @@ simple LteMacVUeMode4 extends LteMacNonIPBase
         @statistic[grantRequests](title="Total number of requested grants"; source="grantRequests"; record=sum,vector);
         @signal[packetDropDCC];
         @statistic[packetDropDCC](title="Packet drop due to DCC mechanism"; source="packetDropDCC"; record=sum,vector);
+        @signal[resourceReselectionCounter];
+        @statistic[resourceReselectionCounter](title="ResourceReselectionCounter selectedNumber of transmissions"; source="resourceReselectionCounter"; record=sum,vector);
+        @signal[retainGrant];
+        @statistic[retainGrant](title="retainGrant if grant is maintained properly"; source="retainGrant"; record=sum,vector);
 
         @signal[macNodeID];
         @statistic[macNodeID](title="Reports Mac NodeID to allow for trans to nodeID"; source="macNodeID"; record=vector);

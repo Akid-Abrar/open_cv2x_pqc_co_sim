@@ -1,7 +1,0 @@
-<launch>
-  <basedir path="UPDATE-WITH-YOUR-PATH"/>
-  <copy file="fast.net.xml"/>
-  <copy file="fast.rou.xml"/>
-  <copy file="rerouters.add.xml"/>
-  <copy file="fast.sumo.cfg" type="config"/>
-</launch>

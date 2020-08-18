@@ -1,7 +1,0 @@
-<launch>
-  <basedir path="UPDATE-WITH-YOUR-PATH"/>
-  <copy file="congested.net.xml"/>
-  <copy file="congested.rou.xml"/>
-  <copy file="rerouters.add.xml"/>
-  <copy file="congested.sumo.cfg" type="config"/>
-</launch>
