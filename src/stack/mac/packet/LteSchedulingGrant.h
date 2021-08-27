@@ -20,6 +20,7 @@ class LteSchedulingGrant : public LteSchedulingGrant_Base
 {
   protected:
 
+    bool periodic;
     const UserTxParams* userTxParams;
     RbMap grantedBlocks;
     std::vector<unsigned int> grantedCwBytes;
@@ -31,6 +32,7 @@ class LteSchedulingGrant : public LteSchedulingGrant_Base
         LteSchedulingGrant_Base(name, kind)
     {
         userTxParams = NULL;
+        periodic = true;
         grantedCwBytes.resize(MAX_CODEWORDS);
     }
 
@@ -60,6 +62,7 @@ class LteSchedulingGrant : public LteSchedulingGrant_Base
         {
             userTxParams = 0;
         }
+        periodic = other.periodic;
         grantedBlocks = other.grantedBlocks;
         grantedCwBytes = other.grantedCwBytes;
         direction_ = other.direction_;
@@ -128,6 +131,14 @@ class LteSchedulingGrant : public LteSchedulingGrant_Base
     Direction getDirection() const
     {
         return direction_;
+    }
+    bool getPeriodic() const
+    {
+        return periodic;
+    }
+    void setPeriodic(bool periodic)
+    {
+        this->periodic = periodic;
     }
 };
 

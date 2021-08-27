@@ -75,9 +75,6 @@ protected:
    std::vector<std::unordered_map<std::string, double>> cbrPSSCHTxConfigList_;
    std::vector<std::unordered_map<std::string, double>> cbrLevels_;
 
-   std::vector<std::tuple<simtime_t, int>> cbrUpwardTransitions_;
-   std::vector<std::tuple<simtime_t, int>> cbrDownwardTransitions_;
-
    std::unordered_map<double, int> previousTransmissions_;
    std::vector<double> validResourceReservationIntervals_;
 
@@ -98,6 +95,7 @@ protected:
    UeInfo* ueInfo_;
 
    simsignal_t grantStartTime;
+   simsignal_t takingReservedGrant;
    simsignal_t grantBreak;
    simsignal_t grantBreakTiming;
    simsignal_t grantBreakSize;
@@ -130,7 +128,7 @@ protected:
     /**
      * Generate a scheduling grant
      */
-    virtual void macGenerateSchedulingGrant(double maximumLatency, int priority);
+    virtual void macGenerateSchedulingGrant(double maximumLatency, int priority, int pktSize);
 
 
     /**

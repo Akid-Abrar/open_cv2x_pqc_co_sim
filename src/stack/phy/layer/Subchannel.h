@@ -28,6 +28,7 @@ class Subchannel
         int timeGapRetrans;
         int mcs;
         int retransmissionIndex;
+        int oneShotSubchannelIndex;
 
         int sciSubchannelIndex;
         int sciLength;
@@ -45,6 +46,18 @@ class Subchannel
             possibleCSR = true;
             subframeTime = simulationTime;
             sciLength = 0;
+            priority = 0;
+            resourceReservationInterval = 0;
+            frequencyResourceLocation = 0;
+            timeGapRetrans = 0;
+            mcs = 0;
+            retransmissionIndex = 0;
+            oneShotSubchannelIndex = 0;
+            sciSubchannelIndex = 0;
+            sciLength = 0;
+            timeGapRetrans = 0;
+            oneShotSubchannelIndex = 0;
+            mcs = 0;
             sciSubchannelIndex = 0;
         }
 
@@ -69,6 +82,7 @@ class Subchannel
             timeGapRetrans = other.timeGapRetrans;
             mcs = other.mcs;
             retransmissionIndex = other.retransmissionIndex;
+            oneShotSubchannelIndex = other.oneShotSubchannelIndex;
             sciSubchannelIndex = other.sciSubchannelIndex;
             sciLength = other.sciLength;
             rsrpValues = other.rsrpValues;
@@ -133,6 +147,43 @@ class Subchannel
                 return linearToDBm(sum);
             } else {
                 return - std::numeric_limits<double>::infinity();
+            }
+        }
+        double getAverageRSSIPscch()
+        {
+            if (rssiValues.size() != 0){
+                int count = 0;
+                double sum = 0;
+                std::map<Band, double>::iterator it;
+                for(it=rssiValues.begin(); it!=rssiValues.end(); it++)
+                {
+                    sum += dBmToLinear(it->second);
+                    count++;
+                    if (count == 2){
+                        break;
+                    }
+                }
+                return linearToDBm(sum);
+            } else {
+                return - std::numeric_limits<double>::infinity();
+            }
+        }
+        double getAverageRSRPPscch()
+        {
+            if (rsrpValues.size() != 0) {
+                int count = 0;
+                double sum = 0;
+                std::map<Band, double>::iterator it;
+                for (it = rsrpValues.begin(); it != rsrpValues.end(); it++) {
+                    sum += it->second;
+                    count++;
+                    if (count == 2){
+                        break;
+                    }
+                }
+                return sum / numRbs;
+            } else {
+                return -std::numeric_limits<double>::infinity();
             }
         }
         void addRsrpValue(double rsrpValue, Band band)
@@ -229,6 +280,14 @@ class Subchannel
         int getTimeGapRetrans()
         {
             return timeGapRetrans;
+        }
+        void setOneShotSubchannelIndex(int oneShotSubchannelIndex)
+        {
+            this->oneShotSubchannelIndex = oneShotSubchannelIndex;
+        }
+        int getOneShotSubchannelIndex()
+        {
+            return oneShotSubchannelIndex;
         }
         void setSciSubchannelIndex(int sciSubchannelIndex)
         {
