@@ -1465,7 +1465,6 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         {
 
             sciReceived_ += 1;
-            oneShot_ = 0;
 
             bool notSensed = false;
             double erfParam = (lteInfo->getD2dTxPower() - attenuation - -90.5) / (3 * sqrt(2));

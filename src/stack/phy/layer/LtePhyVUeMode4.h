@@ -38,12 +38,6 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     bool randomScheduling_;
     bool checkAwareness_;
 
-    int csrSubchannel_;
-    int csrSubframe_;
-    simtime_t csrSignalTime_;
-    simtime_t csrStartTime_;
-    cMessage* csrSignal_;
-
     bool rssiFiltering_;
     bool rsrpFiltering_;
 
@@ -84,8 +78,6 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
     int sciFailedDueToProp_;
     int sciFailedDueToInterference_;
     int sciUnsensed_;
-    int oneShot_;
-
 
     // Tb Stats
     simsignal_t tbSent;

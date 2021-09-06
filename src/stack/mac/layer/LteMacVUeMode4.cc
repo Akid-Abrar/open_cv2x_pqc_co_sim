@@ -67,8 +67,6 @@ void LteMacVUeMode4::initialize(int stage)
         packetDropping_ = par("packetDropping");
         adjacencyPSCCHPSSCH_ = par("adjacencyPSCCHPSSCH");
         randomScheduling_ = par("randomScheduling");
-        nonPeriodic_ = par("nonPeriodic");
-        alwaysReschedule_ = par("alwaysReschedule");
         maximumCapacity_ = 0;
         cbr_=0;
         currentCw_=0;
@@ -641,7 +639,7 @@ void LteMacVUeMode4::handleMessage(cMessage *msg)
             {
                 macGenerateSchedulingGrant(remainingTime_, lteInfo->getPriority(), pkt->getBitLength());
             }
-            else if ((schedulingGrant_ != NULL && periodCounter_ > remainingTime_) || alwaysReschedule_)
+            else if ((schedulingGrant_ != NULL && periodCounter_ > remainingTime_))
             {
                 emit(grantBreakTiming, 1);
                 delete schedulingGrant_;
@@ -1091,7 +1089,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     }
 
     mode4Grant -> setNumberSubchannels(numSubchannels);
-    if ((randomScheduling_) || (nonPeriodic_) ){
+    if (randomScheduling_){
         mode4Grant -> setResourceReselectionCounter(0);
         mode4Grant -> setExpiration(0);
         mode4Grant -> setPeriodic(false);
