@@ -1,9 +1,8 @@
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
 
     <input>
-        <net-file value="highway.net.xml"/>
-        <route-files value="highway.rou.xml"/>
-        <additional-files value="rerouters.add.xml"/>
+        <net-file value="intersection.net.xml"/>
+        <route-files value="intersection.rou.xml"/>
     </input>
 
     <time>

@@ -329,7 +329,9 @@ class LtePhyBase : public ChannelAccess
     /*
      * Returns the current position of the node
      */
-    const inet::Coord& getCoord() { return getRadioPosition(); }
+//    const inet::Coord& getCoord() { return getRadioPosition(); }
+    // AKID
+    const inet::Coord& getCoord();
     /*
      * Returns the time of the last transmission performed
      */

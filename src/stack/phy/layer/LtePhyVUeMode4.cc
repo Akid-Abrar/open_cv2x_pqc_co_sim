@@ -622,6 +622,8 @@ void LtePhyVUeMode4::computeRandomCSRs(LteMode4SchedulingGrant* &grant) {
     int minSelectionIndex = sensingWindowLength + selectionWindowStartingSubframe_;
     int maxSelectionIndex = sensingWindowLength + maxLatency;
 
+    EV_FATAL << "grantLength is "<< grantLength;
+
     int totalPossibleCSRs = ((maxSelectionIndex - minSelectionIndex) * numSubchannels_) / grantLength;
 
     // Create a set of all the possible CSRs
@@ -1060,7 +1062,7 @@ void LtePhyVUeMode4::computeCSRs(LteMode4SchedulingGrant* &grant) {
 std::vector<std::tuple<double, int, int, bool>> LtePhyVUeMode4::selectBestRSSIs(std::unordered_map<int, std::set<int>> possibleCSRs,
         LteMode4SchedulingGrant* &grant, int totalPossibleCSRs, std::unordered_map<int, std::unordered_map<int, bool>> reservedCSRs)
 {
-    EV << NOW << " LtePhyVUeMode4::selectBestRSSIs - Selecting best CSRs from possible CSRs..." << endl;
+    EV << NOW << " LtePhyVUeMode4::selectBestRSSIs - Selecting best CSRs from possible CSRs(selectBestRSSIs)..." << endl;
     int decrease = pStep_;
     if (grant->getPeriod() < 100)
     {
@@ -1080,6 +1082,8 @@ std::vector<std::tuple<double, int, int, bool>> LtePhyVUeMode4::selectBestRSSIs(
     int maxSelectionIndex = sensingWindowLength + maxLatency;
 
     unsigned int grantLength = grant->getNumSubchannels();
+
+    EV_FATAL <<"grantLength : "<<grantLength<<endl;
 
     // This will be avgRSSI -> (subframeIndex, subchannelIndex)
     std::vector<std::tuple<double, int, int, bool>> orderedCSRs;
@@ -1158,6 +1162,7 @@ std::vector<std::tuple<double, int, int, bool>> LtePhyVUeMode4::selectBestRSSIs(
     });
 
     int minSize = std::round(totalPossibleCSRs * .2);
+    EV_FATAL<< "minsize"<<minSize<<endl;
     orderedCSRs.resize(minSize);
 
     return orderedCSRs;
@@ -1166,8 +1171,11 @@ std::vector<std::tuple<double, int, int, bool>> LtePhyVUeMode4::selectBestRSSIs(
 std::vector<std::tuple<double, int, int, bool>> LtePhyVUeMode4::selectBestRSRPs(std::unordered_map<int, std::set<int>> possibleCSRs,
         LteMode4SchedulingGrant* &grant, int totalPossibleCSRs, std::unordered_map<int, std::unordered_map<int, bool>> reservedCSRs)
 {
-    EV << NOW << " LtePhyVUeMode4::selectBestRSSIs - Selecting best CSRs from possible CSRs..." << endl;
+    EV << NOW << " LtePhyVUeMode4::selectBestRSSIs - Selecting best CSRs from possible CSRs(selectBestRSRPs)..." << endl;
     int decrease = pStep_;
+    if(grant == nullptr){
+        EV_FATAL <<"null grant"<<endl;
+    }
     if (grant->getPeriod() < 100)
     {
         // Same as pPrimeRsvpTx from other parts of the function

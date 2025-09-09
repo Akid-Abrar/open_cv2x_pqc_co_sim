@@ -1085,6 +1085,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     }
 
     if (!foundValidMCS){
+        EV_FATAL <<"No valid subchannel configuration for the packet size"<<endl;
         throw cRuntimeError("On generating the grant there was no subchannel configuration which could hold the capacity of the packet: exiting.");
     }
 

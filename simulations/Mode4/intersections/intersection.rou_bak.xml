@@ -1,0 +1,16 @@
+<routes>
+    <vType id="car" accel="2.6" decel="4.5" length="5" maxSpeed="17.9" />
+
+    <route id="route_N_S" edges="N_to_C C_to_S" />
+    <route id="route_S_N" edges="S_to_C C_to_N" />
+    <route id="route_E_W" edges="E_to_C C_to_W" />
+    <route id="route_W_E" edges="W_to_C C_to_E" />
+
+    <flow id="flow_N_S" type="car" route="route_N_S" begin="0" end="300" number="2" departLane="random" />
+
+    <flow id="flow_S_N" type="car" route="route_S_N" begin="0" end="300" number="2" departLane="random" />
+
+    <flow id="flow_E_W" type="car" route="route_E_W" begin="0" end="300" number="2" departLane="random" />
+
+    <flow id="flow_W_E" type="car" route="route_W_E" begin="0" end="300" number="2" departLane="random" />
+</routes>
