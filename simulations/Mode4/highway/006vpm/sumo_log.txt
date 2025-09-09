@@ -1,0 +1,6 @@
+Loading configuration ... done.
+Loading net-file from 'highway.net.xml' ... done (4ms).
+Loading additional-files from 'rerouters.add.xml' ... done (1ms).
+Loading done.
+Error: The vehicle type 'car' for vehicle '0' is not known.
+Quitting (on error).

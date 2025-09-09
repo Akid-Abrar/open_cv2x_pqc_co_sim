@@ -26,6 +26,13 @@
 #include "apps/alert/AlertPacket_m.h"
 #include "corenetwork/binder/LteBinder.h"
 
+// --- AKID ---
+#include "apps/mode4App/BSM_m.h"
+#include "apps/mode4App/Certificate_m.h"
+#include "apps/mode4App/SPDU_m.h"
+#include "apps/mode4App/pqcdsa.h"
+#include "apps/mode4App/IcaWarn_m.h"
+
 
 class Mode4App : public Mode4BaseApp {
 
@@ -42,13 +49,29 @@ protected:
 
     simsignal_t sentMsg_;
     simsignal_t delay_;
-    simsignal_t rcvdMsg_;
+//    simsignal_t rcvdMsg_;
     simsignal_t cbr_;
+
+    simtime_t entryTime;
+    simsignal_t lifetimeSignal;
+    simsignal_t received_;
+    simsignal_t verified_;
+    // add with your other signals
+    simsignal_t warnReceived_;
+    simsignal_t warnVerified_;   // will stay 0 in this option (no signature)
 
     cMessage *selfSender_;
 
     LteBinder* binder_;
     MacNodeId nodeId_;
+
+    /* crypto */
+    pqcdsa::KeyPair keyPair;
+    Certificate     Cert;
+
+    /* timers */
+    cMessage* sendEvt = nullptr;
+    int       bsmSeq  = 0;
 
    int numInitStages() const { return inet::NUM_INIT_STAGES; }
 
@@ -80,6 +103,9 @@ protected:
     * @param pkt Packet to send
     */
    void sendLowerPackets(cPacket* pkt);
+
+   // --- AKID
+   void generateAndSendSPDU();
 
 };
 

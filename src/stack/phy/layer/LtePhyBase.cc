@@ -9,6 +9,9 @@
 
 #include "stack/phy/layer/LtePhyBase.h"
 #include "common/LteCommon.h"
+#include "veins/modules/mobility/traci/TraCIMobility.h"
+#include "veins/base/modules/BaseMobility.h"
+#include "inet/mobility/contract/IMobility.h"
 
 short LtePhyBase::airFramePriority_ = 10;
 
@@ -299,3 +302,83 @@ void LtePhyBase::sendUnicast(LteAirFrame *frame)
 
     return;
 }
+
+// AKID
+
+// In LtePhyBase.cc
+
+//const inet::Coord& LtePhyBase::getCoord()
+//{
+//    cModule *carModule = getParentModule()->getParentModule();
+//    cModule* mob = carModule->getSubmodule("veinsmobility");
+//
+//    if (mob == nullptr)
+//        throw cRuntimeError("LtePhyBase::getCoord() - veinsmobility module not found in car module %s", carModule->getFullPath().c_str());
+//
+//    veins::TraCIMobility* veinsMobility = check_and_cast<veins::TraCIMobility*>(mob);
+//
+//    // Call the new getPosition() function
+//    veins::Coord veinsPos = veinsMobility->getPosition();
+//
+//    static inet::Coord inetPos;
+//    inetPos.x = veinsPos.x;
+//    inetPos.y = veinsPos.y;
+//    inetPos.z = veinsPos.z;
+//
+//    return inetPos;
+//}
+
+const inet::Coord& LtePhyBase::getCoord()
+{
+    static inet::Coord out;  // persist last good value (starts 0,0,0)
+
+    // lteNic.phy -> parent is lteNic, grandparent is the host (car/rsu)
+    cModule* lteNic = getParentModule();
+    cModule* host   = lteNic ? lteNic->getParentModule() : nullptr;
+    if (!host) {
+        EV_WARN << "getCoord(): host is null; keeping last known.\n";
+        return out;
+    }
+
+    // IMPORTANT: your RSU.ned uses exactly 'veinsmobility'
+    cModule* mob = host->getSubmodule("veinsmobility");
+    if (!mob) {
+        EV_WARN << "getCoord(): submodule 'veinsmobility' not found in "
+                << host->getFullPath() << "; keeping last known.\n";
+        return out;
+    }
+
+    // Case 1: vehicles using Veins TraCI mobility
+    if (auto traci = dynamic_cast<veins::TraCIMobility*>(mob)) {
+        try {
+            const auto p = traci->getPosition();   // Veins API
+            out.x = p.x; out.y = p.y; out.z = p.z;
+        } catch (const cRuntimeError& e) {
+            EV_WARN << "getCoord(): TraCIMobility not ready for "
+                    << host->getFullPath() << " at t=" << simTime()
+                    << " — keeping last known. Reason: "
+                    << e.getFormattedMessage() << "\n";
+        }
+        return out;
+    }
+
+    // Case 2: RSU using Veins BaseMobility (stationary via x/y/z in omnetpp.ini)
+    if (dynamic_cast<veins::BaseMobility*>(mob)) {
+        // Use the explicit params you set: *.rsu[*].veinsmobility.{x,y,z}
+        bool updated = false;
+        if (mob->hasPar("x")) { out.x = (double)mob->par("x"); updated = true; }
+        if (mob->hasPar("y")) { out.y = (double)mob->par("y"); updated = true; }
+        if (mob->hasPar("z")) { out.z = (double)mob->par("z"); updated = true; }
+
+        if (!updated) {
+            EV_WARN << "getCoord(): BaseMobility has no x/y/z params; keeping last known.\n";
+        }
+        return out;
+    }
+
+    // Unknown mobility type under 'veinsmobility' — stay safe
+    EV_WARN << "getCoord(): 'veinsmobility' is neither TraCIMobility nor BaseMobility; keeping last known.\n";
+    return out;
+}
+
+

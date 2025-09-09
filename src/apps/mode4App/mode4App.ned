@@ -30,11 +30,23 @@ simple Mode4App like Mode4BaseApp
         @statistic[sentMsg](title="Messages sent"; unit=""; source="sentMsg"; record=sum,vector);
         @signal[delay];
         @statistic[delay](title="Message Delay"; unit="s"; source="delay"; record=mean,vector);    
-        @signal[rcvdMsg]; 
-        @statistic[rcvdMsg](title="Messages Received"; unit="s"; source="rcvdMsg"; record=sum,vector);
+//        @signal[rcvdMsg]; 
+//        @statistic[rcvdMsg](title="Messages Received"; unit="s"; source="rcvdMsg"; record=sum,vector);
         @signal[cbr];
         @statistic[cbr](title="Channel Busy Ratio"; unit=""; source="cbr"; record=vector);         
         @display("i=block/source");
+        @signal[lifetime]; 
+        @statistic[lifetime](title="Lifetime of a Vehicle"; unit="s"; source="lifetime"; record=mean,vector); 
+        @signal[received]; 
+        @statistic[received](title="Total packet Received"; unit=""; source="received"; record=sum,vector);   
+        @signal[verified]; 
+        @statistic[verified](title="Messages Verified"; unit="s"; source="verified"; record=sum,vector);   
+        @signal[warnReceived];
+        @statistic[warnReceived](title="Warnings received"; source="warnReceived"; record=sum,vector);
+        @signal[warnVerified];
+        @statistic[warnVerified](title="Warnings verified"; source="warnVerified"; record=sum,vector);
+                
+                
     gates:
         input lowerGateIn; // FROM NIC
         output lowerGateOut;  // TO NIC

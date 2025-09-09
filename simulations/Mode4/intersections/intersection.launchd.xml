@@ -1,0 +1,7 @@
+<launch>
+   <basedir path="/home/veins/src/simulte/simulations/Mode4/intersections"/>
+    <copy file="intersection.net.xml"/>
+    <copy file="intersection.rou.xml"/>
+    <copy file="intersection.sumocfg" type="config"/>
+    <copy file="rsu.add.xml"/>  
+</launch>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<additional>
+  <!-- Static RSU POI; adjust x/y to taste. Network center is near (1000,1000). -->
+  <poi id="rsu0" x="1010.0" y="1010.0" z="5.0" type="rsu"/>
+  <!-- Alternative: center of junction -->
+  <!-- <poi id="rsu_center" x="1000.0" y="1000.0" type="rsu"/> -->
+</additional>

@@ -1,0 +1,11 @@
+<edges>
+    <edge id="N_to_C" from="north" to="center" numLanes="2" />
+    <edge id="S_to_C" from="south" to="center" numLanes="2" />
+    <edge id="E_to_C" from="east"  to="center" numLanes="2" />
+    <edge id="W_to_C" from="west"  to="center" numLanes="2" />
+
+    <edge id="C_to_N" from="center" to="north" numLanes="2" />
+    <edge id="C_to_S" from="center" to="south" numLanes="2" />
+    <edge id="C_to_E" from="center" to="east"  numLanes="2" />
+    <edge id="C_to_W" from="center" to="west"  numLanes="2" />
+</edges>

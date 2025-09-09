@@ -1,5 +1,5 @@
 <launch>
-  <basedir path="UPDATE-WITH-YOUR-PATH"/>
+  <basedir path="/home/veins/src/simulte/simulations/Mode4/highway/006vpm"/>
   <copy file="highway.net.xml"/>
   <copy file="highway.rou.xml"/>
   <copy file="rerouters.add.xml"/>

@@ -180,7 +180,10 @@ void LtePdcpRrcUeD2D::fromDataIn(cPacket *pkt)
 
     // PDCP Packet creation
     LtePdcpPdu* pdcpPkt = new LtePdcpPdu("LtePdcpPdu");
+    EV_FATAL << "DEBUG TEST: Now setting packet size. Incoming pkt size is " << pkt->getByteLength() << " bytes." << endl;
     pdcpPkt->setByteLength(lteInfo->getRlcType() == UM ? PDCP_HEADER_UM : PDCP_HEADER_AM);
+    //pdcpPkt->setByteLength(pkt->getByteLength() + (lteInfo->getRlcType() == UM ? PDCP_HEADER_UM : PDCP_HEADER_AM));
+
     pdcpPkt->encapsulate(pkt);
     pdcpPkt->setControlInfo(lteInfo);
 

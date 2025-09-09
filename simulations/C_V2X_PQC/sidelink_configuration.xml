@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root>
 		<userEquipment-txParameters>
-			<parameter name="minMCS-PSSCH" type="double" value="0"/>
-			<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+			<parameter name="minMCS-PSSCH" type="double" value="5"/>
+			<parameter name="maxMCS-PSSCH" type="double" value="7"/>
 			<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-			<parameter name="maxSubchannel-NumberPSSCH" type="double" value="2"/>
+			<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
 			<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/> 
 		</userEquipment-txParameters>
 		

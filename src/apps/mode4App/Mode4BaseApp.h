@@ -91,7 +91,6 @@ protected:
      * @param pkt Packet to send
      */
     void sendLowerPackets(cPacket* pkt);
-
 };
 
 #endif
