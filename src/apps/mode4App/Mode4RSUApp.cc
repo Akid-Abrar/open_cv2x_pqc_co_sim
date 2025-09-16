@@ -6,6 +6,10 @@
 #include <nlohmann/json.hpp>
 using nlohmann::json;
 
+#include "veins/base/modules/BaseMobility.h"
+#include "veins/base/utils/Coord.h"
+
+
 Define_Module(Mode4RSUApp);
 //using namespace lte::apps::mode4App;
 
@@ -95,41 +99,28 @@ void Mode4RSUApp::initialize(int stage)
         EV_INFO << "RSU Application started, listening for signed BSMs...\n";
         rsuReceivedMsg = registerSignal("rsuReceivedMsg");
         rsuVerifiedMsg = registerSignal("rsuVerifiedMsg");
-
         cbr_ = registerSignal("cbr");
-
-        numread = registerSignal("numread");
-        numread0 = registerSignal("numread0");
-        numread1 = registerSignal("numread1");
         numBroadcasted = registerSignal("numBroadcasted");
 
     }
 }
 
-//Older one with 0/1 reading
-//void Mode4RSUApp::broadcastWarning()
-//{
-//    auto pkt = new cPacket("RSU_SAFETY_BROADCAST");
-//    pkt->setByteLength(32);               // some payload
-//    pkt->setTimestamp(simTime());         // many stats expect this
-//
-//    auto ci = new FlowControlInfoNonIp();
-//    ci->setDirection(D2D_MULTI);
-//    ci->setPriority(1);
-//    ci->setLcid(5);                       // same LCID the UEs use
-//    ci->setDuration(par("slDurationMs").intValue());
-//    ci->setCreationTime(simTime());
-//    ci->setSrcAddr(nodeId_);
-//    pkt->setControlInfo(ci);
-//
-//    Mode4BaseApp::sendLowerPackets(pkt);
-//    emit(numBroadcasted, 1);
-//    EV_INFO << "[RSU] broadcasted safety dummy due to UDP trigger=1\n";
-//}
-
 void Mode4RSUApp::broadcastIca(IcaWarn* w)
 {
-    // Attach Non-IP flow control (Mode 4) and send
+    // 1) read RSU position from its BaseMobility submodule
+    auto* mobMod = getParentModule()->getSubmodule("veinsmobility");
+    veins::BaseMobility* bm = mobMod ? check_and_cast<veins::BaseMobility*>(mobMod) : nullptr;
+    if (bm) {
+        const veins::Coord pos = bm->getPositionAt(simTime());   // <-- FIX
+        constexpr double SCALE = 1e6; // fixed-point scale to reuse int64 lat/lon
+        w->setLat(static_cast<long long>(std::llround(pos.x * SCALE)));
+        w->setLon(static_cast<long long>(std::llround(pos.y * SCALE)));
+    } else {
+        w->setLat(0);
+        w->setLon(0);
+    }
+
+    // 2) attach sidelink control and send
     auto ci = new FlowControlInfoNonIp();
     ci->setDirection(D2D_MULTI);
     ci->setPriority(par("slPriority"));
@@ -140,45 +131,17 @@ void Mode4RSUApp::broadcastIca(IcaWarn* w)
 
     w->setControlInfo(ci);
     w->setTimestamp(simTime());
-    // a tiny byte length; you can estimate from fields if you want
     w->setByteLength(64);
 
-    Mode4BaseApp::sendLowerPackets(w);
+    Mode4BaseApp::sendLowerPackets(w);   // takes ownership
     emit(numBroadcasted, 1);
-    EV_INFO << "[RSU] broadcast IcaWarn (msgCnt=" << w->getMsgCnt()
-            << ", intId=" << w->getIntersectionId() << ")\n";
 }
 
 
-//Older one with 0/1 reading
-//void Mode4RSUApp::socketRead()
-//{
-//    emit(numread, 1);
-//    if (sockFd_ < 0) return;
-//
-//    for (;;) {
-//        char buf[64];
-//        sockaddr_in src{};
-//        socklen_t slen = sizeof(src);
-//        ssize_t n = ::recvfrom(sockFd_, buf, sizeof(buf), 0, (sockaddr*)&src, &slen);
-//        if (n <= 0) {
-//            if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) break;
-//            break;
-//        }
-////        emit(numread, 1);
-//        char ch = 0;
-//        for (ssize_t i = 0; i < n; ++i) {
-//            unsigned char c = static_cast<unsigned char>(buf[i]);
-//            if (!std::isspace(c)) { ch = static_cast<char>(c); break; }
-//        }
-//        if (ch == '1') { emit(numread1, 1); broadcastWarning(); }
-//        else           { emit(numread0, 1); }
-//    }
-//}
+
 
 void Mode4RSUApp::socketRead()
 {
-    emit(numread, 1);
     if (sockFd_ < 0) return;
 
     for (;;) {
@@ -194,16 +157,13 @@ void Mode4RSUApp::socketRead()
         try {
             auto j = json::parse(buf, buf + n);
             auto* w = makeIcaWarnFromJson(j);
-            emit(numread1, 1);            // “valid object”
             broadcastIca(w);              // takes ownership
         }
         catch (...) {
-            emit(numread0, 1);            // “not valid JSON object”
             EV_WARN << "[RSU] received malformed ICA JSON\n";
         }
     }
 }
-
 
 void Mode4RSUApp::handleSelfMessage(cMessage* msg)
 {
@@ -260,11 +220,6 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     delete spdu;
 }
 
-//void Mode4RSUApp::finish()
-//{
-//    cancelAndDelete(sendEvt);
-//}
-//
 Mode4RSUApp::~Mode4RSUApp()
 {
     if (sockPollEvt_) { cancelAndDelete(sockPollEvt_); sockPollEvt_ = nullptr; }
