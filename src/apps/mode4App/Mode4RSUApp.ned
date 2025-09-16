@@ -24,7 +24,7 @@ simple Mode4RSUApp like Mode4BaseApp
         @statistic[cbr](title="Channel Busy Ratio"; unit=""; source="cbr"; record=vector); 
 
         @signal[numBroadcasted];
-        @statistic[numBroadcasted](title="Socket"; unit=""; source="numBroadcasted"; record=sum,vector); 
+        @statistic[numBroadcasted](title="ICA broadcasted"; unit=""; source="numBroadcasted"; record=sum,vector); 
     gates:
         input lowerGateIn;
         output lowerGateOut;
