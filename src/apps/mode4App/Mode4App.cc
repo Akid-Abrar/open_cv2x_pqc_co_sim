@@ -23,6 +23,10 @@
 #include "common/LteControlInfo.h"
 #include "stack/phy/packet/cbr_m.h"
 
+#include "veins/modules/mobility/traci/TraCIMobility.h"
+#include "veins/base/modules/BaseMobility.h"
+#include "veins/base/utils/Coord.h"
+
 
 
 //#include "stack/phy/layer/LtePhyBase.h"
@@ -96,8 +100,13 @@ void Mode4App::initialize(int stage)
         entryTime = simTime();
         lifetimeSignal = registerSignal("lifetime");
         received_ = registerSignal("received");
+
         warnReceived_ = registerSignal("warnReceived");
-        warnVerified_ = registerSignal("warnVerified");
+        warnExpected_ = registerSignal("warnExpected");
+        warnPdrSample_ = registerSignal("warnPdrSample");    // 1/0
+        warnPdrDistance_ = registerSignal("warnPdrDistance");  // meters
+        rxWarnDist_ = registerSignal("rxWarnDist");   // receive distance in meters
+
 
         double delay = 0.001 * intuniform(0, 1000, 0);
         //scheduleAt((simTime() + delay).trunc(SIMTIME_MS), selfSender_);
@@ -113,30 +122,87 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         delete cbrPkt;
     }else if (auto* w = dynamic_cast<IcaWarn*>(msg)) {
         emit(warnReceived_, 1);
-        // (later) verify signatures here and emit(warnVerified_,1) if valid
 
-        // Optional: small log
-        EV_INFO << "[UE] got IcaWarn msgCnt=" << w->getMsgCnt()
-                << " intId=" << w->getIntersectionId()
-                << " lane=" << w->getLane()
-                << " app="  << w->getApproach()
-                << " flag=" << w->getEventFlag()
-                << "\n";
+        veins::Coord uePos(0,0,0);
+
+        cModule* host = getParentModule();
+        if (!host) {
+            recordScalar("hostNotFound", 1);
+        } else {
+            cModule* mob = host->getSubmodule("veinsmobility");
+            if (!mob) {
+                recordScalar("mobilitySubmoduleNotFound", 1);
+            } else {
+                if (auto* tm = dynamic_cast<veins::TraCIMobility*>(mob)) {
+                    uePos = tm->getPositionAt(simTime());
+                } else if (auto* bm = dynamic_cast<veins::BaseMobility*>(mob)) {
+                    uePos = bm->getPositionAt(simTime());
+                } else {
+                    recordScalar("mobilityTypeUnexpected", 1);
+                }
+            }
+        }
+
+        if (uePos == veins::Coord(0,0,0)) {
+            recordScalar("warnPosLookupFailed", 1);
+        }
+
+        // recover RSU "position" from w->lat/w->lon (used as fixed-point XY)
+        constexpr double SCALE = 1e6; // must match RSU side
+        veins::Coord rsuPos(
+            static_cast<double>(w->getLat()) / SCALE,
+            static_cast<double>(w->getLon()) / SCALE,
+            0.0
+        );
+
+        double dMeters = uePos.distance(rsuPos);
+        emit(rxWarnDist_, dMeters);
+        lastIcaDist_ = dMeters;
+
+        const uint8_t seq = static_cast<uint8_t>(w->getMsgCnt());
+
+        if (lastIcaSeq_ < 0) {
+            // first ever ICA
+            lastIcaSeq_  = seq;
+            icaExpected_ += 1;
+            icaReceived_ += 1;
+            emit(warnPdrSample_, 1);
+            emit(warnPdrDistance_, dMeters);
+            delete w;
+            return;
+        }
+
+        const uint8_t last = static_cast<uint8_t>(lastIcaSeq_);
+        const uint8_t diff = static_cast<uint8_t>(seq - last); // modulo-256
+
+        if (diff == 0) {
+            delete w;
+            return;
+        }
+
+        if (diff <= 128) {
+            const int missed = static_cast<int>(diff) - 1;
+            icaExpected_ += static_cast<long>(diff);
+            icaReceived_ += 1;
+
+            // account for misses at last known distance
+            for (int i = 0; i < missed; ++i) {
+                emit(warnPdrSample_, 0);
+                emit(warnPdrDistance_, lastIcaDist_);
+            }
+            // account for this received one
+            emit(warnPdrSample_, 1);
+            emit(warnPdrDistance_, dMeters);
+
+            lastIcaSeq_ = seq;  // advance baseline
+        } else {
+            // old/out-of-order (<~128 behind): ignore for loss accounting
+            // (keeps PDR stable against late frames)
+        }
+
         delete w;
         return;
-    } else {
-//        AlertPacket* pkt = check_and_cast<AlertPacket*>(msg);
-//
-//        if (pkt == 0)
-//            throw cRuntimeError("Mode4App::handleMessage - FATAL! Error when casting to AlertPacket");
-//
-//        // emit statistics
-//        simtime_t delay = simTime() - pkt->getTimestamp();
-//        emit(delay_, delay);
-//        emit(rcvdMsg_, (long)1);
-//
-//        EV << "Mode4App::handleMessage - Packet received: SeqNo[" << pkt->getSno() << "] Delay[" << delay << "]" << endl;
-
+    }else {
         SPDU* spdu = dynamic_cast<SPDU*>(msg);
         if (!spdu) {
             EV << "Received a non-SPDU message, deleting." << endl;
@@ -174,88 +240,9 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         delete msg;
     }
 
-
-//    SPDU* spdu = dynamic_cast<SPDU*>(msg);
-//    if (!spdu) { /* existing path */ }
-//
-//    // If this is a signed warning from the RSU
-//    const bool isWarn = !strcmp(spdu->getName(), "WARN_SPDU");
-//
-//    simtime_t delay = simTime() - spdu->getTimestamp();
-//    emit(delay_, delay);
-//    emit(received_, long(1));
-//    if (isWarn) emit(warnReceived_, long(1));
-//
-//    // build message string exactly like RSU did for WARNs, or like sender for BSMs
-//    std::ostringstream os;
-//    const BSM& b = spdu->getBsm();
-//    if (isWarn)
-//        os << "WARN," << b.getMsgId() << ',' << b.getLatitude() << ','
-//           << b.getLongitude() << ',' << b.getHeading() << ',' << b.getSpeed();
-//    else
-//        os << b.getMsgId() << ',' << b.getLatitude() << ','
-//           << b.getLongitude() << ',' << b.getHeading() << ',' << b.getSpeed();
-//
-//    std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
-//
-//    // extract pubkey + sig and verify
-//    const Certificate &c = spdu->getCert();
-//    std::vector<uint8_t> pkBytes(c.getPublicKeyArraySize());
-//    for (size_t i = 0; i < pkBytes.size(); ++i) pkBytes[i] = c.getPublicKey(i);
-//    std::string pubKeyHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
-//
-//    std::vector<uint8_t> sigBytes(spdu->getSignatureArraySize());
-//    for (size_t i = 0; i < sigBytes.size(); ++i) sigBytes[i] = spdu->getSignature(i);
-//    std::string sigHex = pqcdsa::toHex(sigBytes.data(), sigBytes.size());
-//
-//    bool ok = pqcdsa::verify(bsmHex, sigHex, pubKeyHex);
-//    if (ok) {
-//        emit(verified_, long(1));         // vehicle BSM verification (existing)
-//        if (isWarn) emit(warnVerified_, long(1));  // RSU warning verification
-//    }
-//
-//    EV_INFO << (isWarn ? "RX WARN_SPDU" : "RX BSM")
-//            << " #" << b.getMsgId() << " from " << spdu->getCert().getSubjectId()
-//            << " --> " << (ok ? "VALID" : "INVALID") << '\n';
-//
-//    delete msg;
-
 }
 
-//void Mode4App::handleSelfMessage(cMessage* msg)
-//{
-//    if (!strcmp(msg->getName(), "selfSender")){
-//        // Replace method
-//        AlertPacket* packet = new AlertPacket("Alert");
-//        packet->setTimestamp(simTime());
-//        packet->setByteLength(size_);
-//        packet->setSno(nextSno_);
-//
-//        nextSno_++;
-//
-//        auto lteControlInfo = new FlowControlInfoNonIp();
-//
-//        lteControlInfo->setSrcAddr(nodeId_);
-//        lteControlInfo->setDirection(D2D_MULTI);
-//        lteControlInfo->setPriority(priority_);
-//        lteControlInfo->setDuration(duration_);
-//        lteControlInfo->setCreationTime(simTime());
-//
-//        packet->setControlInfo(lteControlInfo);
-//
-//        Mode4BaseApp::sendLowerPackets(packet);
-//        emit(sentMsg_, (long)1);
-//
-//        scheduleAt(simTime() + period_, selfSender_);
-//    }else if (msg == sendEvt && bsmSeq < 10) { // Send 10 BSMs
-//        generateAndSendSPDU();
-//        ++bsmSeq;
-//        scheduleAt(simTime() + 1, sendEvt); // Schedule the next one
-//        return;
-//    }
-//    else
-//        throw cRuntimeError("Mode4App::handleMessage - Unrecognized self message");
-//}
+
 
 void Mode4App::handleSelfMessage(cMessage* msg)
 {
@@ -371,27 +358,19 @@ void Mode4App::finish()
     simtime_t lifetime = simTime() - entryTime;
     emit(lifetimeSignal, lifetime);
     EV_FATAL << "LIFETIME::" << lifetime << endl;
+
+    recordScalar("icaReceived", icaReceived_);
+    recordScalar("icaExpected", icaExpected_);
+    const double pdr = (icaExpected_ > 0) ? (double)icaReceived_ / (double)icaExpected_ : 0.0;
+    recordScalar("icaPDR", pdr);
     cancelAndDelete(sendEvt);
-//    cancelAndDelete(selfSender_);
 }
 
 Mode4App::~Mode4App()
 {
-//    if (getSimulation()->getSimulationStage() != CTX_FINISH)
-//    {
-//        simtime_t lifetime = simTime() - entryTime;
-//        emit(lifetimeSignal, lifetime);
-//    }
 
     binder_->unregisterNode(nodeId_);
 
-    //cancelAndDelete(sendEvt);
-    // Free the allocated memory for OQS keys
-//    if (sig_ != nullptr) {
-//        OQS_SIG_free(sig_);
-//        free(public_key_);
-//        free(secret_key_);
-//    }
 }
 
 

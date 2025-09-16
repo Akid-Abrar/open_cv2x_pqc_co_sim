@@ -186,6 +186,8 @@ IcaWarn::IcaWarn(const char *name, short kind) : ::omnetpp::cPacket(name,kind)
     this->approach = -1;
     this->lane = -1;
     this->eventFlag = 0;
+    this->srcX = 0;
+    this->srcY = 0;
     this->lat = 0;
     this->lon = 0;
     this->genTime = 0;
@@ -216,6 +218,8 @@ void IcaWarn::copy(const IcaWarn& other)
     this->approach = other.approach;
     this->lane = other.lane;
     this->eventFlag = other.eventFlag;
+    this->srcX = other.srcX;
+    this->srcY = other.srcY;
     this->lat = other.lat;
     this->lon = other.lon;
     this->genTime = other.genTime;
@@ -230,6 +234,8 @@ void IcaWarn::parsimPack(omnetpp::cCommBuffer *b) const
     doParsimPacking(b,this->approach);
     doParsimPacking(b,this->lane);
     doParsimPacking(b,this->eventFlag);
+    doParsimPacking(b,this->srcX);
+    doParsimPacking(b,this->srcY);
     doParsimPacking(b,this->lat);
     doParsimPacking(b,this->lon);
     doParsimPacking(b,this->genTime);
@@ -244,6 +250,8 @@ void IcaWarn::parsimUnpack(omnetpp::cCommBuffer *b)
     doParsimUnpacking(b,this->approach);
     doParsimUnpacking(b,this->lane);
     doParsimUnpacking(b,this->eventFlag);
+    doParsimUnpacking(b,this->srcX);
+    doParsimUnpacking(b,this->srcY);
     doParsimUnpacking(b,this->lat);
     doParsimUnpacking(b,this->lon);
     doParsimUnpacking(b,this->genTime);
@@ -307,6 +315,26 @@ int32_t IcaWarn::getEventFlag() const
 void IcaWarn::setEventFlag(int32_t eventFlag)
 {
     this->eventFlag = eventFlag;
+}
+
+double IcaWarn::getSrcX() const
+{
+    return this->srcX;
+}
+
+void IcaWarn::setSrcX(double srcX)
+{
+    this->srcX = srcX;
+}
+
+double IcaWarn::getSrcY() const
+{
+    return this->srcY;
+}
+
+void IcaWarn::setSrcY(double srcY)
+{
+    this->srcY = srcY;
 }
 
 int64_t IcaWarn::getLat() const
@@ -404,7 +432,7 @@ const char *IcaWarnDescriptor::getProperty(const char *propertyname) const
 int IcaWarnDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 9+basedesc->getFieldCount() : 9;
+    return basedesc ? 11+basedesc->getFieldCount() : 11;
 }
 
 unsigned int IcaWarnDescriptor::getFieldTypeFlags(int field) const
@@ -425,8 +453,10 @@ unsigned int IcaWarnDescriptor::getFieldTypeFlags(int field) const
         FD_ISEDITABLE,
         FD_ISEDITABLE,
         FD_ISEDITABLE,
+        FD_ISEDITABLE,
+        FD_ISEDITABLE,
     };
-    return (field>=0 && field<9) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<11) ? fieldTypeFlags[field] : 0;
 }
 
 const char *IcaWarnDescriptor::getFieldName(int field) const
@@ -444,11 +474,13 @@ const char *IcaWarnDescriptor::getFieldName(int field) const
         "approach",
         "lane",
         "eventFlag",
+        "srcX",
+        "srcY",
         "lat",
         "lon",
         "genTime",
     };
-    return (field>=0 && field<9) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<11) ? fieldNames[field] : nullptr;
 }
 
 int IcaWarnDescriptor::findField(const char *fieldName) const
@@ -461,9 +493,11 @@ int IcaWarnDescriptor::findField(const char *fieldName) const
     if (fieldName[0]=='a' && strcmp(fieldName, "approach")==0) return base+3;
     if (fieldName[0]=='l' && strcmp(fieldName, "lane")==0) return base+4;
     if (fieldName[0]=='e' && strcmp(fieldName, "eventFlag")==0) return base+5;
-    if (fieldName[0]=='l' && strcmp(fieldName, "lat")==0) return base+6;
-    if (fieldName[0]=='l' && strcmp(fieldName, "lon")==0) return base+7;
-    if (fieldName[0]=='g' && strcmp(fieldName, "genTime")==0) return base+8;
+    if (fieldName[0]=='s' && strcmp(fieldName, "srcX")==0) return base+6;
+    if (fieldName[0]=='s' && strcmp(fieldName, "srcY")==0) return base+7;
+    if (fieldName[0]=='l' && strcmp(fieldName, "lat")==0) return base+8;
+    if (fieldName[0]=='l' && strcmp(fieldName, "lon")==0) return base+9;
+    if (fieldName[0]=='g' && strcmp(fieldName, "genTime")==0) return base+10;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -482,11 +516,13 @@ const char *IcaWarnDescriptor::getFieldTypeString(int field) const
         "int32",
         "int32",
         "int32",
+        "double",
+        "double",
         "int64",
         "int64",
         "simtime_t",
     };
-    return (field>=0 && field<9) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<11) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **IcaWarnDescriptor::getFieldPropertyNames(int field) const
@@ -559,9 +595,11 @@ std::string IcaWarnDescriptor::getFieldValueAsString(void *object, int field, in
         case 3: return long2string(pp->getApproach());
         case 4: return long2string(pp->getLane());
         case 5: return long2string(pp->getEventFlag());
-        case 6: return int642string(pp->getLat());
-        case 7: return int642string(pp->getLon());
-        case 8: return simtime2string(pp->getGenTime());
+        case 6: return double2string(pp->getSrcX());
+        case 7: return double2string(pp->getSrcY());
+        case 8: return int642string(pp->getLat());
+        case 9: return int642string(pp->getLon());
+        case 10: return simtime2string(pp->getGenTime());
         default: return "";
     }
 }
@@ -582,9 +620,11 @@ bool IcaWarnDescriptor::setFieldValueAsString(void *object, int field, int i, co
         case 3: pp->setApproach(string2long(value)); return true;
         case 4: pp->setLane(string2long(value)); return true;
         case 5: pp->setEventFlag(string2long(value)); return true;
-        case 6: pp->setLat(string2int64(value)); return true;
-        case 7: pp->setLon(string2int64(value)); return true;
-        case 8: pp->setGenTime(string2simtime(value)); return true;
+        case 6: pp->setSrcX(string2double(value)); return true;
+        case 7: pp->setSrcY(string2double(value)); return true;
+        case 8: pp->setLat(string2int64(value)); return true;
+        case 9: pp->setLon(string2int64(value)); return true;
+        case 10: pp->setGenTime(string2simtime(value)); return true;
         default: return false;
     }
 }

@@ -56,9 +56,19 @@ protected:
     simsignal_t lifetimeSignal;
     simsignal_t received_;
     simsignal_t verified_;
-    // add with your other signals
-    simsignal_t warnReceived_;
-    simsignal_t warnVerified_;   // will stay 0 in this option (no signature)
+
+    // PDR tracking for ICA
+    int    lastIcaSeq_        = -1;  // last received seq
+    long   icaExpected_       = 0;   // received + missed
+    long   icaReceived_       = 0;
+    double lastIcaDist_       = 0;   // last known distance to RSU
+
+    simsignal_t warnReceived_;       // you already had it
+    simsignal_t warnVerified_;       // (later)
+    simsignal_t warnExpected_;       // new: count expected (recv + miss)
+    simsignal_t warnPdrSample_;      // new: emits 1 for recv, 0 for miss
+    simsignal_t warnPdrDistance_;    // new: emits distance for each sample
+    simsignal_t rxWarnDist_;
 
     cMessage *selfSender_;
 

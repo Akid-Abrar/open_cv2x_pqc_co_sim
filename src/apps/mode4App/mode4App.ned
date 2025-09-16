@@ -28,23 +28,41 @@ simple Mode4App like Mode4BaseApp
         
         @signal[sentMsg];
         @statistic[sentMsg](title="Messages sent"; unit=""; source="sentMsg"; record=sum,vector);
+        
         @signal[delay];
         @statistic[delay](title="Message Delay"; unit="s"; source="delay"; record=mean,vector);    
-//        @signal[rcvdMsg]; 
-//        @statistic[rcvdMsg](title="Messages Received"; unit="s"; source="rcvdMsg"; record=sum,vector);
+        
         @signal[cbr];
         @statistic[cbr](title="Channel Busy Ratio"; unit=""; source="cbr"; record=vector);         
         @display("i=block/source");
+        
         @signal[lifetime]; 
         @statistic[lifetime](title="Lifetime of a Vehicle"; unit="s"; source="lifetime"; record=mean,vector); 
+        
         @signal[received]; 
-        @statistic[received](title="Total packet Received"; unit=""; source="received"; record=sum,vector);   
+        @statistic[received](title="Total packet Received"; unit=""; source="received"; record=sum,vector); 
+          
         @signal[verified]; 
         @statistic[verified](title="Messages Verified"; unit="s"; source="verified"; record=sum,vector);   
+        
         @signal[warnReceived];
         @statistic[warnReceived](title="Warnings received"; source="warnReceived"; record=sum,vector);
+        
         @signal[warnVerified];
         @statistic[warnVerified](title="Warnings verified"; source="warnVerified"; record=sum,vector);
+
+        @signal[warnExpected];
+        @statistic[warnExpected](title="ICA warnings expected"; unit=""; source="warnExpected"; record=sum,vector);
+
+        @signal[warnPdrSample];
+        @statistic[warnPdrSample](title="ICA PDR sample (0/1)"; unit=""; source="warnPdrSample"; record=vector);
+
+        @signal[warnPdrDistance];
+        @statistic[warnPdrDistance](title="ICA PDR sample distance"; unit="m"; source="warnPdrDistance"; record=vector);
+
+        @signal[rxWarnDist];
+        @statistic[rxWarnDist](title="RX warning distance"; unit="m"; source="rxWarnDist"; record=vector);
+        
                 
                 
     gates:

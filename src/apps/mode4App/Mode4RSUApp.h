@@ -26,9 +26,6 @@ class Mode4RSUApp : public Mode4BaseApp
     simsignal_t rsuReceivedMsg;
     simsignal_t rsuVerifiedMsg;
     simsignal_t cbr_;
-    simsignal_t numread;
-    simsignal_t numread0;
-    simsignal_t numread1;
     simsignal_t numBroadcasted;
 
     /* crypto */
