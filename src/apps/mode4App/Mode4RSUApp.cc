@@ -8,7 +8,7 @@ using nlohmann::json;
 
 #include "veins/base/modules/BaseMobility.h"
 #include "veins/base/utils/Coord.h"
-
+#include "apps/mode4App/IcaSpdu_m.h"
 
 Define_Module(Mode4RSUApp);
 //using namespace lte::apps::mode4App;
@@ -44,6 +44,26 @@ static IcaWarn* makeIcaWarnFromJson(const json& j)
 
     w->setGenTime(simTime());
     return w;
+}
+
+// Canonical hex body for ICA signing/verifying (RSU and UE must match 1:1)
+static std::string icaBodyHex(const IcaWarn& w)
+{
+    // A simple, stable CSV; only fields that matter for integrity & replay.
+    // Do NOT include genTime (changes at receiver) or byteLength, etc.
+    std::ostringstream os;
+    os << w.getMsgCnt() << ','
+       << w.getIntersectionId() << ','
+       << w.getApproach() << ','
+       << w.getLane() << ','
+       << w.getEventFlag() << ','
+       << w.getSrcX() << ','        // OMNeT world X
+       << w.getSrcY() << ','        // OMNeT world Y
+       << w.getLat() << ','         // optional coarse position (kept as is)
+       << w.getLon() << ','
+       << w.getTempId();            // hex string for TID
+
+    return pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 }
 
 
@@ -105,22 +125,65 @@ void Mode4RSUApp::initialize(int stage)
     }
 }
 
+// Do not delete. Need this for simple payload
+//void Mode4RSUApp::broadcastIca(IcaWarn* w)
+//{
+//    // 1) read RSU position from its BaseMobility submodule
+//    auto* mobMod = getParentModule()->getSubmodule("veinsmobility");
+//    veins::BaseMobility* bm = mobMod ? check_and_cast<veins::BaseMobility*>(mobMod) : nullptr;
+//    if (bm) {
+//        const veins::Coord pos = bm->getPositionAt(simTime());   // <-- FIX
+//        constexpr double SCALE = 1e6; // fixed-point scale to reuse int64 lat/lon
+//        w->setLat(static_cast<long long>(std::llround(pos.x * SCALE)));
+//        w->setLon(static_cast<long long>(std::llround(pos.y * SCALE)));
+//    } else {
+//        w->setLat(0);
+//        w->setLon(0);
+//    }
+//
+//    // 2) attach sidelink control and send
+//    auto ci = new FlowControlInfoNonIp();
+//    ci->setDirection(D2D_MULTI);
+//    ci->setPriority(par("slPriority"));
+//    ci->setLcid(par("slLcid"));
+//    ci->setDuration(par("slDurationMs").intValue());
+//    ci->setCreationTime(simTime());
+//    ci->setSrcAddr(nodeId_);
+//
+//    w->setControlInfo(ci);
+//    w->setTimestamp(simTime());
+//    w->setByteLength(64);
+//
+//    Mode4BaseApp::sendLowerPackets(w);   // takes ownership
+//    emit(numBroadcasted, 1);
+//}
+
 void Mode4RSUApp::broadcastIca(IcaWarn* w)
 {
-    // 1) read RSU position from its BaseMobility submodule
-    auto* mobMod = getParentModule()->getSubmodule("veinsmobility");
-    veins::BaseMobility* bm = mobMod ? check_and_cast<veins::BaseMobility*>(mobMod) : nullptr;
-    if (bm) {
-        const veins::Coord pos = bm->getPositionAt(simTime());   // <-- FIX
-        constexpr double SCALE = 1e6; // fixed-point scale to reuse int64 lat/lon
-        w->setLat(static_cast<long long>(std::llround(pos.x * SCALE)));
-        w->setLon(static_cast<long long>(std::llround(pos.y * SCALE)));
-    } else {
-        w->setLat(0);
-        w->setLon(0);
+    // 1) stamp RSU position into the payload (srcX/srcY in OMNeT coords)
+    veins::Coord pos(0,0,0);
+    if (auto* mobMod = getParentModule()->getSubmodule("veinsmobility")) {
+        if (auto* bm = dynamic_cast<veins::BaseMobility*>(mobMod))
+            pos = bm->getPositionAt(simTime());
     }
+    w->setSrcX(pos.x);
+    w->setSrcY(pos.y);
 
-    // 2) attach sidelink control and send
+    // 2) build canonical body and sign with RSU’s private key
+    const std::string bodyHex = icaBodyHex(*w);
+    const std::string sigHex  = pqcdsa::sign(bodyHex, keyPair_.privHex);
+
+    // 3) assemble IcaSpdu (payload + signature + cert)
+    auto* spdu = new IcaSpdu("ICA_SPDU");
+    spdu->setWarn(*w);                 // deep copy of the warn payload
+    spdu->setCert(cert_);
+
+    auto sigBytes = pqcdsa::fromHex(sigHex);
+    spdu->setSignatureArraySize(sigBytes.size());
+    for (size_t i = 0; i < sigBytes.size(); ++i)
+        spdu->setSignature(i, sigBytes[i]);
+
+    // 4) attach sidelink flow control
     auto ci = new FlowControlInfoNonIp();
     ci->setDirection(D2D_MULTI);
     ci->setPriority(par("slPriority"));
@@ -128,15 +191,17 @@ void Mode4RSUApp::broadcastIca(IcaWarn* w)
     ci->setDuration(par("slDurationMs").intValue());
     ci->setCreationTime(simTime());
     ci->setSrcAddr(nodeId_);
+    spdu->setControlInfo(ci);
 
-    w->setControlInfo(ci);
-    w->setTimestamp(simTime());
-    w->setByteLength(64);
+    spdu->setTimestamp(simTime());
+    spdu->setByteLength(64 + spdu->getSignatureArraySize() + spdu->getCert().getPublicKeyArraySize());
 
-    Mode4BaseApp::sendLowerPackets(w);   // takes ownership
-    emit(numBroadcasted, 1);
+    // 5) send
+    Mode4BaseApp::sendLowerPackets(spdu);
+    emit(numBroadcasted, long(1));
+
+    delete w; // we copied it into spdu
 }
-
 
 
 

@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by nedtool 5.7 from veins/pqcdsa/IcaWarn.msg.
+// Generated file, do not edit! Created by nedtool 5.7 from veins/pqcdsa/IcaSpdu.msg.
 //
 
 // Disable warnings about unused variables, empty switch stmts, etc:
@@ -27,7 +27,7 @@
 #include <iostream>
 #include <sstream>
 #include <memory>
-#include "IcaWarn_m.h"
+#include "IcaSpdu_m.h"
 
 namespace omnetpp {
 
@@ -206,22 +206,29 @@ inline std::ostream& operator<<(std::ostream& out, const std::vector<T,A>& vec)
     return out;
 }
 
-Register_Class(IcaWarn)
+Register_Class(IcaSpdu)
 
-IcaWarn::IcaWarn(const char *name, short kind) : ::omnetpp::cPacket(name, kind)
+IcaSpdu::IcaSpdu(const char *name, short kind) : ::omnetpp::cPacket(name, kind)
 {
+    take(&this->warn);
+    take(&this->cert);
 }
 
-IcaWarn::IcaWarn(const IcaWarn& other) : ::omnetpp::cPacket(other)
+IcaSpdu::IcaSpdu(const IcaSpdu& other) : ::omnetpp::cPacket(other)
 {
+    take(&this->warn);
+    take(&this->cert);
     copy(other);
 }
 
-IcaWarn::~IcaWarn()
+IcaSpdu::~IcaSpdu()
 {
+    drop(&this->warn);
+    delete [] this->signature;
+    drop(&this->cert);
 }
 
-IcaWarn& IcaWarn::operator=(const IcaWarn& other)
+IcaSpdu& IcaSpdu::operator=(const IcaSpdu& other)
 {
     if (this == &other) return *this;
     ::omnetpp::cPacket::operator=(other);
@@ -229,183 +236,142 @@ IcaWarn& IcaWarn::operator=(const IcaWarn& other)
     return *this;
 }
 
-void IcaWarn::copy(const IcaWarn& other)
+void IcaSpdu::copy(const IcaSpdu& other)
 {
-    this->msgCnt = other.msgCnt;
-    this->tempId = other.tempId;
-    this->intersectionId = other.intersectionId;
-    this->approach = other.approach;
-    this->lane = other.lane;
-    this->eventFlag = other.eventFlag;
-    this->srcX = other.srcX;
-    this->srcY = other.srcY;
-    this->lat = other.lat;
-    this->lon = other.lon;
-    this->genTime = other.genTime;
+    this->warn = other.warn;
+    this->warn.setName(other.warn.getName());
+    delete [] this->signature;
+    this->signature = (other.signature_arraysize==0) ? nullptr : new uint8_t[other.signature_arraysize];
+    signature_arraysize = other.signature_arraysize;
+    for (size_t i = 0; i < signature_arraysize; i++) {
+        this->signature[i] = other.signature[i];
+    }
+    this->cert = other.cert;
+    this->cert.setName(other.cert.getName());
 }
 
-void IcaWarn::parsimPack(omnetpp::cCommBuffer *b) const
+void IcaSpdu::parsimPack(omnetpp::cCommBuffer *b) const
 {
     ::omnetpp::cPacket::parsimPack(b);
-    doParsimPacking(b,this->msgCnt);
-    doParsimPacking(b,this->tempId);
-    doParsimPacking(b,this->intersectionId);
-    doParsimPacking(b,this->approach);
-    doParsimPacking(b,this->lane);
-    doParsimPacking(b,this->eventFlag);
-    doParsimPacking(b,this->srcX);
-    doParsimPacking(b,this->srcY);
-    doParsimPacking(b,this->lat);
-    doParsimPacking(b,this->lon);
-    doParsimPacking(b,this->genTime);
+    doParsimPacking(b,this->warn);
+    b->pack(signature_arraysize);
+    doParsimArrayPacking(b,this->signature,signature_arraysize);
+    doParsimPacking(b,this->cert);
 }
 
-void IcaWarn::parsimUnpack(omnetpp::cCommBuffer *b)
+void IcaSpdu::parsimUnpack(omnetpp::cCommBuffer *b)
 {
     ::omnetpp::cPacket::parsimUnpack(b);
-    doParsimUnpacking(b,this->msgCnt);
-    doParsimUnpacking(b,this->tempId);
-    doParsimUnpacking(b,this->intersectionId);
-    doParsimUnpacking(b,this->approach);
-    doParsimUnpacking(b,this->lane);
-    doParsimUnpacking(b,this->eventFlag);
-    doParsimUnpacking(b,this->srcX);
-    doParsimUnpacking(b,this->srcY);
-    doParsimUnpacking(b,this->lat);
-    doParsimUnpacking(b,this->lon);
-    doParsimUnpacking(b,this->genTime);
+    doParsimUnpacking(b,this->warn);
+    delete [] this->signature;
+    b->unpack(signature_arraysize);
+    if (signature_arraysize == 0) {
+        this->signature = nullptr;
+    } else {
+        this->signature = new uint8_t[signature_arraysize];
+        doParsimArrayUnpacking(b,this->signature,signature_arraysize);
+    }
+    doParsimUnpacking(b,this->cert);
 }
 
-int32_t IcaWarn::getMsgCnt() const
+const IcaWarn& IcaSpdu::getWarn() const
 {
-    return this->msgCnt;
+    return this->warn;
 }
 
-void IcaWarn::setMsgCnt(int32_t msgCnt)
+void IcaSpdu::setWarn(const IcaWarn& warn)
 {
-    this->msgCnt = msgCnt;
+    this->warn = warn;
 }
 
-const char * IcaWarn::getTempId() const
+size_t IcaSpdu::getSignatureArraySize() const
 {
-    return this->tempId.c_str();
+    return signature_arraysize;
 }
 
-void IcaWarn::setTempId(const char * tempId)
+uint8_t IcaSpdu::getSignature(size_t k) const
 {
-    this->tempId = tempId;
+    if (k >= signature_arraysize) throw omnetpp::cRuntimeError("Array of size signature_arraysize indexed by %lu", (unsigned long)k);
+    return this->signature[k];
 }
 
-int32_t IcaWarn::getIntersectionId() const
+void IcaSpdu::setSignatureArraySize(size_t newSize)
 {
-    return this->intersectionId;
+    uint8_t *signature2 = (newSize==0) ? nullptr : new uint8_t[newSize];
+    size_t minSize = signature_arraysize < newSize ? signature_arraysize : newSize;
+    for (size_t i = 0; i < minSize; i++)
+        signature2[i] = this->signature[i];
+    for (size_t i = minSize; i < newSize; i++)
+        signature2[i] = 0;
+    delete [] this->signature;
+    this->signature = signature2;
+    signature_arraysize = newSize;
 }
 
-void IcaWarn::setIntersectionId(int32_t intersectionId)
+void IcaSpdu::setSignature(size_t k, uint8_t signature)
 {
-    this->intersectionId = intersectionId;
+    if (k >= signature_arraysize) throw omnetpp::cRuntimeError("Array of size  indexed by %lu", (unsigned long)k);
+    this->signature[k] = signature;
 }
 
-int32_t IcaWarn::getApproach() const
+void IcaSpdu::insertSignature(size_t k, uint8_t signature)
 {
-    return this->approach;
+    if (k > signature_arraysize) throw omnetpp::cRuntimeError("Array of size  indexed by %lu", (unsigned long)k);
+    size_t newSize = signature_arraysize + 1;
+    uint8_t *signature2 = new uint8_t[newSize];
+    size_t i;
+    for (i = 0; i < k; i++)
+        signature2[i] = this->signature[i];
+    signature2[k] = signature;
+    for (i = k + 1; i < newSize; i++)
+        signature2[i] = this->signature[i-1];
+    delete [] this->signature;
+    this->signature = signature2;
+    signature_arraysize = newSize;
 }
 
-void IcaWarn::setApproach(int32_t approach)
+void IcaSpdu::insertSignature(uint8_t signature)
 {
-    this->approach = approach;
+    insertSignature(signature_arraysize, signature);
 }
 
-int32_t IcaWarn::getLane() const
+void IcaSpdu::eraseSignature(size_t k)
 {
-    return this->lane;
+    if (k >= signature_arraysize) throw omnetpp::cRuntimeError("Array of size  indexed by %lu", (unsigned long)k);
+    size_t newSize = signature_arraysize - 1;
+    uint8_t *signature2 = (newSize == 0) ? nullptr : new uint8_t[newSize];
+    size_t i;
+    for (i = 0; i < k; i++)
+        signature2[i] = this->signature[i];
+    for (i = k; i < newSize; i++)
+        signature2[i] = this->signature[i+1];
+    delete [] this->signature;
+    this->signature = signature2;
+    signature_arraysize = newSize;
 }
 
-void IcaWarn::setLane(int32_t lane)
+const Certificate& IcaSpdu::getCert() const
 {
-    this->lane = lane;
+    return this->cert;
 }
 
-int32_t IcaWarn::getEventFlag() const
+void IcaSpdu::setCert(const Certificate& cert)
 {
-    return this->eventFlag;
+    this->cert = cert;
 }
 
-void IcaWarn::setEventFlag(int32_t eventFlag)
-{
-    this->eventFlag = eventFlag;
-}
-
-double IcaWarn::getSrcX() const
-{
-    return this->srcX;
-}
-
-void IcaWarn::setSrcX(double srcX)
-{
-    this->srcX = srcX;
-}
-
-double IcaWarn::getSrcY() const
-{
-    return this->srcY;
-}
-
-void IcaWarn::setSrcY(double srcY)
-{
-    this->srcY = srcY;
-}
-
-int64_t IcaWarn::getLat() const
-{
-    return this->lat;
-}
-
-void IcaWarn::setLat(int64_t lat)
-{
-    this->lat = lat;
-}
-
-int64_t IcaWarn::getLon() const
-{
-    return this->lon;
-}
-
-void IcaWarn::setLon(int64_t lon)
-{
-    this->lon = lon;
-}
-
-omnetpp::simtime_t IcaWarn::getGenTime() const
-{
-    return this->genTime;
-}
-
-void IcaWarn::setGenTime(omnetpp::simtime_t genTime)
-{
-    this->genTime = genTime;
-}
-
-class IcaWarnDescriptor : public omnetpp::cClassDescriptor
+class IcaSpduDescriptor : public omnetpp::cClassDescriptor
 {
   private:
     mutable const char **propertynames;
     enum FieldConstants {
-        FIELD_msgCnt,
-        FIELD_tempId,
-        FIELD_intersectionId,
-        FIELD_approach,
-        FIELD_lane,
-        FIELD_eventFlag,
-        FIELD_srcX,
-        FIELD_srcY,
-        FIELD_lat,
-        FIELD_lon,
-        FIELD_genTime,
+        FIELD_warn,
+        FIELD_signature,
+        FIELD_cert,
     };
   public:
-    IcaWarnDescriptor();
-    virtual ~IcaWarnDescriptor();
+    IcaSpduDescriptor();
+    virtual ~IcaSpduDescriptor();
 
     virtual bool doesSupport(omnetpp::cObject *obj) const override;
     virtual const char **getPropertyNames() const override;
@@ -427,24 +393,24 @@ class IcaWarnDescriptor : public omnetpp::cClassDescriptor
     virtual void *getFieldStructValuePointer(void *object, int field, int i) const override;
 };
 
-Register_ClassDescriptor(IcaWarnDescriptor)
+Register_ClassDescriptor(IcaSpduDescriptor)
 
-IcaWarnDescriptor::IcaWarnDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(IcaWarn)), "omnetpp::cPacket")
+IcaSpduDescriptor::IcaSpduDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(IcaSpdu)), "omnetpp::cPacket")
 {
     propertynames = nullptr;
 }
 
-IcaWarnDescriptor::~IcaWarnDescriptor()
+IcaSpduDescriptor::~IcaSpduDescriptor()
 {
     delete[] propertynames;
 }
 
-bool IcaWarnDescriptor::doesSupport(omnetpp::cObject *obj) const
+bool IcaSpduDescriptor::doesSupport(omnetpp::cObject *obj) const
 {
-    return dynamic_cast<IcaWarn *>(obj)!=nullptr;
+    return dynamic_cast<IcaSpdu *>(obj)!=nullptr;
 }
 
-const char **IcaWarnDescriptor::getPropertyNames() const
+const char **IcaSpduDescriptor::getPropertyNames() const
 {
     if (!propertynames) {
         static const char *names[] = {  nullptr };
@@ -455,19 +421,19 @@ const char **IcaWarnDescriptor::getPropertyNames() const
     return propertynames;
 }
 
-const char *IcaWarnDescriptor::getProperty(const char *propertyname) const
+const char *IcaSpduDescriptor::getProperty(const char *propertyname) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     return basedesc ? basedesc->getProperty(propertyname) : nullptr;
 }
 
-int IcaWarnDescriptor::getFieldCount() const
+int IcaSpduDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 11+basedesc->getFieldCount() : 11;
+    return basedesc ? 3+basedesc->getFieldCount() : 3;
 }
 
-unsigned int IcaWarnDescriptor::getFieldTypeFlags(int field) const
+unsigned int IcaSpduDescriptor::getFieldTypeFlags(int field) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -476,22 +442,14 @@ unsigned int IcaWarnDescriptor::getFieldTypeFlags(int field) const
         field -= basedesc->getFieldCount();
     }
     static unsigned int fieldTypeFlags[] = {
-        FD_ISEDITABLE,    // FIELD_msgCnt
-        FD_ISEDITABLE,    // FIELD_tempId
-        FD_ISEDITABLE,    // FIELD_intersectionId
-        FD_ISEDITABLE,    // FIELD_approach
-        FD_ISEDITABLE,    // FIELD_lane
-        FD_ISEDITABLE,    // FIELD_eventFlag
-        FD_ISEDITABLE,    // FIELD_srcX
-        FD_ISEDITABLE,    // FIELD_srcY
-        FD_ISEDITABLE,    // FIELD_lat
-        FD_ISEDITABLE,    // FIELD_lon
-        FD_ISEDITABLE,    // FIELD_genTime
+        FD_ISCOMPOUND | FD_ISCOBJECT | FD_ISCOWNEDOBJECT,    // FIELD_warn
+        FD_ISARRAY | FD_ISEDITABLE,    // FIELD_signature
+        FD_ISCOMPOUND | FD_ISCOBJECT | FD_ISCOWNEDOBJECT,    // FIELD_cert
     };
-    return (field >= 0 && field < 11) ? fieldTypeFlags[field] : 0;
+    return (field >= 0 && field < 3) ? fieldTypeFlags[field] : 0;
 }
 
-const char *IcaWarnDescriptor::getFieldName(int field) const
+const char *IcaSpduDescriptor::getFieldName(int field) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -500,40 +458,24 @@ const char *IcaWarnDescriptor::getFieldName(int field) const
         field -= basedesc->getFieldCount();
     }
     static const char *fieldNames[] = {
-        "msgCnt",
-        "tempId",
-        "intersectionId",
-        "approach",
-        "lane",
-        "eventFlag",
-        "srcX",
-        "srcY",
-        "lat",
-        "lon",
-        "genTime",
+        "warn",
+        "signature",
+        "cert",
     };
-    return (field >= 0 && field < 11) ? fieldNames[field] : nullptr;
+    return (field >= 0 && field < 3) ? fieldNames[field] : nullptr;
 }
 
-int IcaWarnDescriptor::findField(const char *fieldName) const
+int IcaSpduDescriptor::findField(const char *fieldName) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     int base = basedesc ? basedesc->getFieldCount() : 0;
-    if (fieldName[0] == 'm' && strcmp(fieldName, "msgCnt") == 0) return base+0;
-    if (fieldName[0] == 't' && strcmp(fieldName, "tempId") == 0) return base+1;
-    if (fieldName[0] == 'i' && strcmp(fieldName, "intersectionId") == 0) return base+2;
-    if (fieldName[0] == 'a' && strcmp(fieldName, "approach") == 0) return base+3;
-    if (fieldName[0] == 'l' && strcmp(fieldName, "lane") == 0) return base+4;
-    if (fieldName[0] == 'e' && strcmp(fieldName, "eventFlag") == 0) return base+5;
-    if (fieldName[0] == 's' && strcmp(fieldName, "srcX") == 0) return base+6;
-    if (fieldName[0] == 's' && strcmp(fieldName, "srcY") == 0) return base+7;
-    if (fieldName[0] == 'l' && strcmp(fieldName, "lat") == 0) return base+8;
-    if (fieldName[0] == 'l' && strcmp(fieldName, "lon") == 0) return base+9;
-    if (fieldName[0] == 'g' && strcmp(fieldName, "genTime") == 0) return base+10;
+    if (fieldName[0] == 'w' && strcmp(fieldName, "warn") == 0) return base+0;
+    if (fieldName[0] == 's' && strcmp(fieldName, "signature") == 0) return base+1;
+    if (fieldName[0] == 'c' && strcmp(fieldName, "cert") == 0) return base+2;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
-const char *IcaWarnDescriptor::getFieldTypeString(int field) const
+const char *IcaSpduDescriptor::getFieldTypeString(int field) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -542,22 +484,14 @@ const char *IcaWarnDescriptor::getFieldTypeString(int field) const
         field -= basedesc->getFieldCount();
     }
     static const char *fieldTypeStrings[] = {
-        "int32",    // FIELD_msgCnt
-        "string",    // FIELD_tempId
-        "int32",    // FIELD_intersectionId
-        "int32",    // FIELD_approach
-        "int32",    // FIELD_lane
-        "int32",    // FIELD_eventFlag
-        "double",    // FIELD_srcX
-        "double",    // FIELD_srcY
-        "int64",    // FIELD_lat
-        "int64",    // FIELD_lon
-        "omnetpp::simtime_t",    // FIELD_genTime
+        "IcaWarn",    // FIELD_warn
+        "uint8_t",    // FIELD_signature
+        "Certificate",    // FIELD_cert
     };
-    return (field >= 0 && field < 11) ? fieldTypeStrings[field] : nullptr;
+    return (field >= 0 && field < 3) ? fieldTypeStrings[field] : nullptr;
 }
 
-const char **IcaWarnDescriptor::getFieldPropertyNames(int field) const
+const char **IcaSpduDescriptor::getFieldPropertyNames(int field) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -570,7 +504,7 @@ const char **IcaWarnDescriptor::getFieldPropertyNames(int field) const
     }
 }
 
-const char *IcaWarnDescriptor::getFieldProperty(int field, const char *propertyname) const
+const char *IcaSpduDescriptor::getFieldProperty(int field, const char *propertyname) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -583,7 +517,7 @@ const char *IcaWarnDescriptor::getFieldProperty(int field, const char *propertyn
     }
 }
 
-int IcaWarnDescriptor::getFieldArraySize(void *object, int field) const
+int IcaSpduDescriptor::getFieldArraySize(void *object, int field) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -591,13 +525,14 @@ int IcaWarnDescriptor::getFieldArraySize(void *object, int field) const
             return basedesc->getFieldArraySize(object, field);
         field -= basedesc->getFieldCount();
     }
-    IcaWarn *pp = (IcaWarn *)object; (void)pp;
+    IcaSpdu *pp = (IcaSpdu *)object; (void)pp;
     switch (field) {
+        case FIELD_signature: return pp->getSignatureArraySize();
         default: return 0;
     }
 }
 
-const char *IcaWarnDescriptor::getFieldDynamicTypeString(void *object, int field, int i) const
+const char *IcaSpduDescriptor::getFieldDynamicTypeString(void *object, int field, int i) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -605,13 +540,13 @@ const char *IcaWarnDescriptor::getFieldDynamicTypeString(void *object, int field
             return basedesc->getFieldDynamicTypeString(object,field,i);
         field -= basedesc->getFieldCount();
     }
-    IcaWarn *pp = (IcaWarn *)object; (void)pp;
+    IcaSpdu *pp = (IcaSpdu *)object; (void)pp;
     switch (field) {
         default: return nullptr;
     }
 }
 
-std::string IcaWarnDescriptor::getFieldValueAsString(void *object, int field, int i) const
+std::string IcaSpduDescriptor::getFieldValueAsString(void *object, int field, int i) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -619,24 +554,16 @@ std::string IcaWarnDescriptor::getFieldValueAsString(void *object, int field, in
             return basedesc->getFieldValueAsString(object,field,i);
         field -= basedesc->getFieldCount();
     }
-    IcaWarn *pp = (IcaWarn *)object; (void)pp;
+    IcaSpdu *pp = (IcaSpdu *)object; (void)pp;
     switch (field) {
-        case FIELD_msgCnt: return long2string(pp->getMsgCnt());
-        case FIELD_tempId: return oppstring2string(pp->getTempId());
-        case FIELD_intersectionId: return long2string(pp->getIntersectionId());
-        case FIELD_approach: return long2string(pp->getApproach());
-        case FIELD_lane: return long2string(pp->getLane());
-        case FIELD_eventFlag: return long2string(pp->getEventFlag());
-        case FIELD_srcX: return double2string(pp->getSrcX());
-        case FIELD_srcY: return double2string(pp->getSrcY());
-        case FIELD_lat: return int642string(pp->getLat());
-        case FIELD_lon: return int642string(pp->getLon());
-        case FIELD_genTime: return simtime2string(pp->getGenTime());
+        case FIELD_warn: {std::stringstream out; out << pp->getWarn(); return out.str();}
+        case FIELD_signature: return ulong2string(pp->getSignature(i));
+        case FIELD_cert: {std::stringstream out; out << pp->getCert(); return out.str();}
         default: return "";
     }
 }
 
-bool IcaWarnDescriptor::setFieldValueAsString(void *object, int field, int i, const char *value) const
+bool IcaSpduDescriptor::setFieldValueAsString(void *object, int field, int i, const char *value) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -644,24 +571,14 @@ bool IcaWarnDescriptor::setFieldValueAsString(void *object, int field, int i, co
             return basedesc->setFieldValueAsString(object,field,i,value);
         field -= basedesc->getFieldCount();
     }
-    IcaWarn *pp = (IcaWarn *)object; (void)pp;
+    IcaSpdu *pp = (IcaSpdu *)object; (void)pp;
     switch (field) {
-        case FIELD_msgCnt: pp->setMsgCnt(string2long(value)); return true;
-        case FIELD_tempId: pp->setTempId((value)); return true;
-        case FIELD_intersectionId: pp->setIntersectionId(string2long(value)); return true;
-        case FIELD_approach: pp->setApproach(string2long(value)); return true;
-        case FIELD_lane: pp->setLane(string2long(value)); return true;
-        case FIELD_eventFlag: pp->setEventFlag(string2long(value)); return true;
-        case FIELD_srcX: pp->setSrcX(string2double(value)); return true;
-        case FIELD_srcY: pp->setSrcY(string2double(value)); return true;
-        case FIELD_lat: pp->setLat(string2int64(value)); return true;
-        case FIELD_lon: pp->setLon(string2int64(value)); return true;
-        case FIELD_genTime: pp->setGenTime(string2simtime(value)); return true;
+        case FIELD_signature: pp->setSignature(i,string2ulong(value)); return true;
         default: return false;
     }
 }
 
-const char *IcaWarnDescriptor::getFieldStructName(int field) const
+const char *IcaSpduDescriptor::getFieldStructName(int field) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -670,11 +587,13 @@ const char *IcaWarnDescriptor::getFieldStructName(int field) const
         field -= basedesc->getFieldCount();
     }
     switch (field) {
+        case FIELD_warn: return omnetpp::opp_typename(typeid(IcaWarn));
+        case FIELD_cert: return omnetpp::opp_typename(typeid(Certificate));
         default: return nullptr;
     };
 }
 
-void *IcaWarnDescriptor::getFieldStructValuePointer(void *object, int field, int i) const
+void *IcaSpduDescriptor::getFieldStructValuePointer(void *object, int field, int i) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     if (basedesc) {
@@ -682,8 +601,10 @@ void *IcaWarnDescriptor::getFieldStructValuePointer(void *object, int field, int
             return basedesc->getFieldStructValuePointer(object, field, i);
         field -= basedesc->getFieldCount();
     }
-    IcaWarn *pp = (IcaWarn *)object; (void)pp;
+    IcaSpdu *pp = (IcaSpdu *)object; (void)pp;
     switch (field) {
+        case FIELD_warn: return toVoidPtr(&pp->getWarn()); break;
+        case FIELD_cert: return toVoidPtr(&pp->getCert()); break;
         default: return nullptr;
     }
 }

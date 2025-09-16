@@ -26,7 +26,7 @@
 #include "veins/modules/mobility/traci/TraCIMobility.h"
 #include "veins/base/modules/BaseMobility.h"
 #include "veins/base/utils/Coord.h"
-
+#include "apps/mode4App/IcaSpdu_m.h"
 
 
 //#include "stack/phy/layer/LtePhyBase.h"
@@ -38,6 +38,27 @@
 Define_Module(Mode4App);
 
 //using namespace lte::apps::mode4App;
+
+// Canonical hex body for ICA signing/verifying (RSU and UE must match 1:1)
+static std::string icaBodyHex(const IcaWarn& w)
+{
+    // A simple, stable CSV; only fields that matter for integrity & replay.
+    // Do NOT include genTime (changes at receiver) or byteLength, etc.
+    std::ostringstream os;
+    os << w.getMsgCnt() << ','
+       << w.getIntersectionId() << ','
+       << w.getApproach() << ','
+       << w.getLane() << ','
+       << w.getEventFlag() << ','
+       << w.getSrcX() << ','        // OMNeT world X
+       << w.getSrcY() << ','        // OMNeT world Y
+       << w.getLat() << ','         // optional coarse position (kept as is)
+       << w.getLon() << ','
+       << w.getTempId();            // hex string for TID
+
+    return pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
+}
+
 
 void Mode4App::initialize(int stage)
 {
@@ -102,13 +123,13 @@ void Mode4App::initialize(int stage)
         received_ = registerSignal("received");
 
         warnReceived_ = registerSignal("warnReceived");
+        warnVerified_     = registerSignal("warnVerified");
         warnExpected_ = registerSignal("warnExpected");
         warnPdrSample_ = registerSignal("warnPdrSample");    // 1/0
         warnPdrDistance_ = registerSignal("warnPdrDistance");  // meters
         rxWarnDist_ = registerSignal("rxWarnDist");   // receive distance in meters
 
-
-        double delay = 0.001 * intuniform(0, 1000, 0);
+        //double delay = 0.001 * intuniform(0, 1000, 0);
         //scheduleAt((simTime() + delay).trunc(SIMTIME_MS), selfSender_);
     }
 }
@@ -120,7 +141,93 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         double channel_load = cbrPkt->getCbr();
         emit(cbr_, channel_load);
         delete cbrPkt;
-    }else if (auto* w = dynamic_cast<IcaWarn*>(msg)) {
+    }
+//    Do not delete
+//    else if (auto* w = dynamic_cast<IcaWarn*>(msg)) {
+//        emit(warnReceived_, 1);
+//
+//        veins::Coord uePos(0,0,0);
+//
+//        cModule* host = getParentModule();
+//        if (!host) {
+//            recordScalar("hostNotFound", 1);
+//        } else {
+//            cModule* mob = host->getSubmodule("veinsmobility");
+//            if (!mob) {
+//                recordScalar("mobilitySubmoduleNotFound", 1);
+//            } else {
+//                if (auto* tm = dynamic_cast<veins::TraCIMobility*>(mob)) {
+//                    uePos = tm->getPositionAt(simTime());
+//                } else if (auto* bm = dynamic_cast<veins::BaseMobility*>(mob)) {
+//                    uePos = bm->getPositionAt(simTime());
+//                } else {
+//                    recordScalar("mobilityTypeUnexpected", 1);
+//                }
+//            }
+//        }
+//
+//        if (uePos == veins::Coord(0,0,0)) {
+//            recordScalar("warnPosLookupFailed", 1);
+//        }
+//
+//        // recover RSU "position" from w->lat/w->lon (used as fixed-point XY)
+//        constexpr double SCALE = 1e6; // must match RSU side
+//        veins::Coord rsuPos(
+//            static_cast<double>(w->getLat()) / SCALE,
+//            static_cast<double>(w->getLon()) / SCALE,
+//            0.0
+//        );
+//
+//        double dMeters = uePos.distance(rsuPos);
+//        emit(rxWarnDist_, dMeters);
+//        lastIcaDist_ = dMeters;
+//
+//        const uint8_t seq = static_cast<uint8_t>(w->getMsgCnt());
+//
+//        if (lastIcaSeq_ < 0) {
+//            // first ever ICA
+//            lastIcaSeq_  = seq;
+//            icaExpected_ += 1;
+//            icaReceived_ += 1;
+//            emit(warnPdrSample_, 1);
+//            emit(warnPdrDistance_, dMeters);
+//            delete w;
+//            return;
+//        }
+//
+//        const uint8_t last = static_cast<uint8_t>(lastIcaSeq_);
+//        const uint8_t diff = static_cast<uint8_t>(seq - last); // modulo-256
+//
+//        if (diff == 0) {
+//            delete w;
+//            return;
+//        }
+//
+//        if (diff <= 128) {
+//            const int missed = static_cast<int>(diff) - 1;
+//            icaExpected_ += static_cast<long>(diff);
+//            icaReceived_ += 1;
+//
+//            // account for misses at last known distance
+//            for (int i = 0; i < missed; ++i) {
+//                emit(warnPdrSample_, 0);
+//                emit(warnPdrDistance_, lastIcaDist_);
+//            }
+//            // account for this received one
+//            emit(warnPdrSample_, 1);
+//            emit(warnPdrDistance_, dMeters);
+//
+//            lastIcaSeq_ = seq;  // advance baseline
+//        } else {
+//            // old/out-of-order (<~128 behind): ignore for loss accounting
+//            // (keeps PDR stable against late frames)
+//        }
+//
+//        delete w;
+//        return;
+//    }
+    else if (auto* s = dynamic_cast<IcaSpdu*>(msg)) {
+        // 1) distance to RSU from payload’s srcX/srcY
         emit(warnReceived_, 1);
 
         veins::Coord uePos(0,0,0);
@@ -147,11 +254,13 @@ void Mode4App::handleLowerMessage(cMessage* msg)
             recordScalar("warnPosLookupFailed", 1);
         }
 
+        const IcaWarn& w = s->getWarn();
+
         // recover RSU "position" from w->lat/w->lon (used as fixed-point XY)
         constexpr double SCALE = 1e6; // must match RSU side
         veins::Coord rsuPos(
-            static_cast<double>(w->getLat()) / SCALE,
-            static_cast<double>(w->getLon()) / SCALE,
+            static_cast<double>(w.getLat()) / SCALE,
+            static_cast<double>(w.getLon()) / SCALE,
             0.0
         );
 
@@ -159,50 +268,69 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         emit(rxWarnDist_, dMeters);
         lastIcaDist_ = dMeters;
 
-        const uint8_t seq = static_cast<uint8_t>(w->getMsgCnt());
 
-        if (lastIcaSeq_ < 0) {
-            // first ever ICA
-            lastIcaSeq_  = seq;
-            icaExpected_ += 1;
-            icaReceived_ += 1;
-            emit(warnPdrSample_, 1);
-            emit(warnPdrDistance_, dMeters);
-            delete w;
-            return;
+
+//        veins::Coord uePos(0,0,0);
+//        if (auto* host = getParentModule()->getParentModule()) {
+//            if (auto* m = host->getSubmodule("veinsmobility")) {
+//                if (auto* tm = dynamic_cast<veins::TraCIMobility*>(m))
+//                    uePos = tm->getPositionAt(simTime());
+//                else if (auto* bm = dynamic_cast<veins::BaseMobility*>(m))
+//                    uePos = bm->getPositionAt(simTime());
+//            }
+//        }
+//        const IcaWarn& w = s->getWarn();
+//        veins::Coord rsuPos(w.getSrcX(), w.getSrcY(), 0.0);
+//        const double dMeters = uePos.distance(rsuPos);
+//        emit(rxWarnDist_, dMeters);
+//        lastIcaDist_ = dMeters;
+
+        veins::Coord rsuPos1(w.getSrcX(), w.getSrcY(), 0.0);
+        const double dMeters1 = uePos.distance(rsuPos1);
+
+        if (dMeters1 == dMeters) {
+                recordScalar("NoSameDistance", 1);
+            }
+
+        const std::string bodyHex = icaBodyHex(w);
+        std::vector<uint8_t> pkBytes(s->getCert().getPublicKeyArraySize());
+        for (size_t i = 0; i < pkBytes.size(); ++i) pkBytes[i] = s->getCert().getPublicKey(i);
+        const std::string pubKeyHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
+
+        std::vector<uint8_t> sigBytes(s->getSignatureArraySize());
+        for (size_t i = 0; i < sigBytes.size(); ++i) sigBytes[i] = s->getSignature(i);
+        const std::string sigHex = pqcdsa::toHex(sigBytes.data(), sigBytes.size());
+
+        const bool ok = pqcdsa::verify(bodyHex, sigHex, pubKeyHex);
+        if (ok) emit(warnVerified_, 1);
+
+        // 3) PDR accounting with 8-bit wrap (python sends msgCnt = seq % 256)
+        const int seq = w.getMsgCnt() & 0xff;
+        long delta = 1;  // how many packets advanced since last (mod 256)
+        if (lastIcaSeq_ >= 0) {
+            delta = (seq - lastIcaSeq_ + 256) % 256;
+            if (delta == 0) delta = 1; // duplicate or resync -> treat as 1 step
         }
-
-        const uint8_t last = static_cast<uint8_t>(lastIcaSeq_);
-        const uint8_t diff = static_cast<uint8_t>(seq - last); // modulo-256
-
-        if (diff == 0) {
-            delete w;
-            return;
-        }
-
-        if (diff <= 128) {
-            const int missed = static_cast<int>(diff) - 1;
-            icaExpected_ += static_cast<long>(diff);
-            icaReceived_ += 1;
-
-            // account for misses at last known distance
-            for (int i = 0; i < missed; ++i) {
+        // expected += delta, received += 1, and mark 'misses' at last known distance
+        icaExpected_ += delta;
+        if (delta > 1) {
+            emit(warnExpected_, delta - 1);
+            for (long i = 0; i < delta - 1; ++i) {
                 emit(warnPdrSample_, 0);
                 emit(warnPdrDistance_, lastIcaDist_);
             }
-            // account for this received one
-            emit(warnPdrSample_, 1);
-            emit(warnPdrDistance_, dMeters);
-
-            lastIcaSeq_ = seq;  // advance baseline
-        } else {
-            // old/out-of-order (<~128 behind): ignore for loss accounting
-            // (keeps PDR stable against late frames)
         }
+        icaReceived_ += 1;
+        lastIcaSeq_ = seq;
 
-        delete w;
+        // 4) log one “hit” sample at this distance
+        emit(warnPdrSample_, ok ? 1 : 0);     // optional: only count verified hits
+        emit(warnPdrDistance_, dMeters);
+
+        delete s;
         return;
-    }else {
+    }
+    else {
         SPDU* spdu = dynamic_cast<SPDU*>(msg);
         if (!spdu) {
             EV << "Received a non-SPDU message, deleting." << endl;
@@ -233,7 +361,6 @@ void Mode4App::handleLowerMessage(cMessage* msg)
             // Only count the event if the signature was valid
             emit(verified_, long(1));
         }
-        //bool ok = pqcdsa::verify(bsmHex, spdu->getSignatureHex(), spdu->getCert().getPublicKeyHex());
 
         EV_INFO << "RX BSM#" << b.getMsgId() << " from " << spdu->getCert().getSubjectId() << "  -->  " << (ok ? "VALID" : "INVALID") << '\n';
 
