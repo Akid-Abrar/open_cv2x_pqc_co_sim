@@ -18,13 +18,18 @@ simple Mode4RSUApp like Mode4BaseApp
         
         @signal[rsuReceivedMsg];
         @statistic[rsuReceivedMsg](title="Messages Received at RSU"; unit=""; source="rsuReceivedMsg"; record=sum,vector);
+        
         @signal[rsuVerifiedMsg]; 
         @statistic[rsuVerifiedMsg](title="Total Msg Verified at RSU"; unit=""; source="rsuVerifiedMsg"; record=sum,vector);  
+     	
      	@signal[cbr];
         @statistic[cbr](title="Channel Busy Ratio"; unit=""; source="cbr"; record=vector); 
 
         @signal[numBroadcasted];
         @statistic[numBroadcasted](title="ICA broadcasted"; unit=""; source="numBroadcasted"; record=sum,vector); 
+        
+        @signal[icaSignMs];
+        @statistic[icaSignMs](title="ICA sign time"; unit="ms"; source="icaSignMs"; record=vector,mean);
     gates:
         input lowerGateIn;
         output lowerGateOut;

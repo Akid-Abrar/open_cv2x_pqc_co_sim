@@ -5,6 +5,7 @@
 #include "apps/mode4App/IcaWarn_m.h"          // the new message
 #include <nlohmann/json.hpp>
 using nlohmann::json;
+#include <chrono>
 
 #include "veins/base/modules/BaseMobility.h"
 #include "veins/base/utils/Coord.h"
@@ -122,6 +123,7 @@ void Mode4RSUApp::initialize(int stage)
         rsuVerifiedMsg = registerSignal("rsuVerifiedMsg");
         cbr_ = registerSignal("cbr");
         numBroadcasted = registerSignal("numBroadcasted");
+        icaSignMs = registerSignal("icaSignMs");
 
     }
 }
@@ -172,7 +174,11 @@ void Mode4RSUApp::broadcastIca(IcaWarn* w)
 
     // 2) build canonical body and sign with RSU’s private key
     const std::string bodyHex = icaBodyHex(*w);
+    auto start_time = std::chrono::high_resolution_clock::now();
     const std::string sigHex  = pqcdsa::sign(bodyHex, keyPair_.privHex);
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration_time = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+    emit(icaSignMs, duration_time/1000.0);
 
     // 3) assemble IcaSpdu (payload + signature + cert)
     auto* spdu = new IcaSpdu("ICA_SPDU");
