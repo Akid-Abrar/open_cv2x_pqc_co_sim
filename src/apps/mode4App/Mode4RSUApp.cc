@@ -100,6 +100,7 @@ void Mode4RSUApp::initialize(int stage)
 
         // after your existing signal registrations…
         keyPair_ = pqcdsa::generateKeyPair();
+        EV_FATAL << "Public Key Length: " << keyPair_.pubKeyLength << " bytes" << endl;
         auto pkBytes = pqcdsa::fromHex(keyPair_.pubHex);
 
         cert_.setSubjectId(getParentModule()->getParentModule()->getFullName());
