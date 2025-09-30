@@ -5,3 +5,4 @@
 5. Add the INET and updated veins in the Project References
 6. Install liboqs from https://openquantumsafe.org/liboqs/getting-started.html
 7. To add libopqs in the project, go to Properties -> OMNeT++ -> Makemake .Then select source and 	go to Options -> Link. Click the add button and type oqs in the diaglogue box and press ok. 	Add crypto and pthread similarly. Finally, go to Preview -> add ( -I/usr/local/include)
+8. sudo apt-get install nlohmann-json3-dev
