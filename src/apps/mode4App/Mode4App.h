@@ -69,6 +69,8 @@ protected:
     simsignal_t warnPdrSample_;      // new: emits 1 for recv, 0 for miss
     simsignal_t warnPdrDistance_;    // new: emits distance for each sample
     simsignal_t rxWarnDist_;
+    simsignal_t icaVerifyMs_ = SIMSIGNAL_NULL;
+    simsignal_t icaDelayMs_  = SIMSIGNAL_NULL;
 
     cMessage *selfSender_;
 

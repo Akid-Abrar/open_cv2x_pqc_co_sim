@@ -27,6 +27,7 @@ class Mode4RSUApp : public Mode4BaseApp
     simsignal_t rsuVerifiedMsg;
     simsignal_t cbr_;
     simsignal_t numBroadcasted;
+    simsignal_t icaSignMs = SIMSIGNAL_NULL;
 
     /* crypto */
     pqcdsa::KeyPair keyPair_;

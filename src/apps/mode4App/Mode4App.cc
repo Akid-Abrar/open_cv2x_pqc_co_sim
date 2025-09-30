@@ -27,7 +27,7 @@
 #include "veins/base/modules/BaseMobility.h"
 #include "veins/base/utils/Coord.h"
 #include "apps/mode4App/IcaSpdu_m.h"
-
+#include <chrono>
 
 //#include "stack/phy/layer/LtePhyBase.h"
 //#include "common/LteCommon.h"
@@ -75,12 +75,12 @@ void Mode4App::initialize(int stage)
 
         // Now, print the lengths using EV_INFO
         EV_FATAL << "--- PQC Key Information ---" << endl;
-        EV_FATAL << "Falcon-512 Public Key Length: " << keyPair.pubKeyLength << " bytes" << endl;
-        EV_FATAL << "Falcon-512 Public Key Length after string: " << strlen(keyPair.pubHex.c_str()) << " bytes" << endl;
+        EV_FATAL << "Public Key Length: " << keyPair.pubKeyLength << " bytes" << endl;
+        EV_FATAL << "Public Key Length after string: " << strlen(keyPair.pubHex.c_str()) << " bytes" << endl;
         EV_FATAL << "---------------------------" << endl;
         Cert.setSubjectId(getParentModule()->getParentModule()->getFullName());
 //        Cert.setAlgoName("Falcon-512");
-        Cert.setAlgoName("Dilithium 2");
+        //Cert.setAlgoName("Dilithium 2");
         //Cert.setPublicKeyHex(keyPair.pubHex.c_str());
 //        std::vector<uint8_t> pubKeyBinary = pqcdsa::fromHex(keyPair.pubHex);
 //        Cert.setPublicKeyArraySize(keyPair.pubKeyLength);
@@ -128,6 +128,8 @@ void Mode4App::initialize(int stage)
         warnPdrSample_ = registerSignal("warnPdrSample");    // 1/0
         warnPdrDistance_ = registerSignal("warnPdrDistance");  // meters
         rxWarnDist_ = registerSignal("rxWarnDist");   // receive distance in meters
+        icaVerifyMs_ = registerSignal("icaVerifyMs");
+        icaDelayMs_  = registerSignal("icaDelayMs");
 
         //double delay = 0.001 * intuniform(0, 1000, 0);
         //scheduleAt((simTime() + delay).trunc(SIMTIME_MS), selfSender_);
@@ -301,7 +303,11 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         for (size_t i = 0; i < sigBytes.size(); ++i) sigBytes[i] = s->getSignature(i);
         const std::string sigHex = pqcdsa::toHex(sigBytes.data(), sigBytes.size());
 
+        auto start_time = std::chrono::high_resolution_clock::now();
         const bool ok = pqcdsa::verify(bodyHex, sigHex, pubKeyHex);
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration_time = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+        emit(icaVerifyMs_, duration_time/1000.0);
         if (ok) emit(warnVerified_, 1);
 
         // 3) PDR accounting with 8-bit wrap (python sends msgCnt = seq % 256)
