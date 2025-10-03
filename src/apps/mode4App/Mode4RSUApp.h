@@ -29,12 +29,10 @@ class Mode4RSUApp : public Mode4BaseApp
     simsignal_t numBroadcasted;
     simsignal_t icaSignMs = SIMSIGNAL_NULL;
 
-    /* crypto */
     pqcdsa::KeyPair keyPair_;
     Certificate     cert_;
     int             warnSeq_ = 0;
 
-    // NEW: external trigger socket
     int          sockFd_ = -1;
     sockaddr_in  sockAddr_{};
     cMessage*    sockPollEvt_ = nullptr;
@@ -44,9 +42,8 @@ class Mode4RSUApp : public Mode4BaseApp
 
     virtual void initialize(int stage) override;
     virtual void handleLowerMessage(cMessage* msg) override;
-    virtual void handleSelfMessage(cMessage *msg) override; // Required by base class
+    virtual void handleSelfMessage(cMessage *msg) override;
 
-    // Helpers
     void openNonBlockingUdp_(int port);
     void socketRead();
     void broadcastIca(IcaWarn* w);

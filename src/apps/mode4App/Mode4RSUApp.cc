@@ -6,6 +6,10 @@
 #include <nlohmann/json.hpp>
 using nlohmann::json;
 #include <chrono>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+
 
 #include "veins/base/modules/BaseMobility.h"
 #include "veins/base/utils/Coord.h"
@@ -13,6 +17,36 @@ using nlohmann::json;
 
 Define_Module(Mode4RSUApp);
 //using namespace lte::apps::mode4App;
+
+static inline void appendLine(const std::string& path, const std::string& line) {
+    std::ofstream f(path, std::ios::out | std::ios::app);
+    if (f.is_open()) f << line << '\n';
+}
+
+static inline void appendCsv(const std::string& path,
+                             const std::string& header,
+                             const std::vector<std::string>& cols)
+{
+    // Write header once if file is new/empty
+    bool writeHeader = false;
+    {
+        std::ifstream fin(path, std::ios::in | std::ios::binary);
+        writeHeader = !fin.good() || fin.peek() == std::ifstream::traits_type::eof();
+    }
+
+    std::ofstream f(path, std::ios::out | std::ios::app);
+    if (!f.is_open()) return;
+
+    if (writeHeader) f << header << '\n';
+
+    // Simple CSV join (fields we use are numeric or hex strings, so no quoting needed)
+    for (size_t i = 0; i < cols.size(); ++i) {
+        if (i) f << ',';
+        f << cols[i];
+    }
+    f << '\n';
+}
+
 
 // helper: JSON -> IcaWarn
 static IcaWarn* makeIcaWarnFromJson(const json& j)
@@ -259,6 +293,9 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     }
 
     emit(rsuReceivedMsg, 1);
+    const char* rsuName = getParentModule()->getFullName();     // rsu[0]
+//    std::string path = std::string("bsm_rx_") + rsuName + ".txt";
+    std::string path = std::string("bsm_rx_") + rsuName + ".csv";
 
     SPDU* spdu = dynamic_cast<SPDU*>(msg);
     if (!spdu) {
@@ -266,6 +303,7 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
         delete msg;
         return;
     }
+    const double delay_ms = (simTime() - spdu->getTimestamp()).dbl() * 1000.0;
 
     // Verification (unchanged)
     const BSM& b = spdu->getBsm();
@@ -288,6 +326,39 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     EV_INFO << "RSU RX BSM#" << b.getMsgId()
             << " from " << spdu->getCert().getSubjectId()
             << "  -->  Verification: " << (ok ? "VALID" : "INVALID") << '\n';
+
+//    std::ostringstream line;
+//    line << std::fixed << std::setprecision(3)
+//         << "t=" << simTime().dbl()
+//         << ", msgId=" << b.getMsgId()
+//         << ", lat=" << b.getLatitude()
+//         << ", lon=" << b.getLongitude()
+//         << ", heading=" << b.getHeading()
+//         << ", speed=" << b.getSpeed()
+//         << ", delay_ms=" << delay_ms
+//         << ", verified=" << (ok ? 1 : 0);
+//    appendLine(path, line.str());
+    const std::string header =
+        "t,rsu,msgId,lat,lon,heading,speed,delay_ms,verified";
+
+    std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
+    std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLatitude();
+    std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLongitude();
+    std::ostringstream hdg; hdg << std::fixed << std::setprecision(6) << b.getHeading();
+    std::ostringstream spd; spd << std::fixed << std::setprecision(6) << b.getSpeed();
+    std::ostringstream dms; dms << std::fixed << std::setprecision(3) << delay_ms;
+
+    appendCsv(path, header, {
+        t.str(),
+        rsuName,
+        std::to_string(b.getMsgId()),
+        lat.str(),
+        lon.str(),
+        hdg.str(),
+        spd.str(),
+        dms.str(),
+        (ok ? "1" : "0")
+    });
 
     delete spdu;
 }
