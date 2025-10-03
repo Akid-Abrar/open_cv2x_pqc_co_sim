@@ -63,11 +63,11 @@ protected:
     long   icaReceived_       = 0;
     double lastIcaDist_       = 0;   // last known distance to RSU
 
-    simsignal_t warnReceived_;       // you already had it
-    simsignal_t warnVerified_;       // (later)
-    simsignal_t warnExpected_;       // new: count expected (recv + miss)
-    simsignal_t warnPdrSample_;      // new: emits 1 for recv, 0 for miss
-    simsignal_t warnPdrDistance_;    // new: emits distance for each sample
+    simsignal_t warnReceived_;
+    simsignal_t warnVerified_;
+    simsignal_t warnExpected_;
+    simsignal_t warnPdrSample_;
+    simsignal_t warnPdrDistance_;
     simsignal_t rxWarnDist_;
     simsignal_t icaVerifyMs_ = SIMSIGNAL_NULL;
     simsignal_t icaDelayMs_  = SIMSIGNAL_NULL;
@@ -77,46 +77,24 @@ protected:
     LteBinder* binder_;
     MacNodeId nodeId_;
 
-    /* crypto */
     pqcdsa::KeyPair keyPair;
     Certificate     Cert;
 
-    /* timers */
     cMessage* sendEvt = nullptr;
     int       bsmSeq  = 0;
 
    int numInitStages() const { return inet::NUM_INIT_STAGES; }
 
-   /**
-    * Grabs NED parameters, initializes gates
-    * and the TTI self message
-    */
    void initialize(int stage);
 
    void handleLowerMessage(cMessage* msg);
 
-
-   /**
-    * Statistics recording
-    */
    void finish();
 
-   /**
-    * Main loop of the Mac level, calls the scheduler
-    * and every other function every TTI : must be reimplemented
-    * by derivate classes
-    */
    void handleSelfMessage(cMessage* msg);
 
-   /**
-    * sendLowerPackets() is used
-    * to send packets to lower layer
-    *
-    * @param pkt Packet to send
-    */
    void sendLowerPackets(cPacket* pkt);
 
-   // --- AKID
    void generateAndSendSPDU();
 
 };

@@ -28,33 +28,56 @@
 #include "veins/base/utils/Coord.h"
 #include "apps/mode4App/IcaSpdu_m.h"
 #include <chrono>
-
-//#include "stack/phy/layer/LtePhyBase.h"
-//#include "common/LteCommon.h"
-//#include "veins/modules/mobility/traci/TraCIMobility.h"
-//#include "veins/base/modules/BaseMobility.h"
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 
 Define_Module(Mode4App);
 
-//using namespace lte::apps::mode4App;
+static inline void appendLine(const std::string& path, const std::string& line) {
+    std::ofstream f(path, std::ios::out | std::ios::app);
+    if (f.is_open()) f << line << '\n';
+}
 
-// Canonical hex body for ICA signing/verifying (RSU and UE must match 1:1)
+static inline void appendCsv(const std::string& path,
+                             const std::string& header,
+                             const std::vector<std::string>& cols)
+{
+    // Write header once if file is new/empty
+    bool writeHeader = false;
+    {
+        std::ifstream fin(path, std::ios::in | std::ios::binary);
+        writeHeader = !fin.good() || fin.peek() == std::ifstream::traits_type::eof();
+    }
+
+    std::ofstream f(path, std::ios::out | std::ios::app);
+    if (!f.is_open()) return;
+
+    if (writeHeader) f << header << '\n';
+
+    // Simple CSV join (fields we use are numeric or hex strings, so no quoting needed)
+    for (size_t i = 0; i < cols.size(); ++i) {
+        if (i) f << ',';
+        f << cols[i];
+    }
+    f << '\n';
+}
+
+
 static std::string icaBodyHex(const IcaWarn& w)
 {
-    // A simple, stable CSV; only fields that matter for integrity & replay.
-    // Do NOT include genTime (changes at receiver) or byteLength, etc.
     std::ostringstream os;
     os << w.getMsgCnt() << ','
        << w.getIntersectionId() << ','
        << w.getApproach() << ','
        << w.getLane() << ','
        << w.getEventFlag() << ','
-       << w.getSrcX() << ','        // OMNeT world X
-       << w.getSrcY() << ','        // OMNeT world Y
-       << w.getLat() << ','         // optional coarse position (kept as is)
+       << w.getSrcX() << ','
+       << w.getSrcY() << ','
+       << w.getLat() << ','
        << w.getLon() << ','
-       << w.getTempId();            // hex string for TID
+       << w.getTempId();
 
     return pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 }
@@ -73,33 +96,22 @@ void Mode4App::initialize(int stage)
 
         keyPair = pqcdsa::generateKeyPair();
 
-        // Now, print the lengths using EV_INFO
         EV_FATAL << "--- PQC Key Information ---" << endl;
         EV_FATAL << "Public Key Length: " << keyPair.pubKeyLength << " bytes" << endl;
         EV_FATAL << "Public Key Length after string: " << strlen(keyPair.pubHex.c_str()) << " bytes" << endl;
         EV_FATAL << "---------------------------" << endl;
         Cert.setSubjectId(getParentModule()->getParentModule()->getFullName());
-//        Cert.setAlgoName("Falcon-512");
-        //Cert.setAlgoName("Dilithium 2");
-        //Cert.setPublicKeyHex(keyPair.pubHex.c_str());
-//        std::vector<uint8_t> pubKeyBinary = pqcdsa::fromHex(keyPair.pubHex);
-//        Cert.setPublicKeyArraySize(keyPair.pubKeyLength);
-//        for (size_t i = 0; i < 897; ++i) {
-//            Cert.setPublicKey(i, pubKeyBinary[i]); // Set each byte of the publicKey array
-//        }
-        auto pkBytes = pqcdsa::fromHex(keyPair.pubHex);            // binary vector
+
+        auto pkBytes = pqcdsa::fromHex(keyPair.pubHex);
         Cert.setPublicKeyArraySize(pkBytes.size());
         for (size_t i = 0; i < pkBytes.size(); ++i)
             Cert.setPublicKey(i, pkBytes[i]);
         Cert.setNotBefore(0);
         Cert.setNotAfter(9223372036854775807LL);
-        // --- END ADDED ---
 
-        // Schedule the first BSM/SPDU transmission
         bsmSeq = 0;
         sendEvt = new cMessage("sendSPDU");
-        //double startTime = par("startTime").doubleValue();
-        scheduleAt(simTime() + 1, sendEvt); // Start sending after 1 second
+        scheduleAt(simTime() + 1, sendEvt);
 
 
         selfSender_ = NULL;
@@ -125,14 +137,11 @@ void Mode4App::initialize(int stage)
         warnReceived_ = registerSignal("warnReceived");
         warnVerified_     = registerSignal("warnVerified");
         warnExpected_ = registerSignal("warnExpected");
-        warnPdrSample_ = registerSignal("warnPdrSample");    // 1/0
-        warnPdrDistance_ = registerSignal("warnPdrDistance");  // meters
-        rxWarnDist_ = registerSignal("rxWarnDist");   // receive distance in meters
+        warnPdrSample_ = registerSignal("warnPdrSample");
+        warnPdrDistance_ = registerSignal("warnPdrDistance");
+        rxWarnDist_ = registerSignal("rxWarnDist");
         icaVerifyMs_ = registerSignal("icaVerifyMs");
         icaDelayMs_  = registerSignal("icaDelayMs");
-
-        //double delay = 0.001 * intuniform(0, 1000, 0);
-        //scheduleAt((simTime() + delay).trunc(SIMTIME_MS), selfSender_);
     }
 }
 
@@ -231,6 +240,10 @@ void Mode4App::handleLowerMessage(cMessage* msg)
     else if (auto* s = dynamic_cast<IcaSpdu*>(msg)) {
         // 1) distance to RSU from payload’s srcX/srcY
         emit(warnReceived_, 1);
+        const char* hostName = getParentModule()->getFullName();
+        //std::string path = std::string("ica_rx_") + hostName + ".txt";
+        std::string path = std::string("ica_rx_") + hostName + ".csv";
+        const double delay_ms = (simTime() - s->getTimestamp()).dbl() * 1000.0;
 
         veins::Coord uePos(0,0,0);
 
@@ -258,8 +271,7 @@ void Mode4App::handleLowerMessage(cMessage* msg)
 
         const IcaWarn& w = s->getWarn();
 
-        // recover RSU "position" from w->lat/w->lon (used as fixed-point XY)
-        constexpr double SCALE = 1e6; // must match RSU side
+        constexpr double SCALE = 1e6;
         veins::Coord rsuPos(
             static_cast<double>(w.getLat()) / SCALE,
             static_cast<double>(w.getLon()) / SCALE,
@@ -333,6 +345,53 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         emit(warnPdrSample_, ok ? 1 : 0);     // optional: only count verified hits
         emit(warnPdrDistance_, dMeters);
 
+//        std::ostringstream line;
+//        line << std::fixed << std::setprecision(3)
+//             << "t=" << simTime().dbl()
+//             << ", seq=" << (w.getMsgCnt() & 0xff)
+//             << ", intId=" << w.getIntersectionId()
+//             << ", lane=" << w.getLane()
+//             << ", approach=" << w.getApproach()
+//             << ", flag=" << w.getEventFlag()
+//             << ", srcX=" << w.getSrcX()
+//             << ", srcY=" << w.getSrcY()
+//             << ", dist_m=" << dMeters
+//             << ", delay_ms=" << delay_ms
+//             << ", verified=" << (ok ? 1 : 0)
+//             << ", tempId=" << w.getTempId();
+//        appendLine(path, line.str());
+
+        // header
+        const std::string header =
+            "t,host,seq,intId,lane,approach,flag,srcX,srcY,lat,lon,dist_m,delay_ms,verified,tempId";
+
+        // row values
+        std::ostringstream t;       t      << std::fixed << std::setprecision(6) << simTime().dbl();
+        std::ostringstream srcX;    srcX   << std::fixed << std::setprecision(6) << w.getSrcX();
+        std::ostringstream srcY;    srcY   << std::fixed << std::setprecision(6) << w.getSrcY();
+        std::ostringstream lat;     lat    << w.getLat();
+        std::ostringstream lon;     lon    << w.getLon();
+        std::ostringstream dist;    dist   << std::fixed << std::setprecision(3) << dMeters;
+        std::ostringstream dms;     dms    << std::fixed << std::setprecision(3) << delay_ms;
+
+        appendCsv(path, header, {
+            t.str(),
+            hostName,
+            std::to_string(w.getMsgCnt() & 0xff),
+            std::to_string(w.getIntersectionId()),
+            std::to_string(w.getLane()),
+            std::to_string(w.getApproach()),
+            std::to_string(w.getEventFlag()),
+            srcX.str(),
+            srcY.str(),
+            lat.str(),
+            lon.str(),
+            dist.str(),
+            dms.str(),
+            (ok ? "1" : "0"),
+            std::string(w.getTempId())
+        });
+
         delete s;
         return;
     }
@@ -344,6 +403,12 @@ void Mode4App::handleLowerMessage(cMessage* msg)
             return;
         }
         simtime_t delay = simTime() - spdu->getTimestamp();
+
+        const char* hostName = getParentModule()->getFullName();
+//        std::string path = std::string("bsm_rx_") + hostName + ".txt";
+        std::string path = std::string("bsm_rx_") + hostName + ".csv";
+        const double delay_ms = (simTime() - spdu->getTimestamp()).dbl() * 1000.0;
+
         emit(delay_, delay);
         emit(received_, long(1));
 
@@ -367,6 +432,39 @@ void Mode4App::handleLowerMessage(cMessage* msg)
             // Only count the event if the signature was valid
             emit(verified_, long(1));
         }
+
+//        std::ostringstream line;
+//        line << std::fixed << std::setprecision(3)
+//             << "t=" << simTime().dbl()
+//             << ", msgId=" << b.getMsgId()
+//             << ", lat=" << b.getLatitude()
+//             << ", lon=" << b.getLongitude()
+//             << ", heading=" << b.getHeading()
+//             << ", speed=" << b.getSpeed()
+//             << ", delay_ms=" << delay_ms
+//             << ", verified=" << (ok ? 1 : 0);
+//        appendLine(path, line.str());
+
+        const std::string header =
+                "t,host,msgId,lat,lon,heading,speed,delay_ms,verified";
+        std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
+        std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLatitude();
+        std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLongitude();
+        std::ostringstream hdg; hdg << std::fixed << std::setprecision(6) << b.getHeading();
+        std::ostringstream spd; spd << std::fixed << std::setprecision(6) << b.getSpeed();
+        std::ostringstream dms; dms << std::fixed << std::setprecision(3) << delay_ms;
+
+        appendCsv(path, header, {
+            t.str(),
+            hostName,
+            std::to_string(b.getMsgId()),
+            lat.str(),
+            lon.str(),
+            hdg.str(),
+            spd.str(),
+            dms.str(),
+            (ok ? "1" : "0")
+        });
 
         EV_INFO << "RX BSM#" << b.getMsgId() << " from " << spdu->getCert().getSubjectId() << "  -->  " << (ok ? "VALID" : "INVALID") << '\n';
 
