@@ -10,18 +10,13 @@ using nlohmann::json;
 #include <iomanip>
 #include <sstream>
 
-
+#include "veins/modules/mobility/traci/TraCIMobility.h"
 #include "veins/base/modules/BaseMobility.h"
 #include "veins/base/utils/Coord.h"
 #include "apps/mode4App/IcaSpdu_m.h"
 
 Define_Module(Mode4RSUApp);
 //using namespace lte::apps::mode4App;
-
-static inline void appendLine(const std::string& path, const std::string& line) {
-    std::ofstream f(path, std::ios::out | std::ios::app);
-    if (f.is_open()) f << line << '\n';
-}
 
 static inline void appendCsv(const std::string& path,
                              const std::string& header,
@@ -46,7 +41,6 @@ static inline void appendCsv(const std::string& path,
     }
     f << '\n';
 }
-
 
 // helper: JSON -> IcaWarn
 static IcaWarn* makeIcaWarnFromJson(const json& j)
@@ -84,8 +78,6 @@ static IcaWarn* makeIcaWarnFromJson(const json& j)
 // Canonical hex body for ICA signing/verifying (RSU and UE must match 1:1)
 static std::string icaBodyHex(const IcaWarn& w)
 {
-    // A simple, stable CSV; only fields that matter for integrity & replay.
-    // Do NOT include genTime (changes at receiver) or byteLength, etc.
     std::ostringstream os;
     os << w.getMsgCnt() << ','
        << w.getIntersectionId() << ','
@@ -101,6 +93,17 @@ static std::string icaBodyHex(const IcaWarn& w)
     return pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 }
 
+static veins::Coord getNodePositionNow(cModule* context, simtime_t t) {
+    for (cModule* m = context; m; m = m->getParentModule()) {
+        if (auto* mob = m->getSubmodule("veinsmobility")) {
+            if (auto* tm = dynamic_cast<veins::TraCIMobility*>(mob))
+                return tm->getPositionAt(t);
+            if (auto* bm = dynamic_cast<veins::BaseMobility*>(mob))
+                return bm->getPositionAt(t);
+        }
+    }
+    return veins::Coord(0,0,0); // fallback if not found
+}
 
 void Mode4RSUApp::openNonBlockingUdp_(int port)
 {
@@ -135,6 +138,9 @@ void Mode4RSUApp::initialize(int stage)
 
         // after your existing signal registrations…
         keyPair_ = pqcdsa::generateKeyPair();
+        std::string tag   = pqcdsa::algoTagFromKey(keyPair_.pubHex);
+        std::string label = pqcdsa::prettyNameFromTag(tag);
+        cert_.setAlgoName(label.c_str());
         EV_FATAL << "Public Key Length: " << keyPair_.pubKeyLength << " bytes" << endl;
         auto pkBytes = pqcdsa::fromHex(keyPair_.pubHex);
 
@@ -244,8 +250,6 @@ void Mode4RSUApp::broadcastIca(IcaWarn* w)
     delete w; // we copied it into spdu
 }
 
-
-
 void Mode4RSUApp::socketRead()
 {
     if (sockFd_ < 0) return;
@@ -305,8 +309,17 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     }
     const double delay_ms = (simTime() - spdu->getTimestamp()).dbl() * 1000.0;
 
-    // Verification (unchanged)
+    // RSU receiver position (meters)
+    veins::Coord rsu = getNodePositionNow(this, simTime());
+
+    // Transmitter position (meters) carried in BSM
     const BSM& b = spdu->getBsm();
+    veins::Coord tx(b.getLatitude(), b.getLongitude(), 0.0);
+
+    // Distance in meters
+    double dist_m = rsu.distance(tx);
+
+    // Verification
     std::ostringstream os;
     os << b.getMsgId() << ',' << b.getLatitude() << ',' << b.getLongitude() << ',' << b.getHeading() << ',' << b.getSpeed();
     std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
@@ -314,7 +327,8 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     const Certificate &c = spdu->getCert();
     std::vector<uint8_t> pkBytes(c.getPublicKeyArraySize());
     for (size_t i = 0; i < pkBytes.size(); ++i) pkBytes[i] = c.getPublicKey(i);
-    std::string pubKeyHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
+    std::string rawPubHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
+    std::string pubKeyHex = pqcdsa::prefixKeyWithCertAlgo(rawPubHex, c.getAlgoName());
 
     std::vector<uint8_t> sigBytes(spdu->getSignatureArraySize());
     for (size_t i = 0; i < sigBytes.size(); ++i) sigBytes[i] = spdu->getSignature(i);
@@ -327,38 +341,37 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
             << " from " << spdu->getCert().getSubjectId()
             << "  -->  Verification: " << (ok ? "VALID" : "INVALID") << '\n';
 
-//    std::ostringstream line;
-//    line << std::fixed << std::setprecision(3)
-//         << "t=" << simTime().dbl()
-//         << ", msgId=" << b.getMsgId()
-//         << ", lat=" << b.getLatitude()
-//         << ", lon=" << b.getLongitude()
-//         << ", heading=" << b.getHeading()
-//         << ", speed=" << b.getSpeed()
-//         << ", delay_ms=" << delay_ms
-//         << ", verified=" << (ok ? 1 : 0);
-//    appendLine(path, line.str());
+    int certSize = spdu->getCert().getPublicKeyArraySize();   // 2) Certificate size (approximate)
+    int sigSize  = spdu->getSignatureArraySize();             // 3) Signature size
+    int spduSize = spdu->getByteLength();                     // 4) Total SPDU size
     const std::string header =
-        "t,rsu,msgId,lat,lon,heading,speed,delay_ms,verified";
+        "t,rsu,msgId,lat,lon,heading,speed,dist_m,delay_ms,verified,cert_size,sig_size,spdu_size,Algorithm";
 
+    std::string algoName = spdu->getCert().getAlgoName();
     std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
     std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLatitude();
     std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLongitude();
     std::ostringstream hdg; hdg << std::fixed << std::setprecision(6) << b.getHeading();
     std::ostringstream spd; spd << std::fixed << std::setprecision(6) << b.getSpeed();
     std::ostringstream dms; dms << std::fixed << std::setprecision(3) << delay_ms;
+    std::ostringstream dst; dst << std::fixed << std::setprecision(3) << dist_m;
 
     appendCsv(path, header, {
-        t.str(),
-        rsuName,
-        std::to_string(b.getMsgId()),
-        lat.str(),
-        lon.str(),
-        hdg.str(),
-        spd.str(),
-        dms.str(),
-        (ok ? "1" : "0")
-    });
+            t.str(),
+            rsuName,
+            std::to_string(b.getMsgId()),
+            lat.str(),
+            lon.str(),
+            hdg.str(),
+            spd.str(),
+            dst.str(),
+            dms.str(),
+            (ok ? "1" : "0"),
+            std::to_string(certSize),
+            std::to_string(sigSize),
+            std::to_string(spduSize),
+            algoName
+        });
 
     delete spdu;
 }

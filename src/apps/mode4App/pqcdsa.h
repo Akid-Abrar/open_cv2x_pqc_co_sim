@@ -47,22 +47,24 @@ struct KeyPair {
     size_t privKeyLength = 0;
 };
 
-/* Generate a key pair (algorithm is chosen by env var PQCDSA_ALGO:
-   "ecdsa", "falcon-512", "dilithium-2"; default "dilithium-2") */
+
 KeyPair generateKeyPair();
 
-/* Sign arbitrary data (dataHex = hex of message bytes). The algorithm
-   is inferred from the prefix inside privHex. */
 std::string sign(const std::string& dataHex, const std::string& privHex);
 
-/* Verify signature (sigHex) over dataHex. Algorithm inferred from pubHex. */
 bool verify(const std::string& dataHex, const std::string& sigHex, const std::string& pubHex);
 
-/* Hex helpers (now robust to prefixed strings in fromHex) */
 std::string toHex(const uint8_t* buf, size_t len);
+
 std::vector<uint8_t> fromHex(const std::string& maybePrefixedHex);
 
-} // namespace pqcdsa
+std::string algoTagFromKey(const std::string& prefixedHex);
+
+std::string prettyNameFromTag(const std::string& tag);
+
+std::string prefixKeyWithCertAlgo(const std::string& rawHex, const std::string& certAlgoName);
+
+}
 #endif
 
 

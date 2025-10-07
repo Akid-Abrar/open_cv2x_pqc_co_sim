@@ -1,24 +1,3 @@
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see http://www.gnu.org/licenses/.
-//
-
-/**
- * Mode4App is a new application developed to be used with Mode 4 based simulation
- * Author: Brian McCarthy
- * Email: b.mccarthy@cs.ucc.ie
- */
-
 #include "apps/mode4App/Mode4App.h"
 #include "common/LteControlInfo.h"
 #include "stack/phy/packet/cbr_m.h"
@@ -34,11 +13,6 @@
 
 
 Define_Module(Mode4App);
-
-static inline void appendLine(const std::string& path, const std::string& line) {
-    std::ofstream f(path, std::ios::out | std::ios::app);
-    if (f.is_open()) f << line << '\n';
-}
 
 static inline void appendCsv(const std::string& path,
                              const std::string& header,
@@ -82,6 +56,17 @@ static std::string icaBodyHex(const IcaWarn& w)
     return pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 }
 
+static veins::Coord getNodePositionNow(cModule* context, simtime_t t) {
+    for (cModule* m = context; m; m = m->getParentModule()) {
+        if (auto* mob = m->getSubmodule("veinsmobility")) {
+            if (auto* tm = dynamic_cast<veins::TraCIMobility*>(mob))
+                return tm->getPositionAt(t);
+            if (auto* bm = dynamic_cast<veins::BaseMobility*>(mob))
+                return bm->getPositionAt(t);
+        }
+    }
+    return veins::Coord(0,0,0); // fallback if not found
+}
 
 void Mode4App::initialize(int stage)
 {
@@ -95,6 +80,10 @@ void Mode4App::initialize(int stage)
     } else if (stage==inet::INITSTAGE_APPLICATION_LAYER) {
 
         keyPair = pqcdsa::generateKeyPair();
+
+        std::string tag   = pqcdsa::algoTagFromKey(keyPair.pubHex);
+        std::string label = pqcdsa::prettyNameFromTag(tag);
+        Cert.setAlgoName(label.c_str());
 
         EV_FATAL << "--- PQC Key Information ---" << endl;
         EV_FATAL << "Public Key Length: " << keyPair.pubKeyLength << " bytes" << endl;
@@ -309,7 +298,8 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         const std::string bodyHex = icaBodyHex(w);
         std::vector<uint8_t> pkBytes(s->getCert().getPublicKeyArraySize());
         for (size_t i = 0; i < pkBytes.size(); ++i) pkBytes[i] = s->getCert().getPublicKey(i);
-        const std::string pubKeyHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
+        const std::string rawPubHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
+        std::string pubKeyHex = pqcdsa::prefixKeyWithCertAlgo(rawPubHex, s->getCert().getAlgoName());
 
         std::vector<uint8_t> sigBytes(s->getSignatureArraySize());
         for (size_t i = 0; i < sigBytes.size(); ++i) sigBytes[i] = s->getSignature(i);
@@ -344,22 +334,6 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         // 4) log one “hit” sample at this distance
         emit(warnPdrSample_, ok ? 1 : 0);     // optional: only count verified hits
         emit(warnPdrDistance_, dMeters);
-
-//        std::ostringstream line;
-//        line << std::fixed << std::setprecision(3)
-//             << "t=" << simTime().dbl()
-//             << ", seq=" << (w.getMsgCnt() & 0xff)
-//             << ", intId=" << w.getIntersectionId()
-//             << ", lane=" << w.getLane()
-//             << ", approach=" << w.getApproach()
-//             << ", flag=" << w.getEventFlag()
-//             << ", srcX=" << w.getSrcX()
-//             << ", srcY=" << w.getSrcY()
-//             << ", dist_m=" << dMeters
-//             << ", delay_ms=" << delay_ms
-//             << ", verified=" << (ok ? 1 : 0)
-//             << ", tempId=" << w.getTempId();
-//        appendLine(path, line.str());
 
         // header
         const std::string header =
@@ -402,6 +376,7 @@ void Mode4App::handleLowerMessage(cMessage* msg)
             delete msg;
             return;
         }
+        veins::Coord rx = getNodePositionNow(this, simTime());
         simtime_t delay = simTime() - spdu->getTimestamp();
 
         const char* hostName = getParentModule()->getFullName();
@@ -421,7 +396,8 @@ void Mode4App::handleLowerMessage(cMessage* msg)
             std::vector<uint8_t> pkBytes(c.getPublicKeyArraySize());
             for (size_t i = 0; i < pkBytes.size(); ++i)
                 pkBytes[i] = c.getPublicKey(i);
-            std::string pubKeyHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
+            std::string rawPubHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
+            std::string pubKeyHex = pqcdsa::prefixKeyWithCertAlgo(rawPubHex, c.getAlgoName());
             std::vector<uint8_t> sigBytes(spdu->getSignatureArraySize());
                 for (size_t i = 0; i < sigBytes.size(); ++i)
                     sigBytes[i] = spdu->getSignature(i);
@@ -432,21 +408,20 @@ void Mode4App::handleLowerMessage(cMessage* msg)
             // Only count the event if the signature was valid
             emit(verified_, long(1));
         }
+        veins::Coord tx(b.getLatitude(), b.getLongitude(), 0.0);
 
-//        std::ostringstream line;
-//        line << std::fixed << std::setprecision(3)
-//             << "t=" << simTime().dbl()
-//             << ", msgId=" << b.getMsgId()
-//             << ", lat=" << b.getLatitude()
-//             << ", lon=" << b.getLongitude()
-//             << ", heading=" << b.getHeading()
-//             << ", speed=" << b.getSpeed()
-//             << ", delay_ms=" << delay_ms
-//             << ", verified=" << (ok ? 1 : 0);
-//        appendLine(path, line.str());
+        // Distance in meters
+        double dist_m = rx.distance(tx);
+
+        std::string algoName = spdu->getCert().getAlgoName();     // 1) Algorithm name
+        int certSize = spdu->getCert().getPublicKeyArraySize();   // 2) Certificate size (approximate)
+        int sigSize  = spdu->getSignatureArraySize();             // 3) Signature size
+        int spduSize = spdu->getByteLength();                     // 4) Total SPDU size
 
         const std::string header =
-                "t,host,msgId,lat,lon,heading,speed,delay_ms,verified";
+            "t,host,msgId,lat,lon,heading,speed,delay_ms,dist_m,verified,cert_size,sig_size,spdu_size,Algorithm";
+
+        std::ostringstream dst; dst << std::fixed << std::setprecision(3) << dist_m;
         std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
         std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLatitude();
         std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLongitude();
@@ -454,17 +429,22 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         std::ostringstream spd; spd << std::fixed << std::setprecision(6) << b.getSpeed();
         std::ostringstream dms; dms << std::fixed << std::setprecision(3) << delay_ms;
 
-        appendCsv(path, header, {
-            t.str(),
-            hostName,
-            std::to_string(b.getMsgId()),
-            lat.str(),
-            lon.str(),
-            hdg.str(),
-            spd.str(),
-            dms.str(),
-            (ok ? "1" : "0")
-        });
+//        appendCsv(path, header, {
+//            t.str(),
+//            hostName,
+//            std::to_string(b.getMsgId()),
+//            lat.str(),
+//            lon.str(),
+//            hdg.str(),
+//            spd.str(),
+//            dms.str(),
+//            dst.str(),
+//            (ok ? "1" : "0"),
+//            std::to_string(certSize),
+//            std::to_string(sigSize),
+//            std::to_string(spduSize),
+//            algoName
+//        });
 
         EV_INFO << "RX BSM#" << b.getMsgId() << " from " << spdu->getCert().getSubjectId() << "  -->  " << (ok ? "VALID" : "INVALID") << '\n';
 
@@ -472,8 +452,6 @@ void Mode4App::handleLowerMessage(cMessage* msg)
     }
 
 }
-
-
 
 void Mode4App::handleSelfMessage(cMessage* msg)
 {
@@ -513,8 +491,12 @@ void Mode4App::generateAndSendSPDU()
 //    double speed    = traciVehicle->getSpeed();
 //    double angleDeg = traciVehicle->getAngle();
 //    AKID_TEMP
-    bsm.setLatitude(0.0);
-    bsm.setLongitude(0.0);
+
+    veins::Coord me = getNodePositionNow(this, simTime());
+    bsm.setLatitude(me.x);
+    bsm.setLongitude(me.y);
+//    bsm.setLatitude(0.0);
+//    bsm.setLongitude(0.0);
     double speed    = 0.0;
     double angleDeg = 0.0;
     double heading  = (90.0 - angleDeg) * M_PI / 180.0;
