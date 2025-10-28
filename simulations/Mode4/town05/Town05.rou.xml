@@ -1,32 +1,61 @@
 <routes>
-    <!-- Simple generic vehicle type -->
-    <!-- <vType id="car" accel="2.6" decel="4.5" length="5.0" maxSpeed="17.9"/> -->
+    <!-- Vehicle class (use your existing type) -->
+    <vType id="veh.prius" type="vehicle.toyota.prius"/>
 
-    <vehicle id="1" type="vehicle.toyota.prius" depart="0.00" departLane="random" departPos="base">
-        <route edges="-29.0.00 39.0.00 -48.0.00 19.0.00"/>
-    </vehicle>
-    <vehicle id="2" type="vehicle.toyota.prius" depart="0.00" departLane="random" departPos="base">
-        <route edges="-29.0.00 -0.0.00 -1.0.00 -2.0.00"/>
-    </vehicle>
+    <!-- Keep your 8 original paths as reusable routes -->
+    <route id="R1" edges="-29.0.00 39.0.00 -48.0.00 19.0.00"/>
+    <route id="R2" edges="-29.0.00 -0.0.00 -1.0.00 -2.0.00"/>
+    <route id="R3" edges="-39.0.00 -0.0.00 -1.0.00 -2.0.00"/>
+    <route id="R4" edges="-39.0.00 25.0.00 15.0.00 13.0.00"/>
+    <route id="R5" edges="-16.0.00 -0.0.00 -1.0.00 -2.0.00"/>
+    <route id="R6" edges="-16.0.00 -26.0.00 28.0.00 27.0.00"/>
+    <route id="R7" edges="0.0.00 39.0.00 -48.0.00 19.0.00"/>
+    <route id="R8" edges="0.0.00 -26.0.00 28.0.00 27.0.00"/>
+    
+    <route id="R9" edges="-29.0.00 25.0.00 15.0.00 13.0.00"/>
+    <route id="R10" edges="-39.0.00 -26.0.00 28.0.00 27.0.00"/>
+    <route id="R11" edges="-16.0.00 39.0.00 -48.0.00 19.0.00"/>
+    <route id="R12" edges="0.0.00 25.0.00 15.0.00 13.0.00"/>
+    
+    <route id="R100" edges="-28.0.00 -29.0.00 25.0.00 15.0.00 13.0.00"/>
 
-    <vehicle id="3" type="vehicle.toyota.prius" depart="0.00" departLane="random" departPos="base">
-        <route edges="-39.0.00 -0.0.00 -1.0.00 -2.0.00"/>
-    </vehicle>
-    <vehicle id="4" type="vehicle.toyota.prius" depart="0.00" departLane="random" departPos="base">
-        <route edges="-39.0.00 25.0.00 15.0.00 13.0.00"/>
-    </vehicle>
+    <!-- Flows: 10 veh/h PER LANE (lane 0 and lane 1) for each route, over 1 hour -->
+    <!-- Note: with 2 lanes per edge, this yields 20 veh/h per path total. -->
+    <!-- <flow id="F100_L0" type="veh.prius" route="R100" begin="0" end="9000" vehsPerHour="1" departLane="random" departPos="random"/>-->
+    <flow id="F1_L0" type="veh.prius" route="R1" begin="0" end="9000" vehsPerHour="100" departLane="random" departPos="random"/>
+    <flow id="F1_L1" type="veh.prius" route="R1" begin="0" end="9000" vehsPerHour="100" departLane="random" departPos="random"/>
 
-    <vehicle id="5" type="vehicle.toyota.prius" depart="0.00" departLane="random" departPos="base">
-        <route edges="-16.0.00 -0.0.00 -1.0.00 -2.0.00"/>
-    </vehicle>
-    <vehicle id="6" type="vehicle.toyota.prius" depart="0.00" departLane="random" departPos="base">
-        <route edges="-16.0.00 -26.0.00 28.0.00 27.0.00"/>
-    </vehicle>
+    <flow id="F2_L0" type="veh.prius" route="R2" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    <flow id="F2_L1" type="veh.prius" route="R2" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
 
-    <vehicle id="7" type="vehicle.toyota.prius" depart="0.00" departLane="random" departPos="base">
-        <route edges="0.0.00 39.0.00 -48.0.00 19.0.00"/>
-    </vehicle>
-    <vehicle id="8" type="vehicle.toyota.prius" depart="0.00" departLane="random" departPos="base">
-        <route edges="0.0.00 -26.0.00 28.0.00 27.0.00"/>
-    </vehicle>
+    <flow id="F3_L0" type="veh.prius" route="R3" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>
+    <flow id="F3_L1" type="veh.prius" route="R3" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+
+    <flow id="F4_L0" type="veh.prius" route="R4" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    <flow id="F4_L1" type="veh.prius" route="R4" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+
+    <flow id="F5_L0" type="veh.prius" route="R5" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>
+    <flow id="F5_L1" type="veh.prius" route="R5" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+
+    <flow id="F6_L0" type="veh.prius" route="R6" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    <flow id="F6_L1" type="veh.prius" route="R6" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+
+    <flow id="F7_L0" type="veh.prius" route="R7" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    <flow id="F7_L1" type="veh.prius" route="R7" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>
+
+    <flow id="F8_L0" type="veh.prius" route="R8" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    <flow id="F8_L1" type="veh.prius" route="R8" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    
+    <flow id="F9_L0" type="veh.prius" route="R9" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    <flow id="F9_L1" type="veh.prius" route="R9" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>
+    
+    <flow id="F10_L0" type="veh.prius" route="R10" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    <flow id="F10_L1" type="veh.prius" route="R10" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    
+    <flow id="F11_L0" type="veh.prius" route="R11" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>
+    <flow id="F11_L1" type="veh.prius" route="R11" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    
+    <flow id="F12_L0" type="veh.prius" route="R12" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
+    <flow id="F12_L1" type="veh.prius" route="R12" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>
+
 </routes>

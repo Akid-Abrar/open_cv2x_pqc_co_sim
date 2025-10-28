@@ -47,6 +47,7 @@ class Mode4RSUApp : public Mode4BaseApp
     void openNonBlockingUdp_(int port);
     void socketRead();
     void broadcastIca(IcaWarn* w);
+    void finish();
 
 };
 
