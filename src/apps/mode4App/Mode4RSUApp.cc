@@ -376,6 +376,11 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     delete spdu;
 }
 
+void Mode4RSUApp::finish()
+{
+    simtime_t endtime = simTime();
+}
+
 Mode4RSUApp::~Mode4RSUApp()
 {
     if (sockPollEvt_) { cancelAndDelete(sockPollEvt_); sockPollEvt_ = nullptr; }
