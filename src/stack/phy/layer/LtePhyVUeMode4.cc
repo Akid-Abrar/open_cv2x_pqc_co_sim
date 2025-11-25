@@ -22,7 +22,47 @@
 #include "stack/phy/packet/SpsCandidateResources.h"
 #include "stack/phy/packet/cbr_m.h"
 
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+
+
+
 Define_Module(LtePhyVUeMode4);
+
+static inline void appendCsv(const std::string& path,
+                             const std::string& header,
+                             const std::vector<std::string>& cols)
+{
+    // Write header once if file is new/empty
+    bool writeHeader = false;
+    {
+        std::ifstream fin(path, std::ios::in | std::ios::binary);
+        writeHeader = !fin.good() || fin.peek() == std::ifstream::traits_type::eof();
+    }
+
+    std::ofstream f(path, std::ios::out | std::ios::app);
+    if (!f.is_open()) return;
+
+    if (writeHeader) f << header << '\n';
+
+    // Simple CSV join (fields we use are numeric or hex strings, so no quoting needed)
+    for (size_t i = 0; i < cols.size(); ++i) {
+        if (i) f << ',';
+        f << cols[i];
+    }
+    f << '\n';
+}
+
+static inline void ensureDir(const std::string& path)
+{
+#ifdef _WIN32
+    _mkdir(path.c_str());
+#else
+    ::mkdir(path.c_str(), 0775);  // ignore error if it already exists
+#endif
+}
+
 
 LtePhyVUeMode4::LtePhyVUeMode4()
 {
@@ -402,6 +442,8 @@ void LtePhyVUeMode4::handleAirFrame(cMessage* msg)
     }
 
     Coord myCoord = getCoord();
+    EV_FATAL <<"CRITICAL TEST: Receiver Co-ordinates: X:"<< myCoord.str() <<endl;
+    EV_FATAL <<"CRITICAL TEST: Sender Co-ordinates: X:"<< lteInfo->getCoord().str() <<endl;
     // Only store frames which are within 1500m over this the interference caused is negligible.
     if (myCoord.distance(lteInfo->getCoord()) < 1500) {
         // store frame, together with related control info
@@ -622,7 +664,6 @@ void LtePhyVUeMode4::computeRandomCSRs(LteMode4SchedulingGrant* &grant) {
     int minSelectionIndex = sensingWindowLength + selectionWindowStartingSubframe_;
     int maxSelectionIndex = sensingWindowLength + maxLatency;
 
-    EV_FATAL << "grantLength is "<< grantLength;
 
     int totalPossibleCSRs = ((maxSelectionIndex - minSelectionIndex) * numSubchannels_) / grantLength;
 
@@ -1162,7 +1203,6 @@ std::vector<std::tuple<double, int, int, bool>> LtePhyVUeMode4::selectBestRSSIs(
     });
 
     int minSize = std::round(totalPossibleCSRs * .2);
-    EV_FATAL<< "minsize"<<minSize<<endl;
     orderedCSRs.resize(minSize);
 
     return orderedCSRs;
@@ -1391,7 +1431,9 @@ LteAirFrame* LtePhyVUeMode4::prepareAirFrame(cMessage* msg, UserControlInfo* lte
     frame->setSchedulingPriority(airFramePriority_);
     frame->setDuration(TTI);
 
-    lteInfo->setCoord(getRadioPosition());
+//    lteInfo->setCoord(getRadioPosition());
+    Coord myCoord = getCoord();
+    lteInfo->setCoord(myCoord);
 
     lteInfo->setTxPower(txPower_);
     lteInfo->setD2dTxPower(d2dTxPower_);
@@ -1618,6 +1660,22 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 if ( jt != previousTransmissionTimes_.end() ) {
                     simtime_t elapsed_time = NOW - jt->second;
                     emit(interPacketDelay, elapsed_time);
+
+                    const char* hostName = getParentModule()->getFullName();
+                    std::string path = std::string("simulation_log_") + hostName + ".csv";
+
+                    const std::string header =
+                                "t,host,txRxDistanceTB,interPacketDelay";
+
+                    std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
+                    std::ostringstream txRxDistanceTB; txRxDistanceTB << std::fixed << std::setprecision(6) << pkt_dist;
+                    std::ostringstream interPacketDelay; interPacketDelay << std::fixed << std::setprecision(6) << elapsed_time;
+                    appendCsv(path, header, {
+                        t.str(),
+                        hostName,
+                        std::to_string(pkt_dist),
+                        std::to_string(elapsed_time.dbl())
+                    });
                 }
                 previousTransmissionTimes_[lteInfo->getSourceId()] = NOW;
             }

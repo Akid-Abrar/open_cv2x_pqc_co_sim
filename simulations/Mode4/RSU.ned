@@ -1,8 +1,5 @@
 package lte.simulations.Mode4;
 
-import inet.node.inet.StandardHost;
-import inet.mobility.static.StationaryMobility;
-
 import lte.stack.phy.ILteNic;
 import lte.stack.phy.LteNicUe;
 import lte.stack.phy.LteNicUeD2D;

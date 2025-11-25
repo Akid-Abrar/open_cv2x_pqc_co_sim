@@ -19,6 +19,8 @@
 #include "world/radio/ChannelAccess.h"
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/common/ModuleAccess.h"
+#include "veins/modules/mobility/traci/TraCIMobility.h"
+
 
 static int parseInt(const char *s, int defaultValue)
 {
@@ -87,6 +89,8 @@ void ChannelAccess::initialize(int stage)
                         hostModule->getFullPath().c_str());
         }
         myRadioRef = cc->registerRadio(this);
+        EV_FATAL << "CRITICAL TEST: radioPos is updated from ChannelAccess::initialize"<<endl;
+        EV_FATAL << "CRITICAL TEST: Initialized Position is "<<radioPos.str() <<endl;
         cc->setRadioPosition(myRadioRef, radioPos);
     }
 }
@@ -118,8 +122,20 @@ void ChannelAccess::receiveSignal(cComponent *source, simsignal_t signalID, cObj
 {
     if (signalID == inet::IMobility::mobilityStateChangedSignal)
     {
-        inet::IMobility *mobility = check_and_cast<inet::IMobility*>(obj);
-        radioPos = mobility->getCurrentPosition();
+//        inet::IMobility *mobility = check_and_cast<inet::IMobility*>(obj);
+
+        static inet::Coord out;
+
+        if (auto traci = check_and_cast<veins::TraCIMobility*>(obj)) {
+            try {
+                const auto p = traci->getPosition();   // Veins API
+                out.x = p.x; out.y = p.y; out.z = p.z;
+            } catch (const cRuntimeError& e) {
+                EV_WARN << "CRITICAL TEST: ChannelAccess Casting Error "<<endl;
+            }
+        }
+        EV_FATAL << "CRITICAL TEST: radioPos is updated from ChannelAccess::receiveSignal"<<endl;
+        radioPos = out;
         positionUpdateArrived = true;
 
         if (myRadioRef)

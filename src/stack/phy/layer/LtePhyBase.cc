@@ -144,6 +144,7 @@ void LtePhyBase::handleUpperMessage(cMessage* msg)
     frame->setDuration(TTI);
     // set current position
     lteInfo->setCoord(getRadioPosition());
+    EV_FATAL <<"CRITICAL TEST: Co-ordinate is set in LtePhyBase::handleUpperMessage"<<endl;
 
     lteInfo->setTxPower(txPower_);
     frame->setControlInfo(lteInfo);
@@ -222,6 +223,8 @@ void LtePhyBase::updateDisplayString()
 void LtePhyBase::sendBroadcast(LteAirFrame *airFrame)
 {
     // delegate the ChannelControl to send the airframe
+    EV_FATAL <<"CRITICAL TEST: Size just before sending: "<< airFrame->getByteLength()<<endl;
+    EV_FATAL <<"CRITICAL TEST: Time just before sending: "<< airFrame->getCreationTime().dbl() * 1000.0 <<endl;
     sendToChannel(airFrame);
 
 //    const ChannelControl::RadioRefVector& gateList = cc->getNeighbors(myRadioRef);

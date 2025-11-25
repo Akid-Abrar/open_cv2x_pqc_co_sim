@@ -142,7 +142,7 @@ void LtePdcpRrcUeD2D::fromDataIn(cPacket *pkt)
         destId = binder_->getMacNodeId(dstAddr);
 
         // Cid Request
-        EV << "LteRrc : Received CID request for Traffic [ " << "Source: "
+        EV << "LtePdcpRrcUeD2D : Received CID request for Traffic [ " << "Source: "
            << nonIpInfo->getSrcAddr() << " Destination: " << nonIpInfo->getDstAddr() << " ]\n";
 
         if ((mylcid = nonIpHt_->find_entry(nonIpInfo->getSrcAddr(), nonIpInfo->getDstAddr())) == 0xFFFF)
@@ -150,7 +150,7 @@ void LtePdcpRrcUeD2D::fromDataIn(cPacket *pkt)
             // LCID not found
             mylcid = lcid_++;
 
-            EV << "LteRrc : Connection not found, new CID created with LCID " << mylcid << "\n";
+            EV << "LtePdcpRrcUeD2D : Connection not found, new CID created with LCID " << mylcid << "\n";
 
             nonIpHt_->create_entry(nonIpInfo->getSrcAddr(), nonIpInfo->getDstAddr(), mylcid);
         }

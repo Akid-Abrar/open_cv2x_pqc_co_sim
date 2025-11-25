@@ -73,7 +73,7 @@ static std::vector<uint8_t> hexToBytes_strict(const std::string& hex) {
 enum class Alg { ECDSA_P256, FALCON_512, DILITHIUM_2 };
 
 // You can change default here if desired
-static Alg kDefaultAlgo = Alg::DILITHIUM_2;
+static Alg kDefaultAlgo = Alg::FALCON_512;
 
 static Alg defaultAlgFromEnv() {
     const char* env = std::getenv("PQCDSA_ALGO");
