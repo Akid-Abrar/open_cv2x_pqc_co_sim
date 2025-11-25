@@ -18,11 +18,11 @@
     <route id="R12" edges="0.0.00 25.0.00 15.0.00 13.0.00"/>
     
     <route id="R100" edges="-28.0.00 -29.0.00 25.0.00 15.0.00 13.0.00"/>
+    <route id="R200" edges="-16.0.00 -0.0.00 -1.0.00 -2.0.00"/>
 
     <!-- Flows: 10 veh/h PER LANE (lane 0 and lane 1) for each route, over 1 hour -->
     <!-- Note: with 2 lanes per edge, this yields 20 veh/h per path total. -->
-    <!-- <flow id="F100_L0" type="veh.prius" route="R100" begin="0" end="9000" vehsPerHour="1" departLane="random" departPos="random"/>-->
-    <flow id="F1_L0" type="veh.prius" route="R1" begin="0" end="9000" vehsPerHour="100" departLane="random" departPos="random"/>
+    <!-- <flow id="F1_L0" type="veh.prius" route="R1" begin="0" end="9000" vehsPerHour="100" departLane="random" departPos="random"/>
     <flow id="F1_L1" type="veh.prius" route="R1" begin="0" end="9000" vehsPerHour="100" departLane="random" departPos="random"/>
 
     <flow id="F2_L0" type="veh.prius" route="R2" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
@@ -56,6 +56,9 @@
     <flow id="F11_L1" type="veh.prius" route="R11" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
     
     <flow id="F12_L0" type="veh.prius" route="R12" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
-    <flow id="F12_L1" type="veh.prius" route="R12" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>
+    <flow id="F12_L1" type="veh.prius" route="R12" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>-->
+    
+    <flow id="1" type="veh.prius" route="R100" begin="0" end="3600" vehsPerHour="1" departLane="random" departPos="base"/>
+    <!--<flow id="2" type="veh.prius" route="R200" begin="0" end="3600" vehsPerHour="1" departLane="random" departPos="base"/>-->
 
 </routes>

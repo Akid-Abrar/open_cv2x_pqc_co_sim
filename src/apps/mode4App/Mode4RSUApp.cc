@@ -309,6 +309,7 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     }
     const double delay_ms = (simTime() - spdu->getTimestamp()).dbl() * 1000.0;
 
+    EV<< "CRITICAL TEST: Received Timestamp: "<< simTime().dbl() * 1000.0 << endl;
     // RSU receiver position (meters)
     veins::Coord rsu = getNodePositionNow(this, simTime());
 

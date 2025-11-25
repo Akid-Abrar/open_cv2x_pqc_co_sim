@@ -287,6 +287,7 @@ void LtePhyUeD2D::handleUpperMessage(cMessage* msg)
     frame->setDuration(TTI);
     // set current position
     lteInfo->setCoord(getRadioPosition());
+    EV_FATAL <<"CRITICAL TEST: Co-ordinate is set in LtePhyUeD2D::handleUpperMessage"<<endl;
 
     lteInfo->setTxPower(txPower_);
     lteInfo->setD2dTxPower(d2dTxPower_);

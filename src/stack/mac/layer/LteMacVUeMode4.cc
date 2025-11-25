@@ -949,6 +949,7 @@ void LteMacVUeMode4::macHandleSps(cPacket* pkt)
     const unsigned int* tbsVect = itbs2tbs(mod, SINGLE_ANTENNA_PORT0, 1, maxMCSPSSCH_ - i);
     maximumCapacity_ = tbsVect[totalGrantedBlocks-1];
     mode4Grant->setGrantedCwBytes(currentCw_, maximumCapacity_);
+    EV_FATAL << "CRITICAL TEST: maximumCapacity: "<< maximumCapacity_ << " and totalGrantedBlocks: " << totalGrantedBlocks << endl;
     // Simply flips the codeword.
     currentCw_ = MAX_CODEWORDS - currentCw_;
 
@@ -1054,6 +1055,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
     }
 
     // Select the number of subchannels based on the size of the packet to be transmitted
+    int capacity = 0;
     int i = minSubchannelNumberPSSCH;
     while (i <= maxSubchannelNumberPSSCH && !foundValidMCS){
         int totalGrantedBlocks = (i * subchannelSize_);
@@ -1074,8 +1076,10 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
 
             const unsigned int *tbsVect = itbs2tbs(mod, SINGLE_ANTENNA_PORT0, 1, mcs - j);
             mcsCapacity = tbsVect[totalGrantedBlocks - 1];
+            //EV_FATAL << "CRITICAL TEST LOOP: mcs - j:" << mcs - j << " packetSize: "<< pktSize <<" and mcsCapacity: "<< mcsCapacity <<endl;
 
             if (mcsCapacity > pktSize) {
+                capacity = mcsCapacity;
                 foundValidMCS = true;
                 numSubchannels = i;
                 break;
@@ -1089,6 +1093,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
         throw cRuntimeError("On generating the grant there was no subchannel configuration which could hold the capacity of the packet: exiting.");
     }
 
+    EV_FATAL << "CRITICAL TEST: mcsCapacity:" << capacity << " for the packet size: "<< pktSize <<" and num of subchannel: "<< numSubchannels <<endl;
     mode4Grant -> setNumberSubchannels(numSubchannels);
     if (randomScheduling_){
         mode4Grant -> setResourceReselectionCounter(0);

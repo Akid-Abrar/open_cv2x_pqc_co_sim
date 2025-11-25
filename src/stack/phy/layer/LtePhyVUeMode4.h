@@ -141,6 +141,10 @@ class LtePhyVUeMode4 : public LtePhyUeD2D
 
     LteAllocationModule* allocator_;
 
+
+    std::string deviceName_;   // e.g., "rsu[0]" or "ue[3]"
+    std::string logFilePath_;  // e.g., "simulation_logs/rsu[0].csv"
+
     void storeAirFrame(LteAirFrame* newFrame);
     LteAirFrame* extractAirFrame();
     void decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo, std::vector<double> &rsrpVector, std::vector<double> &rssiVector, std::vector<double> &sinrVector, double &attenuation);

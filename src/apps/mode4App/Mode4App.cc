@@ -535,14 +535,14 @@ void Mode4App::generateAndSendSPDU()
     long totalByteLength = bsmSize + spdu->getSignatureArraySize() + certSize;
     spdu->setByteLength(totalByteLength);
 
-    EV_FATAL << "signature size : "<< spdu->getSignatureArraySize() <<endl;
+    EV_FATAL << "CRITICAL TEST: signature size : "<< spdu->getSignatureArraySize() <<endl;
 
-    EV_FATAL << "DEBUG TEST: BSM size " << bsmSize << " bytes and Certificate size is "
+    EV_FATAL << "CRITICAL TEST: BSM size " << bsmSize << " bytes and Certificate size is "
             << certSize <<" bytes and public key size is "<< Cert.getPublicKeyArraySize() <<endl;
 
-    EV_FATAL << "DEBUG TEST: fixed size is " << size_ << " bytes and calculated size is " << totalByteLength <<" bytes"<<endl;
+    EV_FATAL << "CRITICAL TEST: fixed size is " << size_ << " bytes and calculated size is " << totalByteLength <<" bytes"<<endl;
 
-    EV_FATAL << "DEBUG TEST: calculating the SPDU size " << spdu->getByteLength() << " bytes." << endl;
+    EV_FATAL << "CRITICAL TEST: calculating the SPDU size " << spdu->getByteLength() << " bytes." << endl;
 
 
     // --- C-V2X MODE 4 SENDING LOGIC ---
@@ -555,6 +555,7 @@ void Mode4App::generateAndSendSPDU()
     lteControlInfo->setDuration(duration_);
     spdu->setControlInfo(lteControlInfo);
     spdu->setTimestamp(simTime());
+    EV_FATAL << "CRITICAL TEST: Time of Creating the SPDU " << spdu->getTimestamp().dbl() * 1000.0 << endl;
     Mode4BaseApp::sendLowerPackets(spdu);
 
 
