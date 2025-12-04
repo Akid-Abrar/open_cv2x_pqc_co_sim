@@ -225,6 +225,8 @@ void LtePhyBase::sendBroadcast(LteAirFrame *airFrame)
     // delegate the ChannelControl to send the airframe
     EV_FATAL <<"CRITICAL TEST: Size just before sending: "<< airFrame->getByteLength()<<endl;
     EV_FATAL <<"CRITICAL TEST: Time just before sending: "<< airFrame->getCreationTime().dbl() * 1000.0 <<endl;
+
+    airFrame->setTimestamp(simTime());
     sendToChannel(airFrame);
 
 //    const ChannelControl::RadioRefVector& gateList = cc->getNeighbors(myRadioRef);

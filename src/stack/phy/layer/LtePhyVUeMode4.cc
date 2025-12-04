@@ -1599,6 +1599,29 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         double pkt_dist = getCoord().distance(lteInfo->getCoord());
         emit(txRxDistanceTB, pkt_dist);
 
+        simtime_t phyDelay = NOW - frame->getTimestamp();
+        simtime_t ipg = SIMTIME_ZERO;
+
+//        const char* hostName = getParentModule()->getParentModule()->getFullName();
+//        std::string path = std::string("simulation_logs/") + hostName + "_phy_delay.csv";
+//
+//        const std::string header =
+//                    "t,host,txRxDistanceTB,Delay";
+
+//        std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
+//        std::ostringstream txRxDistanceTB; txRxDistanceTB << std::fixed << std::setprecision(6) << pkt_dist;
+//        std::ostringstream Delay; Delay << std::fixed << std::setprecision(6) << phyDelay.dbl();
+
+//        std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
+//        std::ostringstream pktDistance;       pktDistance       << pkt_dist;
+//        std::ostringstream phyDelayStr;       phyDelayStr       << phyDelay.dbl() * 1000;
+//        appendCsv(path, header, {
+//            t.str(),
+//            hostName,
+//            pktDistance.str(),
+//            phyDelayStr.str()
+//        });
+
         if(!transmitting_){
 
             tbReceived_ += 1;
@@ -1636,6 +1659,7 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 }
             }
             if (!foundCorrespondingSci || !sciDecodedSuccessfully) {
+                EV_FATAL << "CRITICAL TEST: tbFailedDueToNoSCI_"<<endl;
                 tbFailedDueToNoSCI_ += 1;
                 if (!prop_result) {
                     tbFailedDueToPropIgnoreSCI_ += 1;
@@ -1659,24 +1683,28 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 std::map<MacNodeId, simtime_t>::iterator jt = previousTransmissionTimes_.find(lteInfo->getSourceId());
                 if ( jt != previousTransmissionTimes_.end() ) {
                     simtime_t elapsed_time = NOW - jt->second;
+                    ipg = elapsed_time;
                     emit(interPacketDelay, elapsed_time);
-
-                    const char* hostName = getParentModule()->getFullName();
-                    std::string path = std::string("simulation_log_") + hostName + ".csv";
-
-                    const std::string header =
-                                "t,host,txRxDistanceTB,interPacketDelay";
-
-                    std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
-                    std::ostringstream txRxDistanceTB; txRxDistanceTB << std::fixed << std::setprecision(6) << pkt_dist;
-                    std::ostringstream interPacketDelay; interPacketDelay << std::fixed << std::setprecision(6) << elapsed_time;
-                    appendCsv(path, header, {
-                        t.str(),
-                        hostName,
-                        std::to_string(pkt_dist),
-                        std::to_string(elapsed_time.dbl())
-                    });
                 }
+
+                const char* hostName = getParentModule()->getParentModule()->getFullName();
+                std::string path = std::string("simulation_logs/") + hostName + "_phy_delay.csv";
+
+                const std::string header =
+                            "t,host,txRxDistanceTB,Delay,interPacketDelay";
+
+                std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
+                std::ostringstream pktDistance;       pktDistance       << pkt_dist;
+                std::ostringstream phyDelayStr;       phyDelayStr       << phyDelay.dbl() * 1000;
+                std::ostringstream interPacketDelay;  interPacketDelay  << ipg.dbl() * 1000;
+
+                appendCsv(path, header, {
+                    t.str(),
+                    hostName,
+                    pktDistance.str(),
+                    phyDelayStr.str(),
+                    interPacketDelay.str()
+                });
                 previousTransmissionTimes_[lteInfo->getSourceId()] = NOW;
             }
             if (foundCorrespondingSci) {
