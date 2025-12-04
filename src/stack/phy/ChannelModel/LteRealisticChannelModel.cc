@@ -1408,6 +1408,8 @@ std::vector<double> LteRealisticChannelModel::getSINR_D2D(LteAirFrame *frame, Us
                 // compute final SINR
                 snrVector[i] = linearToDb(denSinr);
 
+                EV_FATAL << "CRITICAL TEST destCoord: " << destCoord.str() << " sourceCoord: "<< sourceCoord.str() << endl;
+
                 EV << "LteRealisticChannelModel::getSINR_D2D - distance from my Peer = " << destCoord.distance(sourceCoord) << " - DIR=" << dirToA(dir) << " - snr[" << snrVector[i] << "]\n";
             }
         }

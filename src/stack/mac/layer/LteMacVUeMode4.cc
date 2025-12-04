@@ -1076,7 +1076,7 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
 
             const unsigned int *tbsVect = itbs2tbs(mod, SINGLE_ANTENNA_PORT0, 1, mcs - j);
             mcsCapacity = tbsVect[totalGrantedBlocks - 1];
-            //EV_FATAL << "CRITICAL TEST LOOP: mcs - j:" << mcs - j << " packetSize: "<< pktSize <<" and mcsCapacity: "<< mcsCapacity <<endl;
+            EV_FATAL << "CRITICAL TEST LOOP: mcs - j:" << mcs - j << " packetSize: "<< pktSize <<" and mcsCapacity: "<< mcsCapacity << " and subchannelSize "<< subchannelSize_ <<endl;
 
             if (mcsCapacity > pktSize) {
                 capacity = mcsCapacity;
