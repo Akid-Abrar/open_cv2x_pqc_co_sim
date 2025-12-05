@@ -1,6 +1,0 @@
-<launch>
-   <basedir path="/home/veins/src/simulte/simulations/C_V2X_PQC/intersections"/>
-    <copy file="intersection.net.xml"/>
-    <copy file="intersection.rou.xml"/>
-    <copy file="intersection.sumocfg" type="config"/>
-</launch>

@@ -89,7 +89,7 @@ void Mode4App::initialize(int stage)
         EV_FATAL << "Public Key Length: " << keyPair.pubKeyLength << " bytes" << endl;
         EV_FATAL << "Public Key Length after string: " << strlen(keyPair.pubHex.c_str()) << " bytes" << endl;
         EV_FATAL << "---------------------------" << endl;
-        Cert.setSubjectId(getParentModule()->getParentModule()->getFullName());
+        Cert.setSubjectId(getParentModule()->getFullName());
 
         auto pkBytes = pqcdsa::fromHex(keyPair.pubHex);
         Cert.setPublicKeyArraySize(pkBytes.size());
