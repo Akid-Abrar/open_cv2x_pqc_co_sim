@@ -18,6 +18,8 @@ using nlohmann::json;
 Define_Module(Mode4RSUApp);
 //using namespace lte::apps::mode4App;
 
+
+
 static inline void appendCsv(const std::string& path,
                              const std::string& header,
                              const std::vector<std::string>& cols)
@@ -40,6 +42,21 @@ static inline void appendCsv(const std::string& path,
         f << cols[i];
     }
     f << '\n';
+}
+
+int Mode4RSUApp::getNumVehicles() const
+{
+    auto ueList = binder_->getUeList();
+    if (!ueList) return 0;
+
+    int count = 0;
+    for (auto* info : *ueList) {
+        if (!info) continue;
+        // RSU itself is also registered as a UE, so skip our own id
+        if (info->id == nodeId_) continue;
+        ++count;
+    }
+    return count;
 }
 
 // helper: JSON -> IcaWarn
@@ -299,7 +316,7 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     emit(rsuReceivedMsg, 1);
     const char* rsuName = getParentModule()->getFullName();     // rsu[0]
 //    std::string path = std::string("bsm_rx_") + rsuName + ".txt";
-    std::string path = std::string("bsm_rx_") + rsuName + ".csv";
+    std::string path = std::string("simulation_logs/appl_logs") + ".csv";
 
     SPDU* spdu = dynamic_cast<SPDU*>(msg);
     if (!spdu) {
@@ -345,8 +362,11 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     int certSize = spdu->getCert().getPublicKeyArraySize();   // 2) Certificate size (approximate)
     int sigSize  = spdu->getSignatureArraySize();             // 3) Signature size
     int spduSize = spdu->getByteLength();                     // 4) Total SPDU size
+    int numberOfVehicles = getNumVehicles();
+//    const std::string header =
+//        "t,receiver,sender,msgId,lat,lon,heading,speed,dist_m,delay_ms,Numer of Vehicles,verified,cert_size,sig_size,spdu_size,Algorithm";
     const std::string header =
-        "t,rsu,msgId,lat,lon,heading,speed,dist_m,delay_ms,verified,cert_size,sig_size,spdu_size,Algorithm";
+            "t,receiver,sender,msgId,lat,lon,dist_m,delay_ms,Numer of Vehicles,verified,cert_size,sig_size,spdu_size,Algorithm";
 
     std::string algoName = spdu->getCert().getAlgoName();
     std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
@@ -356,17 +376,20 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     std::ostringstream spd; spd << std::fixed << std::setprecision(6) << b.getSpeed();
     std::ostringstream dms; dms << std::fixed << std::setprecision(3) << delay_ms;
     std::ostringstream dst; dst << std::fixed << std::setprecision(3) << dist_m;
+    std::ostringstream senderName; senderName << spdu->getCert().getSubjectId();
 
     appendCsv(path, header, {
             t.str(),
             rsuName,
+            senderName.str(),
             std::to_string(b.getMsgId()),
             lat.str(),
             lon.str(),
-            hdg.str(),
-            spd.str(),
+            //hdg.str(),
+            //spd.str(),
             dst.str(),
             dms.str(),
+            std::to_string(numberOfVehicles),
             (ok ? "1" : "0"),
             std::to_string(certSize),
             std::to_string(sigSize),

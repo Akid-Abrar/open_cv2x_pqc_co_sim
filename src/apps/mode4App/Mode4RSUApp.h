@@ -48,6 +48,7 @@ class Mode4RSUApp : public Mode4BaseApp
     void socketRead();
     void broadcastIca(IcaWarn* w);
     void finish();
+    int getNumVehicles() const;
 
 };
 
