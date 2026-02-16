@@ -131,6 +131,8 @@ void Mode4App::initialize(int stage)
         rxWarnDist_ = registerSignal("rxWarnDist");
         icaVerifyMs_ = registerSignal("icaVerifyMs");
         icaDelayMs_  = registerSignal("icaDelayMs");
+
+        signatureTimeMs_  = registerSignal("signatureTimeMs");
     }
 }
 
@@ -509,7 +511,18 @@ void Mode4App::generateAndSendSPDU()
     std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 
     // Sign with Falcon
+    auto  sigStart = std::chrono::high_resolution_clock::now();;
     std::string sigHex = pqcdsa::sign(bsmHex, keyPair.privHex);
+    auto  sigEnd = std::chrono::high_resolution_clock::now();
+    auto sigTime = std::chrono::duration_cast<std::chrono::microseconds>(sigEnd - sigStart).count();
+    emit(signatureTimeMs_, sigTime);
+
+//    auto start_time = std::chrono::high_resolution_clock::now();
+//    const bool ok = pqcdsa::verify(bodyHex, sigHex, pubKeyHex);
+//    auto end_time = std::chrono::high_resolution_clock::now();
+//    auto duration_time = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+//    emit(icaVerifyMs_, duration_time/1000.0);
+
 
     // Build the SPDU packet
     SPDU* spdu = new SPDU("SPDU");

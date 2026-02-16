@@ -58,7 +58,7 @@
     <flow id="F12_L0" type="veh.prius" route="R12" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="base"/>
     <flow id="F12_L1" type="veh.prius" route="R12" begin="0" end="3600" vehsPerHour="100" departLane="random" departPos="random"/>
     
-    <!-- <flow id="1" type="veh.prius" route="R100" begin="0" end="3600" vehsPerHour="1" departLane="random" departPos="base"/>
-    <flow id="2" type="veh.prius" route="R200" begin="0" end="3600" vehsPerHour="1" departLane="random" departPos="base"/>-->
+    <!-- <flow id="1" type="veh.prius" route="R100" begin="0" end="3600" vehsPerHour="2" departLane="random" departPos="base"/>
+    <flow id="2" type="veh.prius" route="R200" begin="0" end="3600" vehsPerHour="2" departLane="random" departPos="base"/>-->
 
 </routes>
