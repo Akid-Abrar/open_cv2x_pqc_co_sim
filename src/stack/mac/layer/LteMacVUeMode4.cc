@@ -1065,10 +1065,13 @@ void LteMacVUeMode4::macGenerateSchedulingGrant(double maximumLatency, int prior
 
         int mcsCapacity = 0;
         for (int mcs=minMCS; mcs <= maxMCS; mcs++) {
+            // SAE J3161 Section 8.6: MCS 8, 9, 10 SHALL NOT be used
+            if (mcs >= 8 && mcs <= 10) continue;
+
             LteMod mod = _QPSK;
-            if (maxMCSPSSCH_ > 9 && maxMCSPSSCH_ < 17) {
+            if (mcs > 9 && mcs < 17) {
                 mod = _16QAM;
-            } else if (maxMCSPSSCH_ > 16 && maxMCSPSSCH_ < 29) {
+            } else if (mcs > 16 && mcs < 29) {
                 mod = _64QAM;
             }
 
@@ -1222,12 +1225,15 @@ void LteMacVUeMode4::flushHarqBuffers()
                     int mcsCapacity = 0;
                     for (int mcs=minMCS; mcs <= maxMCS; mcs++)
                     {
+                        // SAE J3161 Section 8.6: MCS 8, 9, 10 SHALL NOT be used
+                        if (mcs >= 8 && mcs <= 10) continue;
+
                         LteMod mod = _QPSK;
-                        if (maxMCSPSSCH_ > 9 && maxMCSPSSCH_ < 17)
+                        if (mcs > 9 && mcs < 17)
                         {
                             mod = _16QAM;
                         }
-                        else if (maxMCSPSSCH_ > 16 && maxMCSPSSCH_ < 29 )
+                        else if (mcs > 16 && mcs < 29 )
                         {
                             mod = _64QAM;
                         }

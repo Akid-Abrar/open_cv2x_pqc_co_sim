@@ -511,11 +511,11 @@ void Mode4App::generateAndSendSPDU()
     std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 
     // Sign with Falcon
-    auto  sigStart = std::chrono::high_resolution_clock::now();;
+    auto  sigStart = std::chrono::high_resolution_clock::now();
     std::string sigHex = pqcdsa::sign(bsmHex, keyPair.privHex);
     auto  sigEnd = std::chrono::high_resolution_clock::now();
     auto sigTime = std::chrono::duration_cast<std::chrono::microseconds>(sigEnd - sigStart).count();
-    emit(signatureTimeMs_, sigTime);
+    emit(signatureTimeMs_, sigTime / 1000.0);
 
 //    auto start_time = std::chrono::high_resolution_clock::now();
 //    const bool ok = pqcdsa::verify(bodyHex, sigHex, pubKeyHex);
@@ -562,7 +562,7 @@ void Mode4App::generateAndSendSPDU()
     auto lteControlInfo = new FlowControlInfoNonIp();
     lteControlInfo->setDirection(D2D_MULTI);
     lteControlInfo->setLcid(5); // Use integer value for DTCH
-    lteControlInfo->setPriority(1);
+    lteControlInfo->setPriority(2);
     lteControlInfo->setCreationTime(simTime());
     lteControlInfo->setSrcAddr(nodeId_);
     lteControlInfo->setDuration(duration_);
@@ -570,11 +570,6 @@ void Mode4App::generateAndSendSPDU()
     spdu->setTimestamp(simTime());
     EV_FATAL << "CRITICAL TEST: Time of Creating the SPDU " << spdu->getTimestamp().dbl() * 1000.0 << endl;
     Mode4BaseApp::sendLowerPackets(spdu);
-
-
-    lteControlInfo->setSrcAddr(nodeId_);
-    //        lteControlInfo->setDuration(duration_);
-    // --- END C-V2X SENDING LOGIC ---
 
     EV_INFO << "TX BSM#" << bsmSeq << "  speed=" << speed << "  sig=" << sigHex.substr(0,12) << "...\n";
     emit(sentMsg_, (long)1);
@@ -590,6 +585,15 @@ void Mode4App::finish()
     recordScalar("icaExpected", icaExpected_);
     const double pdr = (icaExpected_ > 0) ? (double)icaReceived_ / (double)icaExpected_ : 0.0;
     recordScalar("icaPDR", pdr);
+
+    // Log total BSMs sent by this vehicle for ground-truth PDR calculation
+    const std::string summaryPath = "simulation_logs/sender_summary.csv";
+    const std::string summaryHeader = "sender,total_sent";
+    appendCsv(summaryPath, summaryHeader, {
+        std::string(getParentModule()->getFullName()),
+        std::to_string(bsmSeq)
+    });
+
     cancelAndDelete(sendEvt);
 }
 
