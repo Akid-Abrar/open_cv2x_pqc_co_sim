@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <root>
 		<userEquipment-txParameters>
-			<parameter name="minMCS-PSSCH" type="double" value="9"/>
-			<parameter name="maxMCS-PSSCH" type="double" value="16"/>
+			<parameter name="minMCS-PSSCH" type="double" value="5"/>
+			<parameter name="maxMCS-PSSCH" type="double" value="11"/>
 			<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
 			<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 			<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/> 
@@ -74,81 +74,81 @@
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="1"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="1.6e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="1.5e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="1.4e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="1.3e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="1.2e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="1.1e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="1.0e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="0.9e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 				<txParameters>
 					<parameter name="cr-Limit" type="double" value="0.8e-3"/>
 					<parameter name="minMCS-PSSCH" type="double" value="5"/>
-					<parameter name="maxMCS-PSSCH" type="double" value="7"/>
-					<parameter name="minSubchannel-NumberPSSCH" type="double" value="1"/>
-					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="1"/>
+					<parameter name="maxMCS-PSSCH" type="double" value="11"/>
+					<parameter name="minSubchannel-NumberPSSCH" type="double" value="2"/>
+					<parameter name="maxSubchannel-NumberPSSCH" type="double" value="10"/>
 					<parameter name="allowedRetxNumberPSSCH" type="double" value="0"/>
 				</txParameters>
 			</cbr-PSSCH-TxConfig>

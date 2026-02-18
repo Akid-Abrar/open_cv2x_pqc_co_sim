@@ -2,91 +2,47 @@
 #include "pqcdsa.h"
 
 #include <stdexcept>
-#include <sstream>
-#include <iomanip>
 #include <cstring>
 #include <cctype>
 #include <cstdlib>
 #include <memory>
-#include <string>
-#include <vector>
 
 // OpenSSL (ECDSA P-256)
 #include <openssl/evp.h>
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
-#include <openssl/sha.h>
 #include <openssl/obj_mac.h>
-#include <openssl/x509.h>   // i2d_PUBKEY / d2i_PUBKEY
+#include <openssl/x509.h>
 
 // liboqs (PQC)
 #include <oqs/oqs.h>
 
 namespace {
 
-// ---------------- small hex helpers ----------------
-static std::string bytesToHex(const uint8_t* buf, size_t len) {
-    std::ostringstream oss;
-    oss << std::hex << std::setfill('0');
-    for (size_t i = 0; i < len; ++i)
-        oss << std::setw(2) << static_cast<unsigned>(buf[i]);
-    return oss.str();
-}
+// ---- Algorithm enum & lookup ----
 
-static bool isHexChar(char c) {
-    return std::isdigit(static_cast<unsigned char>(c))
-        || (c>='a' && c<='f') || (c>='A' && c<='F');
-}
+enum class Alg { ECDSA_P256, FALCON_512, DILITHIUM_2 };
 
-static std::string stripAlgPrefixIfAny(const std::string& s) {
-    // Accept forms:
-    //   "ALG:<name>:<hex>"
-    //   "0x<hex>"
-    //   "<hex>"
-    // Return "<hex>" portion.
-    if (s.size() >= 4 && s.compare(0, 4, "ALG:") == 0) {
-        auto pos = s.find_last_of(':');
-        if (pos == std::string::npos || pos + 1 >= s.size())
-            throw std::runtime_error("invalid prefixed key");
-        return s.substr(pos + 1);
-    }
-    if (s.size() >= 2 && (s[0] == '0') && (s[1] == 'x' || s[1] == 'X')) {
-        return s.substr(2);
-    }
+static std::string toLower(std::string s) {
+    for (auto& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     return s;
 }
 
-static std::vector<uint8_t> hexToBytes_strict(const std::string& hex) {
-    if (hex.empty() || (hex.size() % 2))
-        throw std::runtime_error("invalid hex");
-    std::vector<uint8_t> out(hex.size() / 2);
-    for (size_t i = 0; i < out.size(); ++i) {
-        char c1 = hex[2*i], c2 = hex[2*i+1];
-        if (!isHexChar(c1) || !isHexChar(c2))
-            throw std::runtime_error("invalid hex");
-        out[i] = static_cast<uint8_t>(std::stoi(hex.substr(2*i, 2), nullptr, 16));
-    }
-    return out;
-}
-
-// ---------------- algorithm selection ----------------
-enum class Alg { ECDSA_P256, FALCON_512, DILITHIUM_2 };
-
-// You can change default here if desired
-static Alg kDefaultAlgo = Alg::ECDSA_P256;
-
-static Alg defaultAlgFromEnv() {
-    const char* env = std::getenv("PQCDSA_ALGO");
-    if (!env) return Alg::DILITHIUM_2; // current default used when no prefix known
-    std::string s(env);
-    for (auto& ch : s) ch = std::tolower(static_cast<unsigned char>(ch));
-    if (s == "ecdsa" || s == "ecdsa-p256" || s == "p256") return Alg::ECDSA_P256;
-    if (s == "falcon-512" || s == "falcon") return Alg::FALCON_512;
-    if (s == "dilithium-2" || s == "dilithium") return Alg::DILITHIUM_2;
+static Alg algFromName(const std::string& nameIn) {
+    const std::string s = toLower(nameIn);
+    if (s == "ecdsa" || s == "ecdsa-p256" || s == "p256" || s.find("ecdsa") != std::string::npos)
+        return Alg::ECDSA_P256;
+    if (s == "falcon-512" || s == "falcon" || s.find("falcon") != std::string::npos)
+        return Alg::FALCON_512;
     return Alg::DILITHIUM_2;
 }
 
-static std::string algName(Alg a) {
+static Alg getDefaultAlg() {
+    const char* env = std::getenv("PQCDSA_ALGO");
+    return env ? algFromName(env) : Alg::FALCON_512; //Change Here
+}
+
+static const char* algTag(Alg a) {
     switch (a) {
         case Alg::ECDSA_P256:   return "ecdsa";
         case Alg::FALCON_512:   return "falcon-512";
@@ -95,30 +51,75 @@ static std::string algName(Alg a) {
     return "dilithium-2";
 }
 
-static Alg algFromPrefixed(const std::string& s) {
-    if (s.size() >= 4 && s.compare(0,4,"ALG:")==0) {
-        // form: ALG:<name>:<hex>
-        auto second = s.find(':', 4);
-        if (second == std::string::npos) throw std::runtime_error("invalid key prefix");
-        const std::string name = s.substr(4, second-4);
-        std::string low = name;
-        for (auto& ch : low) ch = std::tolower(static_cast<unsigned char>(ch));
-        if (low == "ecdsa" || low == "ecdsa-p256" || low == "p256") return Alg::ECDSA_P256;
-        if (low == "falcon-512" || low == "falcon") return Alg::FALCON_512;
-        if (low == "dilithium-2" || low == "dilithium") return Alg::DILITHIUM_2;
-        throw std::runtime_error("unknown algorithm in key prefix");
-    }
-    // no prefix => assume current default (for backward compat you can force PQC via env)
-    return defaultAlgFromEnv();
+static const char* oqsAlgId(Alg a) {
+    return (a == Alg::FALCON_512) ? OQS_SIG_alg_falcon_512
+                                  : OQS_SIG_alg_dilithium_2;
 }
 
-// --------------- OpenSSL ECDSA helpers ---------------
-struct EvpPkeyDeleter { void operator()(EVP_PKEY* p) const { EVP_PKEY_free(p); } };
-struct CtxDeleter     { void operator()(EVP_PKEY_CTX* c) const { EVP_PKEY_CTX_free(c); } };
-struct MdCtxDel       { void operator()(EVP_MD_CTX* c) const { EVP_MD_CTX_free(c); } };
+// ---- Hex helpers ----
+
+static std::string bytesToHex(const uint8_t* buf, size_t len) {
+    static const char hex[] = "0123456789abcdef";
+    std::string out(len * 2, '\0');
+    for (size_t i = 0; i < len; ++i) {
+        out[2*i]   = hex[buf[i] >> 4];
+        out[2*i+1] = hex[buf[i] & 0x0f];
+    }
+    return out;
+}
+
+static uint8_t hexNibble(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+    throw std::runtime_error("invalid hex character");
+}
+
+static std::vector<uint8_t> hexToBytes(const std::string& hex) {
+    if (hex.size() % 2) throw std::runtime_error("odd-length hex string");
+    std::vector<uint8_t> out(hex.size() / 2);
+    for (size_t i = 0; i < out.size(); ++i)
+        out[i] = (hexNibble(hex[2*i]) << 4) | hexNibble(hex[2*i+1]);
+    return out;
+}
+
+// ---- Prefix helpers ----
+
+static std::string stripPrefix(const std::string& s) {
+    if (s.size() >= 4 && s.compare(0, 4, "ALG:") == 0) {
+        auto pos = s.find_last_of(':');
+        if (pos == std::string::npos || pos + 1 >= s.size())
+            throw std::runtime_error("invalid prefixed key");
+        return s.substr(pos + 1);
+    }
+    if (s.size() >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+        return s.substr(2);
+    return s;
+}
+
+static Alg algFromPrefixed(const std::string& s) {
+    if (s.size() >= 4 && s.compare(0, 4, "ALG:") == 0) {
+        auto second = s.find(':', 4);
+        if (second == std::string::npos) throw std::runtime_error("invalid key prefix");
+        return algFromName(s.substr(4, second - 4));
+    }
+    return getDefaultAlg();
+}
+
+static std::vector<uint8_t> decodeHex(const std::string& maybePrefixed) {
+    return hexToBytes(stripPrefix(maybePrefixed));
+}
+
+// ---- OpenSSL RAII ----
+
+struct EvpPkeyDel { void operator()(EVP_PKEY* p)     const { EVP_PKEY_free(p); } };
+struct PkeyCtxDel { void operator()(EVP_PKEY_CTX* c)  const { EVP_PKEY_CTX_free(c); } };
+struct MdCtxDel   { void operator()(EVP_MD_CTX* c)    const { EVP_MD_CTX_free(c); } };
+
+// ---- ECDSA helpers ----
 
 static void genECDSAp256(std::vector<uint8_t>& pubDer, std::vector<uint8_t>& privDer) {
-    std::unique_ptr<EVP_PKEY_CTX, CtxDeleter> ctx(EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr));
+    std::unique_ptr<EVP_PKEY_CTX, PkeyCtxDel> ctx(EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr));
     if (!ctx || EVP_PKEY_keygen_init(ctx.get()) <= 0)
         throw std::runtime_error("ECDSA keygen init failed");
     if (EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx.get(), NID_X9_62_prime256v1) <= 0)
@@ -127,82 +128,103 @@ static void genECDSAp256(std::vector<uint8_t>& pubDer, std::vector<uint8_t>& pri
     EVP_PKEY* raw = nullptr;
     if (EVP_PKEY_keygen(ctx.get(), &raw) <= 0)
         throw std::runtime_error("ECDSA keygen failed");
-    std::unique_ptr<EVP_PKEY, EvpPkeyDeleter> pkey(raw);
+    std::unique_ptr<EVP_PKEY, EvpPkeyDel> pkey(raw);
 
-    // public DER (SubjectPublicKeyInfo)
     int lenPub = i2d_PUBKEY(pkey.get(), nullptr);
-    if (lenPub <= 0) throw std::runtime_error("ECDSA pub DER size failed");
+    if (lenPub <= 0) throw std::runtime_error("ECDSA pub DER failed");
     pubDer.resize(lenPub);
-    {
-        unsigned char* p = pubDer.data();
-        if (i2d_PUBKEY(pkey.get(), &p) != lenPub) throw std::runtime_error("ECDSA pub DER write failed");
-    }
+    unsigned char* pp = pubDer.data();
+    i2d_PUBKEY(pkey.get(), &pp);
 
-    // private DER (PKCS#8 PrivateKeyInfo)
     int lenPriv = i2d_PrivateKey(pkey.get(), nullptr);
-    if (lenPriv <= 0) throw std::runtime_error("ECDSA priv DER size failed");
+    if (lenPriv <= 0) throw std::runtime_error("ECDSA priv DER failed");
     privDer.resize(lenPriv);
-    {
-        unsigned char* p = privDer.data();
-        if (i2d_PrivateKey(pkey.get(), &p) != lenPriv) throw std::runtime_error("ECDSA priv DER write failed");
-    }
+    pp = privDer.data();
+    i2d_PrivateKey(pkey.get(), &pp);
 }
 
 static std::string ecdsaSign(const std::vector<uint8_t>& msg, const std::vector<uint8_t>& privDer) {
     const unsigned char* p = privDer.data();
-    std::unique_ptr<EVP_PKEY, EvpPkeyDeleter> pkey(d2i_AutoPrivateKey(nullptr, &p, (long)privDer.size()));
+    std::unique_ptr<EVP_PKEY, EvpPkeyDel> pkey(d2i_AutoPrivateKey(nullptr, &p, (long)privDer.size()));
     if (!pkey) throw std::runtime_error("ECDSA load priv failed");
 
     std::unique_ptr<EVP_MD_CTX, MdCtxDel> md(EVP_MD_CTX_new());
-    if (!md) throw std::runtime_error("ECDSA mdctx alloc failed");
-
     if (EVP_DigestSignInit(md.get(), nullptr, EVP_sha256(), nullptr, pkey.get()) <= 0)
         throw std::runtime_error("ECDSA DigestSignInit failed");
-
     if (EVP_DigestSignUpdate(md.get(), msg.data(), msg.size()) <= 0)
         throw std::runtime_error("ECDSA DigestSignUpdate failed");
 
-    size_t sigLen = 0;
-    if (EVP_DigestSignFinal(md.get(), nullptr, &sigLen) <= 0)
-        throw std::runtime_error("ECDSA sig len failed");
-
-    std::vector<uint8_t> sig(sigLen);
-    if (EVP_DigestSignFinal(md.get(), sig.data(), &sigLen) <= 0)
+    size_t derLen = 0;
+    EVP_DigestSignFinal(md.get(), nullptr, &derLen);
+    std::vector<uint8_t> derSig(derLen);
+    if (EVP_DigestSignFinal(md.get(), derSig.data(), &derLen) <= 0)
         throw std::runtime_error("ECDSA sign failed");
-    sig.resize(sigLen);
-    return bytesToHex(sig.data(), sig.size()); // DER-encoded ECDSA signature
+    derSig.resize(derLen);
+
+    // Convert DER signature to fixed-size raw (r||s) = 64 bytes for P-256
+    const unsigned char* dp = derSig.data();
+    ECDSA_SIG* esig = d2i_ECDSA_SIG(nullptr, &dp, (long)derSig.size());
+    if (!esig) throw std::runtime_error("ECDSA DER decode failed");
+
+    const BIGNUM* r = nullptr;
+    const BIGNUM* s = nullptr;
+    ECDSA_SIG_get0(esig, &r, &s);
+
+    std::vector<uint8_t> raw(64, 0);
+    BN_bn2binpad(r, raw.data(),      32);
+    BN_bn2binpad(s, raw.data() + 32, 32);
+    ECDSA_SIG_free(esig);
+
+    return bytesToHex(raw.data(), raw.size());
 }
 
 static bool ecdsaVerify(const std::vector<uint8_t>& msg,
-                        const std::vector<uint8_t>& sigDer,
+                        const std::vector<uint8_t>& rawSig,
                         const std::vector<uint8_t>& pubDer) {
-    const unsigned char* p = pubDer.data();
-    std::unique_ptr<EVP_PKEY, EvpPkeyDeleter> pkey(d2i_PUBKEY(nullptr, &p, (long)pubDer.size()));
+    if (rawSig.size() != 64) return false;
+
+    // Convert fixed-size raw (r||s) back to DER for OpenSSL
+    ECDSA_SIG* esig = ECDSA_SIG_new();
+    if (!esig) return false;
+
+    BIGNUM* r = BN_bin2bn(rawSig.data(),      32, nullptr);
+    BIGNUM* s = BN_bin2bn(rawSig.data() + 32, 32, nullptr);
+    if (!r || !s || !ECDSA_SIG_set0(esig, r, s)) {
+        // set0 takes ownership on success; free manually on failure
+        if (r) BN_free(r);
+        if (s) BN_free(s);
+        ECDSA_SIG_free(esig);
+        return false;
+    }
+
+    int derLen = i2d_ECDSA_SIG(esig, nullptr);
+    if (derLen <= 0) { ECDSA_SIG_free(esig); return false; }
+    std::vector<uint8_t> derSig(derLen);
+    unsigned char* dp = derSig.data();
+    i2d_ECDSA_SIG(esig, &dp);
+    ECDSA_SIG_free(esig);
+
+    const unsigned char* pp = pubDer.data();
+    std::unique_ptr<EVP_PKEY, EvpPkeyDel> pkey(d2i_PUBKEY(nullptr, &pp, (long)pubDer.size()));
     if (!pkey) return false;
 
     std::unique_ptr<EVP_MD_CTX, MdCtxDel> md(EVP_MD_CTX_new());
-    if (!md) return false;
-
     if (EVP_DigestVerifyInit(md.get(), nullptr, EVP_sha256(), nullptr, pkey.get()) <= 0)
         return false;
-
     if (EVP_DigestVerifyUpdate(md.get(), msg.data(), msg.size()) <= 0)
         return false;
-
-    int rc = EVP_DigestVerifyFinal(md.get(), sigDer.data(), sigDer.size());
-    return rc == 1;
+    return EVP_DigestVerifyFinal(md.get(), derSig.data(), derSig.size()) == 1;
 }
 
-// --------------- liboqs helpers ---------------
-static std::string oqsSign(const std::vector<uint8_t>& msg,
-                           const std::string& oqsAlgName,
-                           const std::vector<uint8_t>& sk) {
-    OQS_SIG* sig = OQS_SIG_new(oqsAlgName.c_str());
+// ---- liboqs helpers ----
+
+static std::string oqsSign(const std::vector<uint8_t>& msg, Alg alg,
+                            const std::vector<uint8_t>& sk) {
+    OQS_SIG* sig = OQS_SIG_new(oqsAlgId(alg));
     if (!sig) throw std::runtime_error("OQS alg unavailable");
 
     std::vector<uint8_t> signature(sig->length_signature);
     size_t sigLen = 0;
-
     if (OQS_SIG_sign(sig, signature.data(), &sigLen, msg.data(), msg.size(), sk.data()) != OQS_SUCCESS) {
         OQS_SIG_free(sig);
         throw std::runtime_error("OQS sign failed");
@@ -211,13 +233,13 @@ static std::string oqsSign(const std::vector<uint8_t>& msg,
     return bytesToHex(signature.data(), sigLen);
 }
 
-static bool oqsVerify(const std::vector<uint8_t>& msg,
-                      const std::string& oqsAlgName,
-                      const std::vector<uint8_t>& sigBytes,
-                      const std::vector<uint8_t>& pk) {
-    OQS_SIG* sig = OQS_SIG_new(oqsAlgName.c_str());
+static bool oqsVerify(const std::vector<uint8_t>& msg, Alg alg,
+                       const std::vector<uint8_t>& sigBytes,
+                       const std::vector<uint8_t>& pk) {
+    OQS_SIG* sig = OQS_SIG_new(oqsAlgId(alg));
     if (!sig) return false;
-    bool ok = (OQS_SIG_verify(sig, msg.data(), msg.size(), sigBytes.data(), sigBytes.size(), pk.data()) == OQS_SUCCESS);
+    bool ok = OQS_SIG_verify(sig, msg.data(), msg.size(),
+                              sigBytes.data(), sigBytes.size(), pk.data()) == OQS_SUCCESS;
     OQS_SIG_free(sig);
     return ok;
 }
@@ -225,35 +247,33 @@ static bool oqsVerify(const std::vector<uint8_t>& msg,
 } // unnamed namespace
 
 
-// ---------------- public wrappers ----------------
+// ---- Public API ----
 namespace pqcdsa {
 
-std::string toHex(const uint8_t* buf, size_t len) { return bytesToHex(buf, len); }
+std::string toHex(const uint8_t* buf, size_t len) {
+    return bytesToHex(buf, len);
+}
 
 std::vector<uint8_t> fromHex(const std::string& maybePrefixedHex) {
-    const std::string hex = stripAlgPrefixIfAny(maybePrefixedHex);
-    return hexToBytes_strict(hex);
+    return decodeHex(maybePrefixedHex);
 }
 
 KeyPair generateKeyPair() {
     KeyPair kp;
-    // Choose default algorithm; can be changed via kDefaultAlgo or env if you wish.
-    Alg alg = kDefaultAlgo;
+    Alg alg = getDefaultAlg();
+    const char* tag = algTag(alg);
 
     if (alg == Alg::ECDSA_P256) {
         std::vector<uint8_t> pubDer, privDer;
         genECDSAp256(pubDer, privDer);
-        kp.pubHex   = "ALG:" + ::algName(alg) + ":" + bytesToHex(pubDer.data(), pubDer.size());
-        kp.privHex  = "ALG:" + ::algName(alg) + ":" + bytesToHex(privDer.data(), privDer.size());
+        kp.pubHex       = std::string("ALG:") + tag + ":" + bytesToHex(pubDer.data(), pubDer.size());
+        kp.privHex      = std::string("ALG:") + tag + ":" + bytesToHex(privDer.data(), privDer.size());
         kp.pubKeyLength  = pubDer.size();
         kp.privKeyLength = privDer.size();
         return kp;
     }
 
-    // PQC via liboqs
-    const char* oqsName = (alg == Alg::FALCON_512) ? OQS_SIG_alg_falcon_512
-                                                   : OQS_SIG_alg_dilithium_2;
-    OQS_SIG* sig = OQS_SIG_new(oqsName);
+    OQS_SIG* sig = OQS_SIG_new(oqsAlgId(alg));
     if (!sig) throw std::runtime_error("OQS alg unavailable");
 
     std::vector<uint8_t> pk(sig->length_public_key);
@@ -262,8 +282,8 @@ KeyPair generateKeyPair() {
         OQS_SIG_free(sig);
         throw std::runtime_error("OQS keypair gen failed");
     }
-    kp.pubHex   = "ALG:" + ::algName(alg) + ":" + bytesToHex(pk.data(), pk.size());
-    kp.privHex  = "ALG:" + ::algName(alg) + ":" + bytesToHex(sk.data(), sk.size());
+    kp.pubHex       = std::string("ALG:") + tag + ":" + bytesToHex(pk.data(), pk.size());
+    kp.privHex      = std::string("ALG:") + tag + ":" + bytesToHex(sk.data(), sk.size());
     kp.pubKeyLength  = pk.size();
     kp.privKeyLength = sk.size();
     OQS_SIG_free(sig);
@@ -271,75 +291,46 @@ KeyPair generateKeyPair() {
 }
 
 std::string sign(const std::string& dataHex, const std::string& privHex) {
-    // parse algorithm from priv key prefix
-    Alg alg = ::algFromPrefixed(privHex);
-    const std::vector<uint8_t> msg = hexToBytes_strict(stripAlgPrefixIfAny(dataHex));
+    Alg alg = algFromPrefixed(privHex);
+    std::vector<uint8_t> msg = decodeHex(dataHex);
+    std::vector<uint8_t> sk  = decodeHex(privHex);
 
-    if (alg == Alg::ECDSA_P256) {
-        const std::vector<uint8_t> sk = hexToBytes_strict(stripAlgPrefixIfAny(privHex));
+    if (alg == Alg::ECDSA_P256)
         return ecdsaSign(msg, sk);
-    }
-
-    // PQC
-    const std::vector<uint8_t> sk = hexToBytes_strict(stripAlgPrefixIfAny(privHex));
-    const char* oqsName = (alg == Alg::FALCON_512) ? OQS_SIG_alg_falcon_512
-                                                   : OQS_SIG_alg_dilithium_2;
-    return oqsSign(msg, oqsName, sk);
+    return oqsSign(msg, alg, sk);
 }
 
 bool verify(const std::string& dataHex, const std::string& sigHex, const std::string& pubHex) {
-    Alg alg = ::algFromPrefixed(pubHex);
-    const std::vector<uint8_t> msg = hexToBytes_strict(stripAlgPrefixIfAny(dataHex));
+    Alg alg = algFromPrefixed(pubHex);
+    std::vector<uint8_t> msg = decodeHex(dataHex);
+    std::vector<uint8_t> sig = decodeHex(sigHex);
+    std::vector<uint8_t> pk  = decodeHex(pubHex);
 
-    if (alg == Alg::ECDSA_P256) {
-        const std::vector<uint8_t> sig = hexToBytes_strict(stripAlgPrefixIfAny(sigHex));
-        const std::vector<uint8_t> pk  = hexToBytes_strict(stripAlgPrefixIfAny(pubHex));
+    if (alg == Alg::ECDSA_P256)
         return ecdsaVerify(msg, sig, pk);
-    }
-
-    // PQC
-    const std::vector<uint8_t> sig = hexToBytes_strict(stripAlgPrefixIfAny(sigHex));
-    const std::vector<uint8_t> pk  = hexToBytes_strict(stripAlgPrefixIfAny(pubHex));
-    const char* oqsName = (alg == Alg::FALCON_512) ? OQS_SIG_alg_falcon_512
-                                                   : OQS_SIG_alg_dilithium_2;
-    return oqsVerify(msg, oqsName, sig, pk);
-}
-
-/* -------- helpers to bridge cert <-> prefixed keys -------- */
-
-static std::string toLower(std::string s) {
-    for (auto& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-    return s;
+    return oqsVerify(msg, alg, sig, pk);
 }
 
 std::string algoTagFromKey(const std::string& prefixedHex) {
-    // If key has ALG prefix parse it; otherwise fall back to default
     try {
-        Alg a = ::algFromPrefixed(prefixedHex);
-        return ::algName(a);
+        return algTag(algFromPrefixed(prefixedHex));
     } catch (...) {
-        return ::algName(defaultAlgFromEnv());
+        return algTag(getDefaultAlg());
     }
 }
 
-std::string prettyNameFromTag(const std::string& tagIn) {
-    const std::string tag = toLower(tagIn);
-    if (tag == "ecdsa" || tag == "ecdsa-p256" || tag == "p256") return "ECDSA P-256";
-    if (tag == "falcon-512" || tag == "falcon")                return "Falcon-512";
+std::string prettyNameFromTag(const std::string& tag) {
+    Alg a = algFromName(tag);
+    switch (a) {
+        case Alg::ECDSA_P256:   return "ECDSA P-256";
+        case Alg::FALCON_512:   return "Falcon-512";
+        case Alg::DILITHIUM_2:  return "Dilithium 2";
+    }
     return "Dilithium 2";
 }
 
-static std::string tagFromPrettyName(const std::string& prettyIn) {
-    const std::string s = toLower(prettyIn);
-    if (s.find("ecdsa") != std::string::npos)        return "ecdsa";
-    if (s.find("falcon") != std::string::npos)       return "falcon-512";
-    if (s.find("dilithium") != std::string::npos)    return "dilithium-2";
-    return ::algName(defaultAlgFromEnv());
-}
-
 std::string prefixKeyWithCertAlgo(const std::string& rawHex, const std::string& certAlgoName) {
-    const std::string tag = tagFromPrettyName(certAlgoName);
-    return "ALG:" + tag + ":" + rawHex;
+    return std::string("ALG:") + algTag(algFromName(certAlgoName)) + ":" + rawHex;
 }
 
 } // namespace pqcdsa
