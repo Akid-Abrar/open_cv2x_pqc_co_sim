@@ -1,0 +1,112 @@
+Why Falcon-512 Achieves >99% PDR and <100ms Delay in the Current Simulation
+=============================================================================
+
+There are several compounding reasons why the larger PQC (Falcon-512) packet
+size is NOT significantly degrading PDR or delay in your current simulation
+setup. The configuration is essentially "too favorable" for the impact of
+packet size to manifest.
+
+1. OVER-PROVISIONED SIDELINK RESOURCES
+---------------------------------------
+Your sidelink is configured with:
+  - subchannelSize = 10 RBs per subchannel
+  - numSubchannels = 10 (total = 100 RBs)
+  - maxMCS-PSSCH = 11
+
+With MCS 11 and 10 subchannels (100 RBs), the transport block capacity is
+very large — well over 2000 bytes. A Falcon-512 SPDU with ~650-byte signature
++ 897-byte pubkey + BSM payload totals roughly 1600-1800 bytes. This fits
+comfortably within the maximum allocation. The MAC layer simply assigns more
+subchannels per transmission (e.g., 8-10 instead of 2-3 for ECDSA), but since
+the resource pool is large enough, this does not cause resource exhaustion.
+
+In a real congested scenario or with smaller resource pools (e.g., 5
+subchannels or subchannelSize=5), Falcon-512 packets would start competing
+for and exhausting resources, leading to measurable PDR degradation.
+
+2. LOW VEHICLE DENSITY (for the resource pool size)
+----------------------------------------------------
+Your scenario has 4 approaches x 600 veh/h = 2400 veh/h total, but the
+sim-time-limit is only 40 seconds. At any given moment during 40s, only a
+fraction of these vehicles are active in the network simultaneously. With
+short road segments (intersection scenario), vehicles transit quickly.
+
+The Channel Busy Ratio (CBR) likely stays well below the 0.65 threshold
+where the CBR-based congestion control starts restricting transmissions.
+With low CBR, every vehicle gets its resources without contention, so even
+large packets don't collide frequently.
+
+3. ALL-LOS CHANNEL MODEL
+--------------------------
+As discussed in the LOS analysis: dynamic-los=false and fixed-los=true means
+every link uses LOS pathloss. This gives artificially high SINR values at
+the receiver even at moderate distances. High SINR means:
+  - The selected MCS can be high (up to 11), maximizing TB capacity
+  - BLER (Block Error Rate) is very low, so almost no packets are lost
+    to decoding errors
+  - Even with Nakagami fading, LOS pathloss is significantly more
+    favorable than NLOS
+
+With NLOS pathloss (which is realistic for an intersection with buildings),
+the SINR drops significantly, the effective MCS drops, the TB capacity
+shrinks, and larger packets would either:
+  (a) not fit in the allocated subchannels, or
+  (b) require more subchannels, increasing resource usage and collisions
+
+4. NO HARQ RETRANSMISSIONS
+---------------------------
+maxHarqRtx = 0 and allowedRetxNumberPSSCH = 0 means there are NO
+retransmissions. While this might seem like it should hurt PDR, in this
+low-congestion LOS scenario it actually means there's no extra resource
+usage from retransmissions. Each packet is sent exactly once. Since the
+channel is good (LOS + high SINR), the first transmission almost always
+succeeds.
+
+In a congested or NLOS scenario, the lack of retransmissions would
+actually hurt larger packets MORE, because they are more susceptible to
+partial corruption (more coded bits to get right).
+
+5. SINGLE RSU (V2I is 1-to-many)
+----------------------------------
+You have numRsu = 1 with txPower = 23 dBm. The RSU broadcasts ICA warnings
+and vehicles broadcast BSMs. With only 1 RSU and a moderate number of
+vehicles, V2I channel contention is minimal. The RSU's transmissions don't
+compete heavily with vehicle BSMs because the SPS resource selection
+algorithm has enough resources to avoid collisions.
+
+6. SHORT SIMULATION TIME
+--------------------------
+sim-time-limit = 40s is quite short. Rare events like sustained congestion
+buildup, multiple simultaneous half-duplex collisions, or CBR spikes that
+would differentiate Falcon-512 from ECDSA may simply not occur in a 40s
+window. Statistical confidence in PDR differences requires longer runs.
+
+
+HOW TO MAKE PACKET SIZE IMPACT VISIBLE
+=======================================
+
+To see the actual effect of Falcon-512's larger packets on V2I performance,
+consider these changes:
+
+(a) Enable NLOS: In config_channel.xml, set:
+      dynamic-los = true
+    or:
+      dynamic-los = false, fixed-los = false
+    This will use NLOS pathloss, dramatically reducing SINR and making
+    larger packets harder to decode.
+
+(b) Reduce resource pool: Try numSubchannels=5 and/or subchannelSize=5.
+    This forces more resource contention, and larger Falcon-512 packets
+    will consume proportionally more of the pool.
+
+(c) Increase vehicle density: Raise vehsPerHour to 1200-1800 per approach,
+    or increase sim-time-limit to 300s+ to allow congestion to build.
+
+(d) Enable retransmissions: Set allowedRetxNumberPSSCH=1, which doubles
+    resource usage per packet and amplifies the impact of larger packets.
+
+(e) Reduce MCS: Set maxMCS-PSSCH=7 or lower. This reduces TB capacity,
+    making it harder for large Falcon-512 packets to fit.
+
+Any combination of (a)-(e) should make the PDR difference between
+Falcon-512 and ECDSA/Dilithium visible.
