@@ -1,0 +1,232 @@
+Level of Service A Analysis for the Intersection (Updated)
+=============================================================
+
+Reference: HCM (Highway Capacity Manual) 2010, Chapter 18
+           — Signalized Intersection LOS based on average control delay
+
+LOS Thresholds (Signalized Intersections):
+  LOS A:  delay <= 10.0 s/veh
+  LOS B:  delay <= 20.0 s/veh
+  LOS C:  delay <= 35.0 s/veh
+  LOS D:  delay <= 55.0 s/veh
+  LOS E:  delay <= 80.0 s/veh
+  LOS F:  delay >  80.0 s/veh
+
+
+=======================================================================
+1. CURRENT INTERSECTION CONFIGURATION
+=======================================================================
+
+From intersection.net.xml:
+  - 4-way signalized intersection
+  - 2 lanes per approach (each direction)
+  - All movements allowed: right, through (2 lanes), left, U-turn
+  - Speed limit: 20.12 m/s = 72.4 km/h = 45 mph
+
+From tlLogic (signal timing):
+  Phase 1:  42s green  — N-S through/right/left
+  Phase 2:   3s yellow — N-S clearance
+  Phase 3:  42s green  — E-W through/right/left
+  Phase 4:   3s yellow — E-W clearance
+
+  Total cycle length (C) = 42 + 3 + 42 + 3 = 90 seconds
+  Effective green per phase (g) = 42s
+  Green ratio (g/C) = 42/90 = 0.467
+
+From intersection.rou.xml (actual demand):
+  Each approach: 1200 veh/h (960 through + 120 left + 120 right)
+  Total: 4 × 1200 = 4800 veh/h
+
+
+=======================================================================
+2. CAPACITY CALCULATION (Current 90s Cycle)
+=======================================================================
+
+Saturation flow rate (HCM default): s = 1900 pc/h/ln
+
+Through + Right movement (shared 2 lanes):
+  Saturation flow = 1900 × 2 = 3800 veh/h
+  Capacity = s × (g/C) = 3800 × 0.467 = 1775 veh/h
+
+Left turn (permitted, opposed by oncoming through traffic):
+  Effective saturation ≈ 500-700 veh/h (permitted left, no dedicated phase)
+  Capacity ≈ 600 × 0.467 ≈ 280 veh/h
+
+Current v/c ratios:
+  Through+Right: (960+120) / 1775 = 0.61
+  Left turn:     120 / 280        = 0.43
+
+Overall critical v/c ≈ 0.61
+
+
+=======================================================================
+3. DELAY CALCULATION (HCM Uniform Delay Formula)
+=======================================================================
+
+The HCM uniform delay formula (d1) is:
+
+  d1 = 0.5 × C × (1 - g/C)²
+       ─────────────────────────
+       1 - min(1, X) × (g/C)
+
+  where X = v/c ratio (degree of saturation)
+
+At current demand (X = 0.61):
+  d1 = 0.5 × 90 × (1 - 0.467)² / (1 - 0.61 × 0.467)
+     = 0.5 × 90 × 0.284 / (1 - 0.285)
+     = 12.78 / 0.715
+     = 17.9 s/veh  →  LOS B
+
+  Adding incremental delay (d2) for random arrivals (HCM):
+    d2 ≈ 900T × [(X-1) + sqrt((X-1)² + 8kIX/(cT))]
+    For X=0.61, T=0.25h: d2 ≈ 2-4 s/veh
+
+  Total delay ≈ 17.9 + 3 ≈ 20.9 s/veh  →  LOS C (borderline B/C)
+
+
+=======================================================================
+4. KEY FINDING
+=======================================================================
+
+With the current 90s cycle:
+  - Minimum possible delay (even 0 vehicles) = 12.8 s/veh → LOS B
+  - At 1200 veh/h per approach: delay ≈ 20.9 s/veh → LOS C
+  - LOS A (≤ 10s) is IMPOSSIBLE with 90s cycle regardless of demand
+
+The 90-second cycle is too long. The long red phase (48s) creates
+unavoidable delay that exceeds the LOS A threshold.
+
+
+=======================================================================
+5. ACHIEVING LOS A: REQUIRED SIGNAL TIMING
+=======================================================================
+
+For LOS A, we need d1 ≤ 10 s/veh. Two constraints must be met:
+  (a) The cycle must be short enough that d1_min < 10
+  (b) The capacity must still accommodate 1200 veh/h per approach
+
+Solving for cycle length with 1200 veh/h demand:
+
+  Trial: C = 60s (g = 27s, y = 3s per phase)
+  ─────────────────────────────────────────────
+    g/C = 27/60 = 0.45
+    Capacity (through+right) = 3800 × 0.45 = 1710 veh/h
+    X = 1080/1710 = 0.63
+    d1 = 0.5 × 60 × (0.55)² / (1 - 0.63 × 0.45)
+       = 0.5 × 60 × 0.3025 / (1 - 0.284)
+       = 9.075 / 0.716
+       = 12.7 s/veh  →  LOS B (still too high)
+
+  Trial: C = 50s (g = 22s, y = 3s per phase)
+  ─────────────────────────────────────────────
+    g/C = 22/50 = 0.44
+    Capacity (through+right) = 3800 × 0.44 = 1672 veh/h
+    X = 1080/1672 = 0.65
+    d1 = 0.5 × 50 × (0.56)² / (1 - 0.65 × 0.44)
+       = 0.5 × 50 × 0.3136 / (1 - 0.286)
+       = 7.84 / 0.714
+       = 10.98 s/veh  →  LOS B (barely over)
+
+  Trial: C = 40s (g = 17s, y = 3s per phase)
+  ─────────────────────────────────────────────
+    g/C = 17/40 = 0.425
+    Capacity (through+right) = 3800 × 0.425 = 1615 veh/h
+    X = 1080/1615 = 0.67
+    d1 = 0.5 × 40 × (0.575)² / (1 - 0.67 × 0.425)
+       = 0.5 × 40 × 0.3306 / (1 - 0.285)
+       = 6.61 / 0.715
+       = 9.25 s/veh  →  LOS A ✓
+
+    Left turn capacity check: 600 × 0.425 = 255 veh/h > 120 veh/h ✓
+    Through+right: 1615 > 1080 ✓  (v/c = 0.67, adequate)
+
+    Adding d2 (incremental): ≈ 2 s/veh at X=0.67
+    Total delay ≈ 9.25 + 2 = 11.25 s/veh → borderline LOS A/B
+
+  Trial: C = 36s (g = 15s, y = 3s per phase)
+  ─────────────────────────────────────────────
+    g/C = 15/36 = 0.417
+    Capacity (through+right) = 3800 × 0.417 = 1585 veh/h
+    X = 1080/1585 = 0.68
+    d1 = 0.5 × 36 × (0.583)² / (1 - 0.68 × 0.417)
+       = 0.5 × 36 × 0.340 / (1 - 0.284)
+       = 6.12 / 0.716
+       = 8.55 s/veh  →  LOS A ✓
+
+    Left turn capacity: 600 × 0.417 = 250 veh/h > 120 ✓
+    Total with d2 ≈ 8.55 + 2.5 = 11.05 s/veh → borderline A/B
+
+
+FINDING: With 1200 veh/h per approach, achieving a clean LOS A
+requires BOTH a shorter cycle AND fewer vehicles.
+
+
+=======================================================================
+6. COMBINED SOLUTION: CYCLE + VEHICLE COUNT FOR LOS A
+=======================================================================
+
+Option 1: C = 40s, reduce demand to 800 veh/h per approach
+─────────────────────────────────────────────────────────────
+  g/C = 17/40 = 0.425
+  Through+Right demand = 640 + 80 = 720 veh/h
+  X = 720/1615 = 0.45
+  d1 = 0.5 × 40 × 0.3306 / (1 - 0.45 × 0.425)
+     = 6.61 / (1 - 0.191)
+     = 6.61 / 0.809
+     = 8.17 s/veh
+  d2 ≈ 1 s/veh
+  Total ≈ 9.2 s/veh  →  LOS A ✓  (comfortable margin)
+
+  Route file values (maintaining 80/10/10 split):
+    Through: 640, Left: 80, Right: 80
+
+Option 2: C = 36s, keep 1200 veh/h per approach
+──────────────────────────────────────────────────
+  d1 = 8.55 s/veh
+  d2 ≈ 2.5 s/veh
+  Total ≈ 11 s/veh  →  LOS B (just misses A)
+
+Option 3: C = 36s, reduce demand to 1000 veh/h per approach
+──────────────────────────────────────────────────────────────
+  g/C = 15/36 = 0.417
+  Through+Right demand = 800 + 100 = 900 veh/h
+  X = 900/1585 = 0.57
+  d1 = 6.12 / (1 - 0.57 × 0.417)
+     = 6.12 / 0.762
+     = 8.03 s/veh
+  d2 ≈ 1.5 s/veh
+  Total ≈ 9.5 s/veh  →  LOS A ✓
+
+  Route file values:
+    Through: 800, Left: 100, Right: 100
+
+
+=======================================================================
+7. RECOMMENDED CONFIGURATION FOR LOS A
+=======================================================================
+
+Best balance of realism and LOS A compliance:
+
+  Signal timing (C = 40s):
+    <phase duration="17" state="GGGggrrrrrGGGggrrrrr"/>
+    <phase duration="3"  state="yyyyyrrrrryyyyyrrrrr"/>
+    <phase duration="17" state="rrrrrGGGggrrrrrGGGgg"/>
+    <phase duration="3"  state="rrrrryyyyyrrrrryyyyy"/>
+
+  Demand: 800 veh/h per approach (3200 total):
+    Through: 640, Left: 80, Right: 80
+
+  Result: delay ≈ 9.2 s/veh → LOS A
+
+
+=======================================================================
+8. SUMMARY TABLE
+=======================================================================
+
+  Config              Cycle  Demand/appr  v/c   Delay    LOS
+  ──────────────────────────────────────────────────────────────
+  Current             90s    1200         0.61  ~21 s    C
+  Shorter cycle only  40s    1200         0.67  ~11 s    B
+  Less demand only    90s     800         0.41  ~15 s    B
+  RECOMMENDED         40s     800         0.45  ~9.2 s   A ✓
+  Alternative         36s    1000         0.57  ~9.5 s   A ✓

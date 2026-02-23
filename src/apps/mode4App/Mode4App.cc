@@ -475,33 +475,22 @@ void Mode4App::generateAndSendSPDU()
     BSM bsm;
     bsm.setMsgId(bsmSeq);
 
-//    cModule *carModule = getParentModule()->getParentModule();
-//    cModule* mob = carModule->getSubmodule("veinsmobility");
-//
-//    if (mob == nullptr)
-//        throw cRuntimeError("Mode4App::getCoord() - veinsmobility module not found in car module %s", carModule->getFullPath().c_str());
-//
-//    veins::TraCIMobility* veinsMobility = check_and_cast<veins::TraCIMobility*>(mob);
-//
-//    // Call the new getPosition() function
-//    veins::Coord veinsPos = veinsMobility->getPosition();
-//
-//    // Get position, speed, and heading from Veins mobility
-////    veins::Coord pos = mobility->getPosition();
-//    bsm.setLatitude(veinsPos.x);
-//    bsm.setLongitude(veinsPos.y);
-//    double speed    = traciVehicle->getSpeed();
-//    double angleDeg = traciVehicle->getAngle();
-//    AKID_TEMP
-
     veins::Coord me = getNodePositionNow(this, simTime());
     bsm.setLatitude(me.x);
     bsm.setLongitude(me.y);
-//    bsm.setLatitude(0.0);
-//    bsm.setLongitude(0.0);
-    double speed    = 0.0;
-    double angleDeg = 0.0;
-    double heading  = (90.0 - angleDeg) * M_PI / 180.0;
+
+    // Fetch speed and heading from TraCI mobility
+    double speed   = 0.0;
+    double heading = 0.0;
+    for (cModule* m = this; m; m = m->getParentModule()) {
+        if (auto* mob = m->getSubmodule("veinsmobility")) {
+            if (auto* tm = dynamic_cast<veins::TraCIMobility*>(mob)) {
+                speed   = tm->getSpeed();
+                heading = tm->getHeading().getRad();
+                break;
+            }
+        }
+    }
     bsm.setSpeed(speed);
     bsm.setHeading(heading);
 

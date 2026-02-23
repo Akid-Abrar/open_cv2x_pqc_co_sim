@@ -132,6 +132,13 @@ def main():
     # Compute overall PDR per sender (used in suptitle)
     pdr_dict = compute_pdr(df, sent_counts)
 
+    # Weighted overall PDR: total_received / total_sent
+    total_received = sum(v["Received"] for v in pdr_dict.values())
+    total_sent = sum(v["Sent"] for v in pdr_dict.values())
+    weighted_pdr = total_received / total_sent if total_sent > 0 else 0
+    print(f"Weighted Overall PDR: {weighted_pdr * 100:.2f}% "
+          f"({total_received} received / {total_sent} sent)")
+
     # Global axis limits
     global_x_min = 0
     global_x_max = df["t"].max() + 10
@@ -249,6 +256,97 @@ def main():
         plt.close(fig)
 
         image_paths.append(fname)
+
+    # -------------------------------------------------------
+    # Overall PDR vs Average Distance plot
+    # -------------------------------------------------------
+    sender_stats = []
+    for sender, group in df.groupby("sender"):
+        avg_dist = group["dist_m"].mean()
+        info = pdr_dict[sender]
+        sender_stats.append({
+            "sender": sender,
+            "car_name": sender_to_carname(sender),
+            "avg_dist": avg_dist,
+            "pdr": info["PDR"],
+            "sent": info["Sent"],
+            "received": info["Received"],
+        })
+    df_stats = pd.DataFrame(sender_stats).sort_values("avg_dist")
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(df_stats["avg_dist"], df_stats["pdr"] * 100, marker="o", s=50)
+
+    # Label each point with car name
+    for _, row in df_stats.iterrows():
+        ax.annotate(row["car_name"], (row["avg_dist"], row["pdr"] * 100),
+                    textcoords="offset points", xytext=(5, 5), fontsize=7)
+
+    ax.axhline(90, color="red", linestyle="--", linewidth=1.5, label="PDR = 90%")
+    ax.set_title(
+        f"Per-Vehicle PDR vs Average Distance from RSU\n"
+        f"Algorithm: {algo_name}, SPDU: {spdu_size} B, "
+        f"Weighted PDR: {weighted_pdr * 100:.2f}%",
+        fontsize=13, fontweight="bold"
+    )
+    ax.set_xlabel("Average Distance from RSU (m)")
+    ax.set_ylabel("PDR (%)")
+    ax.set_ylim(0, 105)
+    ax.grid(True)
+    ax.legend()
+    plt.tight_layout()
+
+    fname = OUTPUT_DIR / f"PDR_vs_Distance{IMAGE_EXT}"
+    plt.savefig(fname, dpi=300)
+    plt.close(fig)
+    image_paths.append(fname)
+    print(f"Saved PDR vs Distance plot: {fname}")
+
+    # -------------------------------------------------------
+    # Binned PDR vs Distance plot
+    # -------------------------------------------------------
+    bin_width = 50  # meters
+    max_dist = df_stats["avg_dist"].max()
+    bins = list(range(0, int(max_dist) + bin_width + 1, bin_width))
+    df_stats["dist_bin"] = pd.cut(df_stats["avg_dist"], bins=bins, right=False)
+
+    binned = df_stats.groupby("dist_bin", observed=True).agg(
+        avg_pdr=("pdr", "mean"),
+        num_vehicles=("sender", "count"),
+        total_sent=("sent", "sum"),
+        total_received=("received", "sum"),
+    ).reset_index()
+    binned["weighted_pdr"] = binned["total_received"] / binned["total_sent"]
+    binned["bin_center"] = binned["dist_bin"].apply(lambda x: x.mid)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.bar(binned["bin_center"], binned["weighted_pdr"] * 100,
+                  width=bin_width * 0.8, edgecolor="black", alpha=0.7)
+
+    # Add vehicle count labels on bars
+    for bar, n in zip(bars, binned["num_vehicles"]):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+                f"n={n}", ha="center", va="bottom", fontsize=9)
+
+    ax.axhline(90, color="red", linestyle="--", linewidth=1.5, label="PDR = 90%")
+    ax.set_title(
+        f"Weighted PDR vs Distance (binned, {bin_width}m intervals)\n"
+        f"Algorithm: {algo_name}, SPDU: {spdu_size} B, "
+        f"Weighted PDR: {weighted_pdr * 100:.2f}%",
+        fontsize=13, fontweight="bold"
+    )
+    ax.set_xlabel("Distance from RSU (m)")
+    ax.set_ylabel("PDR (%)")
+    ax.set_ylim(0, 105)
+    ax.grid(True, axis="y")
+    ax.legend()
+    plt.tight_layout()
+
+    fname = OUTPUT_DIR / f"PDR_vs_Distance_Binned{IMAGE_EXT}"
+    plt.savefig(fname, dpi=300)
+    plt.close(fig)
+    image_paths.append(fname)
+    print(f"Saved binned PDR vs Distance plot: {fname}")
 
     # Create PPTX
     if image_paths:

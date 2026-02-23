@@ -1,0 +1,27 @@
+LOS (Line-of-Sight) Analysis for Mode4 Simulation
+===================================================
+
+In the current configuration, all communications are LOS (Line-of-Sight).
+
+Evidence from config_channel.xml:
+
+- dynamic-los = false (line 38) — the simulation does NOT dynamically switch
+  between LOS/NLOS based on obstacles
+- fixed-los = true (line 40) — since dynamic-los is disabled, this parameter
+  forces LOS pathloss for all links
+
+Additionally:
+- Shadowing is enabled (true)
+- Fading is enabled using Nakagami fading with 6 paths
+- The Veins config.xml also loads SimpleObstacleShadowing, but the LTE channel
+  model itself always uses LOS pathloss
+
+So the physical layer does model fading and shadowing effects, but the path loss
+computation is always LOS — it never switches to NLOS even when buildings or
+obstacles block the direct path between transmitter and receiver. This means the
+simulation is optimistic about signal propagation in obstructed scenarios (e.g.,
+around building corners at the intersection).
+
+If you want NLOS modeling, you'd set dynamic-los to true in config_channel.xml,
+which would let the channel model switch between LOS/NLOS based on obstacle
+geometry.
