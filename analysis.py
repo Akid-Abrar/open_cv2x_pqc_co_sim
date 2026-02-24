@@ -10,7 +10,7 @@ from pptx.util import Inches
 
 
 # ========= USER SETTINGS =========
-CSV_PATH = "results.csv"
+CSV_PATH = "appl_logs.csv"
 SUMMARY_PATH = "sender_summary.csv"
 OUTPUT_DIR = Path("plots")
 IMAGE_EXT = ".png"
@@ -139,6 +139,26 @@ def main():
     print(f"Weighted Overall PDR: {weighted_pdr * 100:.2f}% "
           f"({total_received} received / {total_sent} sent)")
 
+    # Report vehicles with actual packet drops (excluding the last packet,
+    # which is expected to be lost due to simulation ending)
+    print("\n--- Vehicles with packet drops (excluding last-packet loss) ---")
+    drop_found = False
+    for sender, info in sorted(pdr_dict.items(), key=lambda x: x[0]):
+        received = info["Received"]
+        sent = info["Sent"]
+        # If simulation ends mid-transmission, the last packet is expected
+        # to be dropped. So received == sent - 1 is normal (no real drops).
+        # Anything less means actual packets were dropped.
+        if received < sent - 1:
+            dropped = sent - received
+            car_name = sender_to_carname(sender)
+            print(f"  {car_name} ({sender}): sent={sent}, received={received}, "
+                  f"dropped={dropped} (excluding last pkt: {dropped - 1} real drops)")
+            drop_found = True
+    if not drop_found:
+        print("  None — all vehicles have at most 1 dropped packet (last-packet loss only)")
+    print()
+
     # Global axis limits
     global_x_min = 0
     global_x_max = df["t"].max() + 10
@@ -187,16 +207,19 @@ def main():
         pdr_time_vals = group["pdr_time"].values
 
         # Fetch overall PDR for title
-        pdr_value = pdr_dict[sender]["PDR"]
-        pdr_percent = f"{pdr_value * 100:.2f}%"
+        pdr_info = pdr_dict[sender]
+        pdr_value = pdr_info["PDR"]
+        pdr_received = pdr_info["Received"]
+        pdr_sent = pdr_info["Sent"]
+        pdr_label = f"{pdr_value * 100:.2f}% ({pdr_received}/{pdr_sent})"
 
         # Create figure (now 4 subplots)
         fig, axes = plt.subplots(4, 1, figsize=(10, 11))
 
         # Full title including PDR
         fig.suptitle(
-            f"Plot for {car_name}. Algorithm: {algo_name}, "
-            f"SPDU Size: {spdu_size} Bytes, Overall PDR: {pdr_percent}",
+            f"{car_name}. Algo: {algo_name}, "
+            f"SPDU Size: {spdu_size} B, PDR: {pdr_label}",
             fontsize=14,
             fontweight="bold"
         )
@@ -286,7 +309,7 @@ def main():
     ax.set_title(
         f"Per-Vehicle PDR vs Average Distance from RSU\n"
         f"Algorithm: {algo_name}, SPDU: {spdu_size} B, "
-        f"Weighted PDR: {weighted_pdr * 100:.2f}%",
+        f"Weighted PDR: {weighted_pdr * 100:.2f}% ({total_received}/{total_sent})",
         fontsize=13, fontweight="bold"
     )
     ax.set_xlabel("Average Distance from RSU (m)")
@@ -332,7 +355,7 @@ def main():
     ax.set_title(
         f"Weighted PDR vs Distance (binned, {bin_width}m intervals)\n"
         f"Algorithm: {algo_name}, SPDU: {spdu_size} B, "
-        f"Weighted PDR: {weighted_pdr * 100:.2f}%",
+        f"Weighted PDR: {weighted_pdr * 100:.2f}% ({total_received}/{total_sent})",
         fontsize=13, fontweight="bold"
     )
     ax.set_xlabel("Distance from RSU (m)")
