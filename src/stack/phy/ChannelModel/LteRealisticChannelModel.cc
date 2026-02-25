@@ -533,7 +533,16 @@ std::tuple<double, double> LteRealisticChannelModel::getAttenuation_D2D(MacNodeI
             attenuation = computeSubUrbanMacro(sqrDistance, dbp, nodeId);
             break;
         case ANALYTICAL:
-            attenuation = computeAnalyticalPathloss(coord, myCoord_, nodeId);
+            // AKID-CODE-BUG-FIX: Previously used myCoord_ (eNodeB/channel-model position)
+            // instead of coord_2 (the D2D peer UE position). In D2D/sidelink mode, path loss
+            // must be computed between the two UEs (coord = transmitter, coord_2 = receiver),
+            // NOT between a UE and the eNodeB. Using myCoord_ produced incorrect attenuation
+            // values, causing the probabilistic sensing formula (erf-based) to compute near-zero
+            // sensing ratios, which prevented SCI decoding in the ANALYTICAL/Base scenario.
+            // Other path loss models (URBAN_MICROCELL, etc.) correctly used sqrDistance derived
+            // from coord.distance(coord_2) at line ~499 and were not affected by this bug.
+            // Original: computeAnalyticalPathloss(coord, myCoord_, nodeId)
+            attenuation = computeAnalyticalPathloss(coord, coord_2, nodeId);
             break;
         default:
             throw cRuntimeError("Wrong value %d for path-loss scenario", scenario_);
@@ -2287,8 +2296,24 @@ double LteRealisticChannelModel::computeUrbanMicro(double d, MacNodeId nodeId)
     if (d < 10)
         d = 10;
 
+    // AKID-CODE-BUG-FIX: Breakpoint distance (dbp) formula is: 4 * h1' * h2' * fc / c
+    // where fc is in Hz and c = speed of light in m/s (ITU-R M.2135 / 3GPP TR 36.843).
+    // Previously this was: carrierFrequency_ * 1000000000, which assumed carrierFrequency_
+    // was in GHz. But carrierFrequency_ is already stored in Hz (e.g., 5.91e9 for C-V2X),
+    // so the multiplication produced 5.91e18 — an astronomically wrong dbp (~7.8e10 m).
+    // This caused ALL distances to fall into the d < dbp branch, using the wrong LOS formula.
+    // Original: carrierFrequency_ * 1000000000
     double dbp = 4 * (hNodeB_ - 1) * (hUe_ - 1)
-                        * ((carrierFrequency_ * 1000000000) / SPEED_OF_LIGHT);
+                        * (carrierFrequency_ / SPEED_OF_LIGHT);
+    // AKID-CODE-BUG-FIX: ITU UMi path loss formulas (3GPP TR 36.843 Table A.2.1.1-2) expect
+    // carrier frequency in GHz for the log10(fc) terms. carrierFrequency_ is stored in Hz
+    // (e.g., 5.91e9). Previously, raw carrierFrequency_ was passed directly to log10(),
+    // producing: 20*log10(5.91e9) = 195.4 dB instead of the correct 20*log10(5.91) = 15.4 dB.
+    // This added ~180 dB of spurious path loss, making received signal power far too low
+    // for SCI decoding. The probabilistic sensing formula then computed sensing ratio ≈ 0,
+    // causing sciDecoded ≈ 0 in the NLOS (URBAN_MICROCELL) scenario.
+    // Original: log10(carrierFrequency_)  [4 occurrences in this function]
+    double fc_GHz = carrierFrequency_ / 1e9;
     if (losMap_[nodeId])
     {
         // LOS situation
@@ -2299,10 +2324,10 @@ double LteRealisticChannelModel::computeUrbanMicro(double d, MacNodeId nodeId)
                 throw cRuntimeError("Error LOS urban microcell path loss model is valid for d<5000 m");
         }
         if (d < dbp)
-            return 22 * log10(d) + 28 + 20 * log10(carrierFrequency_);
+            return 22 * log10(d) + 28 + 20 * log10(fc_GHz);
         else
             return 40 * log10(d) + 7.8 - 18 * log10(hNodeB_ - 1)
-        - 18 * log10(hUe_ - 1) + 2 * log10(carrierFrequency_);
+        - 18 * log10(hUe_ - 1) + 2 * log10(fc_GHz);
     }
     // NLOS situation
     if (d < 10)
@@ -2313,7 +2338,7 @@ double LteRealisticChannelModel::computeUrbanMicro(double d, MacNodeId nodeId)
         else
             throw cRuntimeError("Error NLOS urban microcell path loss model is valid for d <2000 m");
     }
-    return 36.7 * log10(d) + 22.7 + 26 * log10(carrierFrequency_);
+    return 36.7 * log10(d) + 22.7 + 26 * log10(fc_GHz);
 }
 
 double LteRealisticChannelModel::computeUrbanMacro(double d, MacNodeId nodeId)
@@ -2321,8 +2346,15 @@ double LteRealisticChannelModel::computeUrbanMacro(double d, MacNodeId nodeId)
     if (d < 10)
         d = 10;
 
+    // AKID-CODE-BUG-FIX: Same dbp fix as computeUrbanMicro(). carrierFrequency_ is in Hz,
+    // not GHz. Previously used carrierFrequency_ * 1e9 which double-converted the value.
+    // Original: carrierFrequency_ * 1000000000
     double dbp = 4 * (hNodeB_ - 1) * (hUe_ - 1)
-                        * ((carrierFrequency_ * 1000000000) / SPEED_OF_LIGHT);
+                        * (carrierFrequency_ / SPEED_OF_LIGHT);
+    // AKID-CODE-BUG-FIX: Same Hz-to-GHz fix as computeUrbanMicro(). ITU UMa formulas
+    // (3GPP TR 36.843 Table A.2.1.1-2) expect fc in GHz for log10() terms.
+    // Original: log10(carrierFrequency_) — added ~180 dB spurious path loss.
+    double fc_GHz = carrierFrequency_ / 1e9;
     if (losMap_[nodeId])
     {
         if (d > 5000){
@@ -2332,10 +2364,10 @@ double LteRealisticChannelModel::computeUrbanMacro(double d, MacNodeId nodeId)
                 throw cRuntimeError("Error LOS urban macrocell path loss model is valid for d<5000 m");
         }
         if (d < dbp)
-            return 22 * log10(d) + 28 + 20 * log10(carrierFrequency_);
+            return 22 * log10(d) + 28 + 20 * log10(fc_GHz);
         else
             return 40 * log10(d) + 7.8 - 18 * log10(hNodeB_ - 1)
-        - 18 * log10(hUe_ - 1) + 2 * log10(carrierFrequency_);
+        - 18 * log10(hUe_ - 1) + 2 * log10(fc_GHz);
     }
 
     if (d < 10)
@@ -2350,7 +2382,7 @@ double LteRealisticChannelModel::computeUrbanMacro(double d, MacNodeId nodeId)
     double att = 161.04 - 7.1 * log10(wStreet_) + 7.5 * log10(hBuilding_)
     - (24.37 - 3.7 * pow(hBuilding_ / hNodeB_, 2)) * log10(hNodeB_)
     + (43.42 - 3.1 * log10(hNodeB_)) * (log10(d) - 3)
-    + 20 * log10(carrierFrequency_)
+    + 20 * log10(fc_GHz)
     - (3.2 * (pow(log10(11.75 * hUe_), 2)) - 4.97);
     return att;
 }
@@ -2361,8 +2393,14 @@ double LteRealisticChannelModel::computeSubUrbanMacro(double d, double& dbp,
     if (d < 10)
         d = 10;
 
+    // AKID-CODE-BUG-FIX: Same dbp fix as computeUrbanMicro(). carrierFrequency_ is in Hz.
+    // Original: carrierFrequency_ * 1000000000
     dbp = 4 * (hNodeB_ - 1) * (hUe_ - 1)
-                        * ((carrierFrequency_ * 1000000000) / SPEED_OF_LIGHT);
+                        * (carrierFrequency_ / SPEED_OF_LIGHT);
+    // AKID-CODE-BUG-FIX: Same Hz-to-GHz fix as computeUrbanMicro(). ITU SMa formulas
+    // expect fc in GHz for log10() terms.
+    // Original: log10(carrierFrequency_) — added ~180 dB spurious path loss.
+    double fc_GHz = carrierFrequency_ / 1e9;
     if (losMap_[nodeId])
     {
         if (d > 5000) {
@@ -2377,13 +2415,13 @@ double LteRealisticChannelModel::computeSubUrbanMacro(double d, double& dbp,
         double b = (b1 < 14.72) ? b1 : 14.72;
         if (d < dbp)
         {
-            double primo = 20 * log10((40 * M_PI * d * carrierFrequency_) / 3);
+            double primo = 20 * log10((40 * M_PI * d * fc_GHz) / 3);
             double secondo = a * log10(d);
             double quarto = 0.002 * log10(hBuilding_) * d;
             return primo + secondo - b + quarto;
         }
         else
-            return 20 * log10((40 * M_PI * dbp * carrierFrequency_) / 3)
+            return 20 * log10((40 * M_PI * dbp * fc_GHz) / 3)
         + a * log10(dbp) - b + 0.002 * log10(hBuilding_) * dbp
         + 40 * log10(d / dbp);
     }
@@ -2396,7 +2434,7 @@ double LteRealisticChannelModel::computeSubUrbanMacro(double d, double& dbp,
     double att = 161.04 - 7.1 * log10(wStreet_) + 7.5 * log10(hBuilding_)
     - (24.37 - 3.7 * pow(hBuilding_ / hNodeB_, 2)) * log10(hNodeB_)
     + (43.42 - 3.1 * log10(hNodeB_)) * (log10(d) - 3)
-    + 20 * log10(carrierFrequency_)
+    + 20 * log10(fc_GHz)
     - (3.2 * (pow(log10(11.75 * hUe_), 2)) - 4.97);
     return att;
 }
@@ -2407,8 +2445,14 @@ double LteRealisticChannelModel::computeRuralMacro(double d, double& dbp,
     if (d < 10)
         d = 10;
 
+    // AKID-CODE-BUG-FIX: Same dbp fix as computeUrbanMicro(). carrierFrequency_ is in Hz.
+    // Original: carrierFrequency_ * 1000000000
     dbp = 4 * (hNodeB_ - 1) * (hUe_ - 1)
-                        * ((carrierFrequency_ * 1000000000) / SPEED_OF_LIGHT);
+                        * (carrierFrequency_ / SPEED_OF_LIGHT);
+    // AKID-CODE-BUG-FIX: Same Hz-to-GHz fix as computeUrbanMicro(). ITU RMa formulas
+    // expect fc in GHz for log10() terms.
+    // Original: log10(carrierFrequency_) — added ~180 dB spurious path loss.
+    double fc_GHz = carrierFrequency_ / 1e9;
     if (losMap_[nodeId])
     {
         // LOS situation
@@ -2424,10 +2468,10 @@ double LteRealisticChannelModel::computeRuralMacro(double d, double& dbp,
         double a = (a1 < 10) ? a1 : 10;
         double b = (b1 < 14.72) ? b1 : 14.72;
         if (d < dbp)
-            return 20 * log10((40 * M_PI * d * carrierFrequency_) / 3)
+            return 20 * log10((40 * M_PI * d * fc_GHz) / 3)
         + a * log10(d) - b + 0.002 * log10(hBuilding_) * d;
         else
-            return 20 * log10((40 * M_PI * dbp * carrierFrequency_) / 3)
+            return 20 * log10((40 * M_PI * dbp * fc_GHz) / 3)
         + a * log10(dbp) - b + 0.002 * log10(hBuilding_) * dbp
         + 40 * log10(d / dbp);
     }
@@ -2442,7 +2486,7 @@ double LteRealisticChannelModel::computeRuralMacro(double d, double& dbp,
     double att = 161.04 - 7.1 * log10(wStreet_) + 7.5 * log10(hBuilding_)
     - (24.37 - 3.7 * pow(hBuilding_ / hNodeB_, 2)) * log10(hNodeB_)
     + (43.42 - 3.1 * log10(hNodeB_)) * (log10(d) - 3)
-    + 20 * log10(carrierFrequency_)
+    + 20 * log10(fc_GHz)
     - (3.2 * (pow(log10(11.75 * hUe_), 2)) - 4.97);
     return att;
 }
