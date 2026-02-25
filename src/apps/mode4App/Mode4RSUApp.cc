@@ -169,10 +169,11 @@ void Mode4RSUApp::initialize(int stage)
         cert_.setNotAfter(9223372036854775807LL);
 
 
-        int port = par("socketPort");
-        openNonBlockingUdp_(port);
-        sockPollEvt_ = new cMessage("sockPoll");
-        scheduleAt(simTime() + par("socketPollInterval"), sockPollEvt_);
+        // ICA socket reading disabled — not using ICA right now
+        // int port = par("socketPort");
+        // openNonBlockingUdp_(port);
+        // sockPollEvt_ = new cMessage("sockPoll");
+        // scheduleAt(simTime() + par("socketPollInterval"), sockPollEvt_);
 
     } else if (stage == inet::INITSTAGE_APPLICATION_LAYER) {
         EV_INFO << "RSU Application started, listening for signed BSMs...\n";
@@ -294,11 +295,12 @@ void Mode4RSUApp::socketRead()
 
 void Mode4RSUApp::handleSelfMessage(cMessage* msg)
 {
-    if (msg == sockPollEvt_) {
-        socketRead();
-        scheduleAt(simTime() + par("socketPollInterval"), sockPollEvt_);
-        return;
-    }
+    // ICA socket reading disabled
+    // if (msg == sockPollEvt_) {
+    //     socketRead();
+    //     scheduleAt(simTime() + par("socketPollInterval"), sockPollEvt_);
+    //     return;
+    // }
     // RSU has no other timers
     delete msg;
 }
@@ -407,8 +409,9 @@ void Mode4RSUApp::finish()
 
 Mode4RSUApp::~Mode4RSUApp()
 {
-    if (sockPollEvt_) { cancelAndDelete(sockPollEvt_); sockPollEvt_ = nullptr; }
-    if (sockFd_ >= 0) { ::close(sockFd_); sockFd_ = -1; }
+    // ICA socket reading disabled
+    // if (sockPollEvt_) { cancelAndDelete(sockPollEvt_); sockPollEvt_ = nullptr; }
+    // if (sockFd_ >= 0) { ::close(sockFd_); sockFd_ = -1; }
     binder_->unregisterNode(nodeId_);
 
 }
