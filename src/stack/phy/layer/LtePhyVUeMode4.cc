@@ -1604,6 +1604,20 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
         simtime_t ipg = SIMTIME_ZERO;
 
 
+        // AKID-CODE-BUG-FIX: Added fullDecode flag to gate TB forwarding on BOTH SCI and TB
+        // decoding success. Previously, the deciderResult sent to the upper layer (HARQ) was
+        // set to interference_result (line ~1748), which only reflects the TB data-channel
+        // SINR check from error_Mode4(). This completely ignored whether the corresponding
+        // SCI was decoded successfully. In real C-V2X hardware (3GPP TS 36.213 Sec 14.2.1),
+        // a UE CANNOT decode a TB without first decoding its SCI, because the SCI carries
+        // the MCS, resource allocation (RIV), and retransmission parameters needed to locate
+        // and demodulate the TB. Without this fix, the simulation reported artificially high
+        // PDR (e.g., 98% with sciDecoded=0) because packets with good TB SINR were forwarded
+        // to the app layer even though their SCIs were never decoded.
+        // fullDecode is set to true ONLY in the else branch at line ~1665 where both
+        // sciDecodedSuccessfully AND prop_result AND interference_result are all true.
+        bool fullDecode = false;
+
         if(!transmitting_){
 
             tbReceived_ += 1;
@@ -1660,6 +1674,10 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
                 tbFailedDueToInterference_ += 1;
                 tbFailedDueToInterferenceIgnoreSCI_ += 1;
             } else {
+                // AKID-CODE-BUG-FIX: Only set fullDecode=true here — the ONLY path where
+                // SCI was found, SCI decoded successfully, propagation passed, AND TB SINR
+                // passed. This is the legitimate reception path per 3GPP TS 36.213 Sec 14.2.1.
+                fullDecode = true;
                 tbDecoded_ += 1;
                 tbDecodedIgnoreSCI_ += 1;
                 std::map<MacNodeId, simtime_t>::iterator jt = previousTransmissionTimes_.find(lteInfo->getSourceId());
@@ -1741,8 +1759,14 @@ void LtePhyVUeMode4::decodeAirFrame(LteAirFrame* frame, UserControlInfo* lteInfo
 
         delete frame;
 
-        // send decapsulated message along with result control info to upperGateOut_
-        lteInfo->setDeciderResult(interference_result);
+        // AKID-CODE-BUG-FIX: Changed from interference_result to fullDecode. The HARQ layer
+        // (LteHarqProcessRxMode4.cc:49) uses deciderResult to mark PDUs as CORRECT or
+        // CORRUPTED. Using interference_result here meant packets with good TB SINR but
+        // failed SCI decoding were marked CORRECT and delivered to the application layer.
+        // With fullDecode, only packets that passed the complete reception chain (SCI decode
+        // + propagation check + TB SINR check) are forwarded as successfully received.
+        // Original: lteInfo->setDeciderResult(interference_result);
+        lteInfo->setDeciderResult(fullDecode);
         pkt->setControlInfo(lteInfo);
         send(pkt, upperGateOut_);
 
