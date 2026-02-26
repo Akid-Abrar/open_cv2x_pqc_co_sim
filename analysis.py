@@ -82,6 +82,35 @@ def compute_pdr(df, sent_counts: dict = None):
     return pdr_results
 
 
+def compute_distance_filtered_pdr(df, range_threshold):
+    """Compute PDR per sender using only packets received within range_threshold meters.
+
+    Denominator = last_msgId - first_msgId + 1 for in-range packets (estimates
+    packets sent while the receiver was within range).
+    """
+    pdr_results = {}
+
+    for sender, group in df.groupby("sender"):
+        in_range = group[group["dist_m"] <= range_threshold]
+        if in_range.empty:
+            continue
+
+        received = len(in_range)
+        msg_min = in_range["msgId"].min()
+        msg_max = in_range["msgId"].max()
+        sent = msg_max - msg_min + 1
+
+        pdr = received / sent if sent > 0 else 0
+
+        pdr_results[sender] = {
+            "PDR": pdr,
+            "Sent": int(sent),
+            "Received": received,
+        }
+
+    return pdr_results
+
+
 def create_pptx_from_images(image_paths, pptx_path: Path) -> None:
     prs = Presentation()
     blank_layout = prs.slide_layouts[6]  # blank slide
@@ -370,6 +399,101 @@ def main():
     plt.close(fig)
     image_paths.append(fname)
     print(f"Saved binned PDR vs Distance plot: {fname}")
+
+    # -------------------------------------------------------
+    # Distance-Filtered PDR: only count packets within range
+    # -------------------------------------------------------
+    range_thresholds = [100, 200, 300, 400, 500]
+
+    print("\n--- Distance-Filtered PDR (packets within range only) ---")
+    print(f"{'Threshold (m)':<16} {'PDR (%)':<10} {'Received':<10} {'Sent':<10} {'Senders':<8}")
+    print("-" * 54)
+
+    threshold_pdrs = []
+    threshold_sender_counts = []
+    for thresh in range_thresholds:
+        filt_pdr = compute_distance_filtered_pdr(df, thresh)
+        if not filt_pdr:
+            threshold_pdrs.append(0)
+            threshold_sender_counts.append(0)
+            print(f"{thresh:<16} {'N/A':<10} {0:<10} {0:<10} {0:<8}")
+            continue
+        tot_recv = sum(v["Received"] for v in filt_pdr.values())
+        tot_sent = sum(v["Sent"] for v in filt_pdr.values())
+        wpdr = tot_recv / tot_sent if tot_sent > 0 else 0
+        threshold_pdrs.append(wpdr)
+        threshold_sender_counts.append(len(filt_pdr))
+        print(f"{thresh:<16} {wpdr * 100:<10.2f} {tot_recv:<10} {tot_sent:<10} {len(filt_pdr):<8}")
+    print()
+
+    # Plot: PDR vs Range Threshold (bar chart)
+    fig, ax = plt.subplots(figsize=(9, 6))
+    x_pos = range(len(range_thresholds))
+    bars = ax.bar(x_pos, [p * 100 for p in threshold_pdrs],
+                  color="#4C72B0", edgecolor="black", alpha=0.85)
+
+    for i, (bar, pdr_val, n_senders) in enumerate(zip(bars, threshold_pdrs, threshold_sender_counts)):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+                f"{pdr_val * 100:.1f}%\nn={n_senders}",
+                ha="center", va="bottom", fontsize=9)
+
+    ax.axhline(90, color="red", linestyle="--", linewidth=1.5, label="PDR = 90%")
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels([f"{t}m" for t in range_thresholds])
+    ax.set_xlabel("Range Threshold (m)")
+    ax.set_ylabel("Weighted PDR (%)")
+    ax.set_ylim(0, 110)
+    ax.set_title(
+        f"Distance-Filtered PDR vs Range Threshold\n"
+        f"Algorithm: {algo_name}, SPDU: {spdu_size} B",
+        fontsize=13, fontweight="bold"
+    )
+    ax.grid(True, axis="y")
+    ax.legend()
+    plt.tight_layout()
+
+    fname = OUTPUT_DIR / f"PDR_vs_Range_Threshold{IMAGE_EXT}"
+    plt.savefig(fname, dpi=300)
+    plt.close(fig)
+    image_paths.append(fname)
+    print(f"Saved distance-filtered PDR plot: {fname}")
+
+    # Plot: Per-Sender PDR at 300m threshold
+    pdr_300 = compute_distance_filtered_pdr(df, 300)
+    if pdr_300:
+        sorted_senders = sorted(pdr_300.items(), key=lambda x: x[1]["PDR"], reverse=True)
+        car_names = [sender_to_carname(s) for s, _ in sorted_senders]
+        pdr_vals = [info["PDR"] * 100 for _, info in sorted_senders]
+        labels = [f"{info['Received']}/{info['Sent']}" for _, info in sorted_senders]
+
+        fig, ax = plt.subplots(figsize=(max(8, len(car_names) * 0.6), 6))
+        bars = ax.bar(range(len(car_names)), pdr_vals,
+                      color="#55A868", edgecolor="black", alpha=0.85)
+
+        for bar, lbl in zip(bars, labels):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+                    lbl, ha="center", va="bottom", fontsize=7, rotation=45)
+
+        ax.axhline(90, color="red", linestyle="--", linewidth=1.5, label="PDR = 90%")
+        ax.set_xticks(range(len(car_names)))
+        ax.set_xticklabels(car_names, rotation=45, ha="right", fontsize=8)
+        ax.set_xlabel("Vehicle")
+        ax.set_ylabel("PDR (%)")
+        ax.set_ylim(0, 115)
+        ax.set_title(
+            f"Per-Vehicle PDR (packets within 300m only)\n"
+            f"Algorithm: {algo_name}, SPDU: {spdu_size} B",
+            fontsize=13, fontweight="bold"
+        )
+        ax.grid(True, axis="y")
+        ax.legend()
+        plt.tight_layout()
+
+        fname = OUTPUT_DIR / f"PDR_Per_Sender_300m{IMAGE_EXT}"
+        plt.savefig(fname, dpi=300)
+        plt.close(fig)
+        image_paths.append(fname)
+        print(f"Saved per-sender 300m PDR plot: {fname}")
 
     # Create PPTX
     if image_paths:
