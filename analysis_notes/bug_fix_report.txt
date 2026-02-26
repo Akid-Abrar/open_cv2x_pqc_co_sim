@@ -1,0 +1,440 @@
+==============================================================================
+         SimuLTE Mode4 Project - Comprehensive Bug Fix Report
+                     Generated: 2026-02-26
+==============================================================================
+
+This report documents all bugs identified and fixed during the SimuLTE Mode4
+C-V2X simulation project, organized by severity.
+
+
+==============================================================================
+                        CRITICAL SEVERITY
+==============================================================================
+
+BUG #1: PHY Layer TB Packets Bypass SCI Decoding Check
+-------------------------------------------------------
+File:     src/stack/phy/layer/LtePhyVUeMode4.cc (line ~1745)
+Commit:   2f05e04
+
+Problem:  The PHY layer unconditionally forwarded Transport Block (TB)
+          packets to upper layers based solely on TB data-channel SINR,
+          completely ignoring whether the corresponding Sidelink Control
+          Information (SCI) was successfully decoded. In real C-V2X hardware
+          (3GPP TS 36.213 Section 14.2.1), a UE cannot decode a TB without
+          first decoding its SCI, since the SCI carries MCS, resource
+          allocation, and retransmission parameters.
+
+Evidence: In Stress-NLOS runs, sciDecoded = 0 yet 572,430 packets were
+          delivered to the application layer. tbDecodedIgnoreSCI = 586,981
+          closely matched the app-layer received count.
+
+Fix:      Added a bool fullDecode flag set to true ONLY when: SCI found,
+          SCI decoded successfully, propagation passed, AND TB SINR passed.
+          Changed the decider result from interference_result to fullDecode,
+          gating HARQ acceptance on the complete reception chain.
+
+Impact:   All prior simulation results reported artificially high PDR.
+          Packets with good TB SINR but failed SCI were being accepted.
+
+
+BUG #2: ANALYTICAL Path Loss Used Wrong Coordinate (D2D)
+---------------------------------------------------------
+File:     src/stack/phy/ChannelModel/LteRealisticChannelModel.cc (line ~536)
+Commit:   2f05e04
+
+Problem:  In getAttenuation_D2D(), the ANALYTICAL path loss model computed
+          distance between the source UE (coord) and myCoord_ (the channel
+          model's position, typically eNodeB), instead of between the two
+          D2D peers (coord and coord_2). Other path loss models correctly
+          used the peer-to-peer distance.
+
+Fix:      Changed:
+            attenuation = computeAnalyticalPathloss(coord, myCoord_, nodeId);
+          To:
+            attenuation = computeAnalyticalPathloss(coord, coord_2, nodeId);
+
+Impact:   Produced incorrect attenuation values for all D2D links in
+          ANALYTICAL mode, causing the probabilistic sensing formula to
+          compute near-zero sensing ratios and preventing SCI decoding.
+
+
+BUG #3: Carrier Frequency Unit Mismatch in ITU Path Loss Models
+----------------------------------------------------------------
+File:     src/stack/phy/ChannelModel/LteRealisticChannelModel.cc
+          - computeUrbanMicro()      lines ~2290-2340
+          - computeUrbanMacro()      lines ~2325-2355
+          - computeSubUrbanMacro()   lines ~2365-2435
+          - computeRuralMacro()      lines ~2407-2490
+Commit:   2f05e04
+
+Problem:  Two interrelated unit bugs in four path loss functions:
+
+          1) Breakpoint distance (dbp) used carrierFrequency_ * 1e9,
+             assuming carrierFrequency_ was in GHz. But it is stored in Hz
+             (e.g., 5.91e9), producing dbp = 5.91e18 -- astronomically
+             wrong, causing ALL distances to use the wrong LOS formula.
+
+          2) log10(fc) terms passed raw carrierFrequency_ (Hz) to log10(),
+             producing 20*log10(5.91e9) = 195.4 dB instead of the correct
+             20*log10(5.91) = 15.4 dB. This added ~180 dB of spurious
+             path loss.
+
+Fix:      Removed * 1e9 from dbp calculations. Added:
+            double fc_GHz = carrierFrequency_ / 1e9;
+          and replaced all log10(carrierFrequency_) with log10(fc_GHz).
+
+Impact:   Made URBAN_MICROCELL (NLOS) scenario produce ~180 dB excess path
+          loss, rendering all non-ANALYTICAL propagation models completely
+          broken.
+
+
+==============================================================================
+                          HIGH SEVERITY
+==============================================================================
+
+BUG #4: Modulation Selection Used maxMCS Instead of Current MCS
+----------------------------------------------------------------
+File:     src/stack/mac/layer/LteMacVUeMode4.cc
+          - macGenerateSchedulingGrant() at line ~1067
+          - flushHarqBuffers() at line ~1227
+Commit:   720e913
+
+Problem:  The modulation type (QPSK/16QAM/64QAM) was determined using
+          maxMCSPSSCH_ instead of the current loop variable mcs. With
+          maxMCSPSSCH_=11, the condition was always true, forcing 16QAM
+          for ALL MCS values including 5-7 (which should be QPSK).
+
+Fix:      Changed:
+            if (maxMCSPSSCH_ > 9 && maxMCSPSSCH_ < 17) mod = _16QAM;
+          To:
+            if (mcs > 9 && mcs < 17) mod = _16QAM;
+
+Impact:   MCS 5-7 (QPSK) were incorrectly treated as 16QAM, producing
+          wrong TBS values and potentially incorrect grant sizes.
+
+
+BUG #5: MCS 8, 9, 10 Not Excluded Per J3161 Section 8.6
+---------------------------------------------------------
+File:     src/stack/mac/layer/LteMacVUeMode4.cc (same two loops as Bug #4)
+Commit:   720e913
+
+Problem:  SAE J3161 Section 8.6 explicitly forbids MCS values 8, 9, and 10.
+          The MCS selection loops did not skip these forbidden values.
+
+Fix:      Added: if (mcs >= 8 && mcs <= 10) continue;
+
+Impact:   Standard non-compliance. Forbidden MCS values could be selected.
+          Violation of SAE J3161 Section 8.6.
+
+
+BUG #6: Double-Trial Packet Drop Overestimation
+-------------------------------------------------
+File:     src/stack/phy/ChannelModel/LteRealisticChannelModel.cc
+          src/stack/phy/layer/LtePhyVUeMode4.cc
+Commit:   e4cb3ee (upstream PR #6 by STPell)
+
+Problem:  error_Mode4() was called twice to determine whether a packet drop
+          was due to interference or propagation. This created two
+          independent random trials per packet, overestimating drop rates.
+          P_success = (1 - P_tb_err^2)(1 - P_sci_err^2) instead of
+          the correct (1 - P_tb_err)(1 - P_sci_err).
+
+Fix:      Changed error_Mode4() to return std::tuple<bool, bool> from a
+          single random trial.
+
+Impact:   Overestimated BLER/packet drop rates across all scenarios.
+
+
+BUG #7: Non-Compliant MCS Range in sidelink_configuration.xml
+--------------------------------------------------------------
+File:     simulations/Mode4/sidelink_configuration.xml
+Commit:   720e913
+
+Problem:  Default MCS range was minMCS-PSSCH=9, maxMCS-PSSCH=16.
+          J3161 specifies min=5, max=11. MCS 9 is in the forbidden range
+          (8-10), and max of 16 exceeds the allowed limit.
+
+Fix:      Changed to minMCS-PSSCH=5, maxMCS-PSSCH=11 in all entries.
+
+Impact:   Standard non-compliance. SAE J3161 Section 8.6 violation.
+
+
+BUG #8: Non-Compliant numBands (Bandwidth Mismatch)
+-----------------------------------------------------
+File:     simulations/Mode4/omnetpp.ini (line ~53)
+Commit:   720e913
+
+Problem:  numBands was set to 48 while numRbUl=100. J3161 requires a
+          20 MHz channel (100 RBs). The mismatch meant only 48 of 100
+          resource blocks were usable.
+
+Fix:      Changed numBands from 48 to 100.
+
+Impact:   Resource pool was effectively halved, reducing capacity for
+          larger PQC packets.
+
+
+==============================================================================
+                        MEDIUM SEVERITY
+==============================================================================
+
+BUG #9: CBR Fallback Minimum Subchannel = 1
+---------------------------------------------
+File:     simulations/Mode4/sidelink_configuration.xml
+Commit:   720e913
+
+Problem:  All CBR-based fallback tx parameter entries had
+          minSubchannel-NumberPSSCH=1, maxSubchannel-NumberPSSCH=1.
+          SAE J3161 Section 8.6 requires at least 2 subchannels
+          (REQ-J3161-SPS_002).
+
+Fix:      Changed all CBR fallback entries to minSubchannel=2,
+          maxSubchannel=10, maxMCS-PSSCH=11.
+
+Impact:   Under high CBR, transmissions restricted to 1 subchannel,
+          violating the standard and making PQC packets impossible.
+
+
+BUG #10: CBR/DCC Congestion Control Disabled
+----------------------------------------------
+File:     simulations/Mode4/omnetpp.ini
+Commit:   720e913
+
+Problem:  useCBR=false, crLimit=false, packetDropping=false for both
+          cars and RSU. J3161 requires CBR-based congestion control.
+
+Fix:      Set useCBR=true, crLimit=true, packetDropping=true.
+
+Impact:   No congestion control under high load. Standard non-compliance.
+
+
+BUG #11: sl-ReselectAfter = 1 Instead of 6
+--------------------------------------------
+File:     simulations/Mode4/omnetpp.ini
+Commit:   720e913
+
+Problem:  reselectAfter=1 triggers resource reselection after a single
+          missed SPS grant, far more aggressive than J3161's required
+          value of 6, causing unnecessary resource churn.
+
+Fix:      Changed reselectAfter from 1 to 6.
+
+Impact:   Excessive resource reselection under transient interference.
+          SAE J3161 Table 8, #22 violation.
+
+
+BUG #12: BSM Priority / PPPP = 1 Instead of 2
+------------------------------------------------
+File:     src/apps/mode4App/Mode4App.cc (line ~565)
+          simulations/Mode4/omnetpp.ini (RSU slPriority)
+Commit:   720e913
+
+Problem:  BSM priority was hardcoded to 1. J3161 specifies minimum
+          PPPP=2 for Critical V2V traffic. No standard V2X message type
+          uses PPPP 1.
+
+Fix:      Changed Mode4App setPriority(1) to setPriority(2).
+          Changed RSU slPriority from 1 to 3.
+
+Impact:   Standard non-compliance.
+
+
+BUG #13: RSSI-CBR Threshold = 10 Instead of 9
+------------------------------------------------
+File:     simulations/Mode4/omnetpp.ini
+Commit:   720e913
+
+Problem:  thresholdRSSI=10 corresponds to -92 dBm. J3161 Table 10
+          requires value 9 (-94 dBm). The 2 dB higher threshold
+          underestimates channel busy ratio.
+
+Fix:      Changed thresholdRSSI from 10 to 9.
+
+Impact:   Underestimates CBR, affecting congestion control accuracy.
+
+
+BUG #14: PDR Calculation Uses Receiver-Only Estimate
+------------------------------------------------------
+File:     analysis.py, compute_pdr() function
+
+Problem:  PDR estimated "total sent" as msgId_max - msgId_min + 1 from
+          the RSU's receive log only. This misses packets lost before the
+          first received or after the last received msgId, inflating PDR.
+
+Fix:      Implemented sender-side logging in Mode4App.cc to write
+          sender_summary.csv with ground-truth sent counts. Updated
+          analysis.py to read this summary for accurate PDR denominators.
+
+Impact:   PDR was overestimated, especially for vehicles with high early
+          or late packet loss.
+
+
+BUG #15: Cumulative PDR Breaks With Out-of-Order msgIds
+---------------------------------------------------------
+File:     analysis.py (lines ~142-147)
+
+Problem:  Cumulative PDR used sent_est = msgId - msg_min + 1 with data
+          sorted by time, not msgId. If packets arrive out of order,
+          sent_est can decrease while received_count increases, producing
+          PDR > 1.0.
+
+Fix:      Used cummax() on msgId so out-of-order arrivals don't cause
+          sent_est to decrease.
+
+Impact:   Cumulative PDR plots could show values exceeding 100%.
+
+
+BUG #16: BSM Speed and Heading Hardcoded to Zero
+--------------------------------------------------
+File:     src/apps/mode4App/Mode4App.cc (lines ~502-503)
+
+Problem:  In generateAndSendSPDU(), speed and heading were hardcoded to
+          0.0 instead of being fetched from TraCI. Position was correctly
+          fetched, but kinematic fields were not.
+
+Fix:      Replaced hardcoded values with traciVehicle->getSpeed() and
+          mobility->getHeading().getRad().
+
+Impact:   BSM packets carried incorrect kinematic data.
+
+
+==============================================================================
+                          LOW SEVERITY
+==============================================================================
+
+BUG #17: Carrier Frequency 5905 MHz Instead of 5915 MHz
+---------------------------------------------------------
+File:     simulations/Mode4/omnetpp.ini (line ~37)
+Commit:   720e913
+
+Problem:  carrierFrequency=5905e+6 is the lower edge of the ITS band,
+          not Channel 183 center frequency (5915 MHz per J3161 Table 8).
+
+Fix:      Changed from 5905e+6 to 5915e+6.
+
+Impact:   Slight path loss calculation difference.
+
+
+BUG #18: Signature Time Logged in Microseconds Instead of Milliseconds
+------------------------------------------------------------------------
+File:     src/apps/mode4App/Mode4App.cc (line ~518)
+
+Problem:  sigTime signal was emitted in microseconds (raw
+          std::chrono::microseconds value) but analysis expected ms.
+
+Fix:      Divided sigTime by 1000.0 before emitting.
+
+Impact:   Logging/analysis issue only.
+
+
+BUG #19: Dead Code After sendLowerPackets
+-------------------------------------------
+File:     src/apps/mode4App/Mode4App.cc (lines ~575-577)
+
+Problem:  After sendLowerPackets(spdu) transfers ownership, subsequent
+          lines set lteControlInfo->setSrcAddr(nodeId_) on the
+          already-sent packet's control info.
+
+Fix:      Removed the redundant code.
+
+Impact:   No functional impact, but could cause undefined behavior.
+
+
+BUG #20: Double Semicolon
+---------------------------
+File:     src/apps/mode4App/Mode4App.cc (line ~514)
+
+Problem:  A double semicolon ;; in the source.
+
+Fix:      Removed the extra semicolon.
+
+Impact:   No functional impact.
+
+
+BUG #21: Distance and Delay Plots Shared Y-Axis Limits
+--------------------------------------------------------
+File:     analysis.py (lines ~113-114)
+
+Problem:  Distance and delay subplots used a single shared y_max,
+          causing one plot to have inappropriate scaling.
+
+Fix:      Used independent dist_y_max and delay_y_max for each subplot.
+
+Impact:   Visualization issue only.
+
+
+BUG #22: omnetpp.ini Missing Asterisk Prefix
+----------------------------------------------
+File:     simulations/Mode4/omnetpp.ini (line ~113)
+
+Problem:  Line had .manager.launchConfig instead of *.manager.launchConfig,
+          causing the parameter to not match any module.
+
+Fix:      Added the missing * prefix.
+
+Impact:   Launch config parameter was not being applied.
+
+
+BUG #23: pqcdsa.cc Contradictory Default Algorithm
+-----------------------------------------------------
+File:     src/apps/mode4App/pqcdsa.cc
+
+Problem:  The default algorithm was set to ECDSA via kDefaultAlgo constant,
+          but defaultAlgFromEnv() returned Dilithium-2 when no environment
+          variable was set. The two defaults contradicted each other.
+
+Fix:      Unified into a single getDefaultAlg() function that defaults to
+          ECDSA but is overridable via the PQCDSA_ALGO environment variable.
+
+Impact:   Could cause confusion about which algorithm was actually used.
+
+
+==============================================================================
+                    KNOWN ISSUES (NOT YET FIXED)
+==============================================================================
+
+LATENT BUG: maxMCSPSSCH_ Fallback Uses Wrong Parameter
+--------------------------------------------------------
+File:     src/stack/mac/layer/LteMacVUeMode4.cc:163
+
+Problem:  The fallback line reads:
+            maxMCSPSSCH_ = (int)par("minMCSPSSCH")
+          instead of par("maxMCSPSSCH"). Not currently triggered because
+          the XML config always has maxMCS-PSSCH, but if that entry were
+          ever missing, maxMCSPSSCH_ would be set to the minimum value.
+
+
+OUTSTANDING: SPS + One-Shot Transmission Not Implemented
+---------------------------------------------------------
+File:     src/stack/mac/layer/LteMacVUeMode4.cc
+
+Problem:  SAE J3161 Section 7.3.3 / Figure 15 requires one-shot
+          transmission alongside SPS to avoid repetitive packet collisions.
+          Needs OneShotCtr alongside ResourceReselectionCtr.
+          HIGH SEVERITY standard compliance gap.
+
+
+KNOWN: subchannelSent = 0 for Falcon
+--------------------------------------
+Problem:  All Falcon car nodes report subchannelSent:sum = 0 and
+          subchannelReceived:mean = 0, despite clearly transmitting
+          (RSU receives 19,348 TBs). The subchannel stat counter is
+          bypassed in the code path handling Falcon's larger subchannel
+          allocations.
+
+
+==============================================================================
+                          SUMMARY
+==============================================================================
+
+  Total bugs fixed:          23
+    - Critical:               3  (PHY bypass, wrong D2D coord, freq units)
+    - High:                   5  (MCS selection, MCS range, numBands, etc.)
+    - Medium:                 8  (congestion control, PDR calc, BSM fields)
+    - Low:                    7  (frequency, logging, cosmetic issues)
+
+  Known issues remaining:    3  (maxMCS fallback, one-shot SPS, Falcon stats)
+
+  Upstream bugs (pre-project): 20 (fixed by original SimuLTE Mode4 devs)
+
+==============================================================================
