@@ -1,0 +1,486 @@
+================================================================================
+  IEEE 1609.2-2022 GAP ANALYSIS vs. SimuLTE Mode4 Implementation
+  Generated: 2026-03-02
+  Reference: IEEE Std 1609.2-2022 (16092-2022.pdf)
+================================================================================
+
+EXECUTIVE SUMMARY
+-----------------
+The current SimuLTE Mode4 implementation provides a functional but heavily
+simplified security layer. It correctly implements the core concept of
+sign-then-verify using ECDSA/Falcon-512/Dilithium-2, but the SPDU and
+Certificate structures deviate significantly from the IEEE 1609.2-2022 ASN.1
+definitions. Most gaps are structural (missing wrapper fields, missing
+HeaderInfo) rather than cryptographic. For a simulation-focused research paper,
+many of these gaps are acceptable simplifications, but they should be explicitly
+acknowledged.
+
+SEVERITY LEVELS:
+  [CRITICAL]  - Fundamentally incompatible with 1609.2 wire format
+  [HIGH]      - Missing mandatory field/behavior required by the standard
+  [MEDIUM]    - Missing optional but commonly-used feature
+  [LOW]       - Simplification acceptable for simulation purposes
+  [OK]        - Compliant or not applicable to simulation
+
+================================================================================
+1. SPDU (Ieee1609Dot2Data) STRUCTURE
+================================================================================
+
+IEEE 1609.2 Required Structure (Section 6.3):
+  Ieee1609Dot2Data ::= SEQUENCE {
+    protocolVersion  Uint8(3),
+    content          Ieee1609Dot2Content  -- CHOICE: signedData, encrypted, ...
+  }
+
+  SignedData ::= SEQUENCE {
+    hashId     HashAlgorithm,
+    tbsData    ToBeSignedData,
+    signer     SignerIdentifier,
+    signature  Signature
+  }
+
+  ToBeSignedData ::= SEQUENCE {
+    payload    SignedDataPayload,
+    headerInfo HeaderInfo
+  }
+
+  HeaderInfo ::= SEQUENCE {
+    psid               Psid,                    -- MANDATORY
+    generationTime     Time64 OPTIONAL,
+    expiryTime         Time64 OPTIONAL,
+    generationLocation ThreeDLocation OPTIONAL,
+    p2pcdLearningRequest HashedId3 OPTIONAL,
+    missingCrlIdentifier MissingCrlIdentifier OPTIONAL,
+    encryptionKey      EncryptionKey OPTIONAL,
+    ...
+  }
+
+Current SimuLTE Structure (SPDU.msg):
+  packet SPDU extends cPacket {
+    BSM          bsm;
+    uint8_t      signature[];
+    Certificate  cert;
+  }
+
+GAP #1: Missing Ieee1609Dot2Data wrapper                          [CRITICAL]
+------------------------------------------------------------------------
+  Standard requires: protocolVersion (=3) + content type discriminator
+  Current:           No protocol version, no content type field
+  Impact:            Wire format incompatible. Cannot distinguish signed
+                     vs encrypted vs unsecured SPDUs.
+  Recommendation:    Add protocolVersion=3 and contentType="signedData"
+                     fields to SPDU.msg. For simulation, these are constant
+                     values but should be present for byte-count accuracy.
+
+GAP #2: Missing HashAlgorithm identifier (hashId)                [HIGH]
+------------------------------------------------------------------------
+  Standard requires: hashId field in SignedData (sha256, sha384, sm3)
+  Current:           Not present. Hash algorithm is implicit.
+  Impact:            Receiver cannot determine which hash was used.
+  Recommendation:    Add string hashAlgorithm = "sha256" to SPDU.msg.
+
+GAP #3: Missing HeaderInfo                                        [CRITICAL]
+------------------------------------------------------------------------
+  Standard requires: HeaderInfo with mandatory PSID field, plus optional
+                     generationTime, expiryTime, generationLocation
+  Current:           No HeaderInfo at all. BSM data (lat/lon) is in the
+                     payload but not in the security header.
+  Impact:            - No PSID (Provider Service ID) for BSM (PSID=0x20)
+                     - No generationTime in security envelope
+                     - No generationLocation for relevance checks
+                     - Receiver cannot perform consistency/relevance checks
+                       per Section 5.2.6 and 5.2.7
+  Recommendation:    Add HeaderInfo fields to SPDU.msg:
+                       int psid = 0x20;     // BSM PSID per SAE J2945/1
+                       int64_t generationTime = 0;
+                       double genLat = 0;
+                       double genLon = 0;
+                       double genElev = 0;
+
+GAP #4: Missing SignerIdentifier CHOICE                           [HIGH]
+------------------------------------------------------------------------
+  Standard requires: SignerIdentifier = CHOICE {
+                       digest: HashedId8,
+                       certificate: SequenceOfCertificate,
+                       self: NULL
+                     }
+  Current:           Always sends full certificate inline (cert field).
+                     No digest option, no self-signed option.
+  Impact:            In real V2X, certificates are sent every ~5th packet
+                     and digest (HashedId8 = 8 bytes) is used otherwise.
+                     This dramatically affects packet size overhead.
+                     Current simulation ALWAYS sends full cert = worst case
+                     overhead scenario.
+  Recommendation:    For accurate overhead analysis, add:
+                       int signerType = 0;  // 0=digest, 1=certificate
+                       uint8_t certDigest[8]; // HashedId8
+                     And implement certificate caching + periodic
+                     inclusion (every 5th BSM per SAE J2945/1).
+                     NOTE: Current "always include cert" approach gives
+                     CONSERVATIVE (worst-case) packet size estimates.
+
+GAP #5: Signature type discriminator                              [HIGH]
+------------------------------------------------------------------------
+  Standard requires: Signature = CHOICE {
+                       ecdsaNistP256Signature,
+                       ecdsaBrainpoolP256r1Signature,
+                       ecdsaBrainpoolP384r1Signature,
+                       ecdsaNistP384Signature,
+                       sm2Signature
+                     }
+  Current:           Raw signature bytes with no type tag.
+                     Algorithm name is in Certificate.algoName but not
+                     in the SPDU Signature field itself.
+  Impact:            No PQC signature types defined in IEEE 1609.2-2022.
+                     Falcon-512 and Dilithium-2 are NOT in the standard's
+                     Signature CHOICE. This is expected — the standard
+                     predates PQC standardization.
+  Note:              This is actually a KEY RESEARCH CONTRIBUTION: showing
+                     what happens when PQC algorithms replace ECDSA in the
+                     1609.2 framework.
+
+================================================================================
+2. CERTIFICATE STRUCTURE
+================================================================================
+
+IEEE 1609.2 Required Structure (Section 6.4):
+  CertificateBase ::= SEQUENCE {
+    version       Uint8(3),
+    type          CertificateType,     -- explicit | implicit
+    issuer        IssuerIdentifier,
+    toBeSigned    ToBeSignedCertificate,
+    signature     Signature OPTIONAL   -- present for explicit only
+  }
+
+  ToBeSignedCertificate ::= SEQUENCE {
+    id                   CertificateId,
+    cracaId              HashedId3,
+    crlSeries            CrlSeries,
+    validityPeriod       ValidityPeriod,
+    region               GeographicRegion OPTIONAL,
+    assuranceLevel       SubjectAssurance OPTIONAL,
+    appPermissions       SequenceOfPsidSsp OPTIONAL,
+    certIssuePermissions SequenceOfPsidGroupPermissions OPTIONAL,
+    certRequestPermissions SequenceOfPsidGroupPermissions OPTIONAL,
+    ...
+    verifyKeyIndicator   VerificationKeyIndicator,
+  }
+
+  ValidityPeriod ::= SEQUENCE {
+    start    Time32,     -- TAI seconds since 2004-01-01
+    duration Duration    -- CHOICE {microseconds, ms, s, min, hours, ...}
+  }
+
+Current SimuLTE Structure (Certificate.msg):
+  message Certificate {
+    string  subjectId;
+    string  algoName;
+    uint8_t publicKey[];
+    int64_t notBefore = 0;
+    int64_t notAfter  = 0;
+  }
+
+GAP #6: Missing certificate version                               [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: version = 3
+  Current:           No version field
+  Impact:            Minor for simulation. Affects byte count by 1 byte.
+
+GAP #7: Missing CertificateType                                   [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: explicit | implicit
+  Current:           Implicitly explicit (always has public key + signature
+                     would be present)
+  Impact:            Implicit certificates (ECQV) not supported. These are
+                     important in real deployments for smaller cert sizes.
+
+GAP #8: Missing IssuerIdentifier                                  [HIGH]
+------------------------------------------------------------------------
+  Standard requires: IssuerIdentifier = CHOICE {
+                       sha256AndDigest HashedId8,
+                       self HashAlgorithm,
+                       sha384AndDigest HashedId8
+                     }
+  Current:           No issuer field. Certificates are effectively
+                     self-signed with no chain of trust.
+  Impact:            No PKI hierarchy. Cannot validate certificate chain
+                     from end-entity -> PCA -> Root CA.
+  Note:              Acceptable simplification for simulation. Real SCMS
+                     (Security Credential Management System) is out of
+                     scope for radio performance evaluation.
+
+GAP #9: Missing CertificateId                                     [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: CertificateId = CHOICE {
+                       linkageData, name, binaryId, none
+                     }
+  Current:           subjectId (string) — partially maps to "name" choice
+  Impact:            LinkageData (for pseudonym certificate revocation) and
+                     binaryId not supported. "none" option (anonymous) not
+                     available.
+
+GAP #10: Missing CRACA and CRL fields                             [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: cracaId (HashedId3), crlSeries (CrlSeries)
+  Current:           Not present
+  Impact:            No certificate revocation support.
+  Note:              CRL/revocation is a management-plane concern, not
+                     directly relevant to radio performance simulation.
+
+GAP #11: ValidityPeriod format mismatch                           [LOW]
+------------------------------------------------------------------------
+  Standard requires: ValidityPeriod = { start: Time32, duration: Duration }
+                     Time32 = TAI seconds since 2004-01-01
+  Current:           notBefore/notAfter as int64_t (Unix epoch)
+  Impact:            Different epoch base. Functionally equivalent for
+                     validity checking in simulation.
+
+GAP #12: Missing appPermissions (PSID+SSP)                        [HIGH]
+------------------------------------------------------------------------
+  Standard requires: appPermissions: SequenceOfPsidSsp
+                     Maps PSIDs to Service Specific Permissions
+  Current:           Not present
+  Impact:            Cannot verify that a certificate is authorized to
+                     sign BSMs (PSID 0x20) or other message types.
+                     Consistency check per Section 5.2.6.2.3 not possible.
+
+GAP #13: Missing geographic region                                [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: region: GeographicRegion OPTIONAL
+  Current:           Not present
+  Impact:            Cannot perform geographic consistency checks per
+                     Section 5.2.6.4.3.
+
+GAP #14: Missing assuranceLevel                                   [LOW]
+------------------------------------------------------------------------
+  Standard requires: assuranceLevel: SubjectAssurance OPTIONAL
+  Current:           Not present
+  Impact:            Minor. Used for trust level differentiation.
+
+GAP #15: Missing verifyKeyIndicator                               [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: verifyKeyIndicator: VerificationKeyIndicator
+                     = CHOICE { verificationKey, reconstructionValue }
+  Current:           publicKey[] field — functionally equivalent for
+                     explicit certificates
+  Impact:            Does not distinguish between explicit verification
+                     keys and implicit reconstruction values.
+
+================================================================================
+3. BSM (Basic Safety Message) STRUCTURE
+================================================================================
+
+Current SimuLTE Structure (BSM.msg):
+  message BSM {
+    int32_t msgId;
+    double  latitude;
+    double  longitude;
+    double  heading;
+    double  speed;
+  }
+
+GAP #16: Simplified BSM payload                                   [LOW]
+------------------------------------------------------------------------
+  Standard reference: SAE J2735 (not IEEE 1609.2, but relevant to PSID)
+  Full BSM Part I has: msgCount, temporaryId, secMark, lat, lon, elev,
+                       accuracy, speed, heading, angle, accelSet, brakes,
+                       size
+  Current:            Only msgId, lat, lon, heading, speed
+  Impact:             Packet size underestimated by ~10-15 bytes for the
+                      BSM payload portion. However, this is small compared
+                      to the PQC signature overhead being studied.
+
+================================================================================
+4. SIGNED SPDU VALIDITY CHECKS (Section 5.2)
+================================================================================
+
+IEEE 1609.2 Section 5.2 requires the following validity conditions:
+
+GAP #17: No PSID consistency check                                [HIGH]
+------------------------------------------------------------------------
+  Standard requires: Transmitted PSID must match PSID derived from context
+                     (Section 5.2.6.3.2) and PSID must appear in cert's
+                     appPermissions (Section 5.2.6.2.3)
+  Current:           No PSID field exists, so no check performed
+  Impact:            Any certificate can sign any message type
+
+GAP #18: No generation time consistency check                     [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: generationTime must be within certificate validity
+                     period (Section 5.2.6.2.3)
+  Current:           No generationTime in SPDU header. Certificate
+                     notBefore/notAfter exist but are not checked against
+                     SPDU generation time.
+  Impact:            Expired certificates could theoretically be used
+
+GAP #19: No freshness/replay detection                            [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: SDS can check if generation time is "too far in the
+                     past" (Section 5.2.7.2.2) and detect replays
+                     (Section 5.2.7.2)
+  Current:           Not implemented
+  Impact:            Replay attacks not detected. Acceptable for benign
+                     simulation environment.
+
+GAP #20: No geographic relevance check                            [LOW]
+------------------------------------------------------------------------
+  Standard requires: SDS can check if generation location is "too far away"
+                     (Section 5.2.7.2.5)
+  Current:           Not implemented
+  Impact:            All received SPDUs accepted regardless of origin
+                     location.
+
+GAP #21: No certificate chain validation                          [HIGH]
+------------------------------------------------------------------------
+  Standard requires: Certificate chain from signing cert to known trust
+                     anchor (Section 5.2.6.2.1). All certs in chain must
+                     be correctly formed, cryptographically valid, and
+                     permissions-consistent.
+  Current:           Single self-signed certificate. No chain.
+  Impact:            No PKI trust hierarchy. Every vehicle trusts every
+                     other vehicle's self-generated certificate.
+  Note:              This is the biggest architectural simplification.
+                     Acceptable for radio-layer performance evaluation but
+                     must be explicitly stated in the paper.
+
+================================================================================
+5. CRYPTOGRAPHIC ALGORITHMS
+================================================================================
+
+GAP #22: PQC algorithms not in IEEE 1609.2 Signature CHOICE      [OK/RESEARCH]
+------------------------------------------------------------------------
+  Standard defines:  ecdsaNistP256, ecdsaBrainpoolP256r1,
+                     ecdsaBrainpoolP384r1, ecdsaNistP384, sm2Signature
+  Current supports:  ECDSA P-256, Falcon-512, Dilithium-2
+  Impact:            Falcon-512 and Dilithium-2 are NOT part of the current
+                     1609.2 standard. This is EXPECTED and is the primary
+                     research contribution — evaluating PQC candidates as
+                     future replacements.
+  Note:              ECDSA P-256 implementation IS compliant with the
+                     ecdsaNistP256Signature option in the standard.
+
+GAP #23: No COER encoding                                        [MEDIUM]
+------------------------------------------------------------------------
+  Standard requires: Canonical OER (Octet Encoding Rules) for all ASN.1
+                     structures
+  Current:           OMNeT++ native serialization (cPacket fields)
+  Impact:            Wire-format byte sizes differ from real 1609.2. For
+                     accurate overhead comparison, COER sizes should be
+                     computed analytically even if not used in simulation.
+
+================================================================================
+6. FEATURES NOT APPLICABLE TO SIMULATION
+================================================================================
+
+The following 1609.2 features are management/infrastructure concerns and are
+correctly omitted from a radio-performance simulation:
+
+  - Encryption (EncryptedData)         — BSMs are broadcast, never encrypted
+  - Certificate revocation (CRL)       — Management plane, not radio plane
+  - SCMS enrollment                    — PKI infrastructure concern
+  - Peer-to-peer cert distribution     — p2pcdLearningRequest mechanism
+  - Butterfly key expansion            — Certificate management optimization
+  - Misbehavior reporting              — Higher-layer concern
+
+================================================================================
+7. COMPLIANCE SUMMARY TABLE
+================================================================================
+
+Feature                          | 1609.2 Ref  | Status    | Severity
+---------------------------------|-------------|-----------|----------
+Ieee1609Dot2Data wrapper         | 6.3.1       | MISSING   | CRITICAL
+protocolVersion = 3              | 6.3.1       | MISSING   | CRITICAL
+SignedData.hashId                | 6.3.5       | MISSING   | HIGH
+HeaderInfo with PSID             | 6.3.9       | MISSING   | CRITICAL
+HeaderInfo.generationTime        | 6.3.9       | MISSING   | HIGH
+HeaderInfo.generationLocation    | 6.3.9       | MISSING   | MEDIUM
+SignerIdentifier CHOICE          | 6.3.12      | PARTIAL   | HIGH
+  (always full cert, no digest)  |             |           |
+Signature type discriminator     | 6.3.13      | MISSING   | HIGH
+Certificate version=3            | 6.4.3       | MISSING   | MEDIUM
+CertificateType (expl/impl)     | 6.4.4       | IMPLICIT  | MEDIUM
+IssuerIdentifier                 | 6.4.7       | MISSING   | HIGH
+CertificateId                    | 6.4.9       | PARTIAL   | MEDIUM
+CRACA + CrlSeries               | 6.4.8       | MISSING   | MEDIUM
+ValidityPeriod format            | 6.4.14      | DIFFER    | LOW
+appPermissions (PSID+SSP)        | 6.4.28      | MISSING   | HIGH
+Geographic region                | 6.4.17      | MISSING   | MEDIUM
+assuranceLevel                   | 6.4.27      | MISSING   | LOW
+verifyKeyIndicator               | 6.4.8       | PARTIAL   | MEDIUM
+BSM payload completeness         | SAE J2735   | PARTIAL   | LOW
+PSID consistency check           | 5.2.6.3.2   | MISSING   | HIGH
+Generation time check            | 5.2.6.2.3   | MISSING   | MEDIUM
+Freshness/replay detection       | 5.2.7.2     | MISSING   | MEDIUM
+Geographic relevance check       | 5.2.7.2.5   | MISSING   | LOW
+Certificate chain validation     | 5.2.6.2.1   | MISSING   | HIGH
+Signature verification           | 5.2.6.2.2   | OK        | OK
+ECDSA P-256 support              | 6.3.13      | OK        | OK
+PQC algorithm support            | N/A (future)| ADDED     | RESEARCH
+COER encoding                    | 6.1         | MISSING   | MEDIUM
+
+CRITICAL: 3  |  HIGH: 8  |  MEDIUM: 10  |  LOW: 4  |  OK: 2  |  RESEARCH: 1
+
+================================================================================
+8. RECOMMENDATIONS FOR THE PAPER
+================================================================================
+
+8.1 What to acknowledge as "simulation simplifications":
+  - No PKI hierarchy / certificate chain (GAP #8, #21)
+  - No PSID/permission checking (GAP #12, #17)
+  - No replay/freshness detection (GAP #19)
+  - No certificate revocation (GAP #10)
+  - Always-attach-cert instead of digest (GAP #4) — note this gives
+    WORST-CASE overhead, which is actually conservative for your analysis
+
+8.2 What to fix for paper credibility (LOW EFFORT):
+  - Add PSID field to SPDU (constant 0x20 for BSM) — shows awareness
+  - Add generationTime to SPDU header — enables future freshness analysis
+  - Document COER-equivalent byte sizes analytically (Table in paper):
+
+    1609.2 Signed BSM overhead breakdown (COER):
+    ┌─────────────────────────────┬──────────┬───────────┬───────────┐
+    │ Field                       │ ECDSA-256│ Falcon-512│ Dilithium2│
+    ├─────────────────────────────┼──────────┼───────────┼───────────┤
+    │ protocolVersion (1B)        │    1     │     1     │     1     │
+    │ content type tag (1B)       │    1     │     1     │     1     │
+    │ hashId (1B)                 │    1     │     1     │     1     │
+    │ HeaderInfo (~17B min)       │   17     │    17     │    17     │
+    │   psid (1-4B)              │          │           │           │
+    │   generationTime (8B)      │          │           │           │
+    │   genLocation (12B opt)    │          │           │           │
+    │ BSM payload (~39B)          │   39     │    39     │    39     │
+    │ SignerIdentifier            │   ~8     │   ~8      │   ~8      │
+    │   (digest=8B, cert=varies) │ or ~150  │  or ~950  │  or ~1350 │
+    │ Signature                   │   64     │  ~660     │  2420     │
+    │ Certificate (when attached) │  ~136    │  ~930     │  ~1350    │
+    │   version (1B)             │          │           │           │
+    │   type (1B)                │          │           │           │
+    │   issuer (9B)              │          │           │           │
+    │   toBeSigned (~60B base)   │          │           │           │
+    │   pubkey (33/897/1312B)    │          │           │           │
+    │   issuer sig (64/660/2420B)│          │           │           │
+    ├─────────────────────────────┼──────────┼───────────┼───────────┤
+    │ TOTAL (with digest)         │  ~131 B  │  ~726 B   │  ~2487 B  │
+    │ TOTAL (with full cert)      │  ~259 B  │ ~1646 B   │  ~3827 B  │
+    └─────────────────────────────┴──────────┴───────────┴───────────┘
+
+8.3 What NOT to implement (out of scope):
+  - Full COER serialization engine
+  - SCMS enrollment/provisioning
+  - Implicit certificates (ECQV)
+  - CRL distribution/checking
+  - P2PCD (peer-to-peer certificate distribution)
+
+8.4 Paper framing suggestion:
+  State: "Our simulation implements the core IEEE 1609.2 sign-and-verify
+  security model with explicit certificates. Management-plane features
+  (PKI hierarchy, CRL, SCMS) are simplified as they do not affect the
+  radio-layer performance metrics under study. Certificate attachment
+  follows the worst-case policy (always attached), giving conservative
+  overhead estimates. We evaluate PQC candidates (Falcon-512, Dilithium-2)
+  as drop-in replacements for the ECDSA P-256 signature algorithm defined
+  in the standard's Signature CHOICE type."
+
+================================================================================
+END OF GAP ANALYSIS
+================================================================================

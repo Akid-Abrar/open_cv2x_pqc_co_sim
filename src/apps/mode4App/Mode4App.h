@@ -72,6 +72,7 @@ protected:
     simsignal_t icaVerifyMs_ = SIMSIGNAL_NULL;
     simsignal_t icaDelayMs_  = SIMSIGNAL_NULL;
     simsignal_t signatureTimeMs_  = SIMSIGNAL_NULL;
+    simsignal_t verifyTimeMs_      = SIMSIGNAL_NULL;
 
     cMessage *selfSender_;
 

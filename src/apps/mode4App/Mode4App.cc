@@ -133,6 +133,7 @@ void Mode4App::initialize(int stage)
         icaDelayMs_  = registerSignal("icaDelayMs");
 
         signatureTimeMs_  = registerSignal("signatureTimeMs");
+        verifyTimeMs_      = registerSignal("verifyTimeMs");
     }
 }
 
@@ -405,7 +406,11 @@ void Mode4App::handleLowerMessage(cMessage* msg)
                     sigBytes[i] = spdu->getSignature(i);
                 std::string sigHex = pqcdsa::toHex(sigBytes.data(), sigBytes.size());
 
+        auto verifyStart = std::chrono::high_resolution_clock::now();
         bool ok = pqcdsa::verify(bsmHex, sigHex, pubKeyHex);
+        auto verifyEnd = std::chrono::high_resolution_clock::now();
+        auto verifyUs = std::chrono::duration_cast<std::chrono::microseconds>(verifyEnd - verifyStart).count();
+        emit(verifyTimeMs_, verifyUs / 1000.0);
         if (ok) {
             // Only count the event if the signature was valid
             emit(verified_, long(1));

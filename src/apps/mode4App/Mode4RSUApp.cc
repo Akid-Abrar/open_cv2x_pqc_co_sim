@@ -182,6 +182,7 @@ void Mode4RSUApp::initialize(int stage)
         cbr_ = registerSignal("cbr");
         numBroadcasted = registerSignal("numBroadcasted");
         icaSignMs = registerSignal("icaSignMs");
+        verifyTimeMs_ = registerSignal("verifyTimeMs");
 
     }
 }
@@ -354,7 +355,11 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     for (size_t i = 0; i < sigBytes.size(); ++i) sigBytes[i] = spdu->getSignature(i);
     std::string sigHex = pqcdsa::toHex(sigBytes.data(), sigBytes.size());
 
+    auto verifyStart = std::chrono::high_resolution_clock::now();
     bool ok = pqcdsa::verify(bsmHex, sigHex, pubKeyHex);
+    auto verifyEnd = std::chrono::high_resolution_clock::now();
+    auto verifyUs = std::chrono::duration_cast<std::chrono::microseconds>(verifyEnd - verifyStart).count();
+    emit(verifyTimeMs_, verifyUs / 1000.0);
     if (ok) emit(rsuVerifiedMsg, 1);
 
     EV_INFO << "RSU RX BSM#" << b.getMsgId()
