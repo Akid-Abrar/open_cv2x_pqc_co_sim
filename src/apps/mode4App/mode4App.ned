@@ -70,8 +70,11 @@ simple Mode4App like Mode4BaseApp
         @statistic[icaDelayMs](title="ICA one-way delay"; unit="ms"; source="icaDelayMs"; record=vector,mean);   
         
         @signal[signatureTimeMs];
-        @statistic[signatureTimeMs](title="Signature Time"; unit="ms"; source="signatureTimeMs"; record=vector,mean);     
-                
+        @statistic[signatureTimeMs](title="Signature Time"; unit="ms"; source="signatureTimeMs"; record=vector,mean);
+
+        @signal[verifyTimeMs];
+        @statistic[verifyTimeMs](title="BSM verify time"; unit="ms"; source="verifyTimeMs"; record=vector,mean);
+
     gates:
         input lowerGateIn; // FROM NIC
         output lowerGateOut;  // TO NIC

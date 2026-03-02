@@ -28,6 +28,7 @@ class Mode4RSUApp : public Mode4BaseApp
     simsignal_t cbr_;
     simsignal_t numBroadcasted;
     simsignal_t icaSignMs = SIMSIGNAL_NULL;
+    simsignal_t verifyTimeMs_ = SIMSIGNAL_NULL;
 
     pqcdsa::KeyPair keyPair_;
     Certificate     cert_;

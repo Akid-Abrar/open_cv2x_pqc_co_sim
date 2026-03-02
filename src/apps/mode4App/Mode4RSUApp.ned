@@ -30,6 +30,9 @@ simple Mode4RSUApp like Mode4BaseApp
         
         @signal[icaSignMs];
         @statistic[icaSignMs](title="ICA sign time"; unit="ms"; source="icaSignMs"; record=vector,mean);
+
+        @signal[verifyTimeMs];
+        @statistic[verifyTimeMs](title="BSM verify time"; unit="ms"; source="verifyTimeMs"; record=vector,mean);
     gates:
         input lowerGateIn;
         output lowerGateOut;

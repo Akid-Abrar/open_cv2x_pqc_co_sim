@@ -39,7 +39,7 @@ static Alg algFromName(const std::string& nameIn) {
 
 static Alg getDefaultAlg() {
     const char* env = std::getenv("PQCDSA_ALGO");
-    return env ? algFromName(env) : Alg::FALCON_512; //Change Here
+    return env ? algFromName(env) : Alg::ECDSA_P256; //Change Here
 }
 
 static const char* algTag(Alg a) {
