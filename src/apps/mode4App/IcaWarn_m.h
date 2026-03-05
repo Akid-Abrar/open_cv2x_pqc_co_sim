@@ -1,5 +1,5 @@
 //
-// Generated file, do not edit! Created by nedtool 5.7 from veins/pqcdsa/IcaWarn.msg.
+// Generated file, do not edit! Created by nedtool 5.7 from veins/pqcdsa//IcaWarn.msg.
 //
 
 #ifndef __ICAWARN_M_H
@@ -31,7 +31,7 @@
 
 class IcaWarn;
 /**
- * Class generated from <tt>veins/pqcdsa/IcaWarn.msg:2</tt> by nedtool.
+ * Class generated from <tt>veins/pqcdsa//IcaWarn.msg:2</tt> by nedtool.
  * <pre>
  * packet IcaWarn extends cPacket
  * {

@@ -39,19 +39,44 @@ class SPDU;
  * <pre>
  * packet SPDU extends cPacket
  * {
- *     BSM bsm;              // nested message
- *     uint8_t signature[];   // raw bytes (666 for Falcon-512)
- *     Certificate cert;             // sender’s certificate
+ *     // --- Ieee1609Dot2Data ---
+ *     uint8_t protocolVersion = 3;
+ * 
+ *     // --- HeaderInfo ---
+ *     uint32_t psid = 0x20;             // BSM PSID
+ *     int64_t generationTime = 0;      // microsec since 2004-01-01 UTC
+ *     int32_t genLocation_lat = 0;     // optional
+ *     int32_t genLocation_lon = 0;
+ *     int16_t genLocation_elev = 0;
+ * 
+ *     // --- ToBeSignedData.payload ---
+ *     BSM bsm;
+ * 
+ *     // --- SignerIdentifier ---
+ *     uint8_t signerType = 1;          // 0=digest, 1=certificate, 2=self
+ *     uint8_t signerDigest[8];         // HashedId8 (when signerType=0)
+ *     Certificate cert;                   // included when signerType=1
+ * 
+ *     // --- Signature ---
+ *     uint8_t signature[];
  * }
  * </pre>
  */
 class VEINS_API SPDU : public ::omnetpp::cPacket
 {
   protected:
+    uint8_t protocolVersion = 3;
+    uint32_t psid = 0x20;
+    int64_t generationTime = 0;
+    int32_t genLocation_lat = 0;
+    int32_t genLocation_lon = 0;
+    int16_t genLocation_elev = 0;
     BSM bsm;
+    uint8_t signerType = 1;
+    uint8_t signerDigest[8] = {0};
+    Certificate cert;
     uint8_t *signature = nullptr;
     size_t signature_arraysize = 0;
-    Certificate cert;
 
   private:
     void copy(const SPDU& other);
@@ -70,9 +95,29 @@ class VEINS_API SPDU : public ::omnetpp::cPacket
     virtual void parsimUnpack(omnetpp::cCommBuffer *b) override;
 
     // field getter/setter methods
+    virtual uint8_t getProtocolVersion() const;
+    virtual void setProtocolVersion(uint8_t protocolVersion);
+    virtual uint32_t getPsid() const;
+    virtual void setPsid(uint32_t psid);
+    virtual int64_t getGenerationTime() const;
+    virtual void setGenerationTime(int64_t generationTime);
+    virtual int32_t getGenLocation_lat() const;
+    virtual void setGenLocation_lat(int32_t genLocation_lat);
+    virtual int32_t getGenLocation_lon() const;
+    virtual void setGenLocation_lon(int32_t genLocation_lon);
+    virtual int16_t getGenLocation_elev() const;
+    virtual void setGenLocation_elev(int16_t genLocation_elev);
     virtual const BSM& getBsm() const;
     virtual BSM& getBsmForUpdate() { return const_cast<BSM&>(const_cast<SPDU*>(this)->getBsm());}
     virtual void setBsm(const BSM& bsm);
+    virtual uint8_t getSignerType() const;
+    virtual void setSignerType(uint8_t signerType);
+    virtual size_t getSignerDigestArraySize() const;
+    virtual uint8_t getSignerDigest(size_t k) const;
+    virtual void setSignerDigest(size_t k, uint8_t signerDigest);
+    virtual const Certificate& getCert() const;
+    virtual Certificate& getCertForUpdate() { return const_cast<Certificate&>(const_cast<SPDU*>(this)->getCert());}
+    virtual void setCert(const Certificate& cert);
     virtual void setSignatureArraySize(size_t size);
     virtual size_t getSignatureArraySize() const;
     virtual uint8_t getSignature(size_t k) const;
@@ -80,9 +125,6 @@ class VEINS_API SPDU : public ::omnetpp::cPacket
     virtual void insertSignature(uint8_t signature);
     virtual void insertSignature(size_t k, uint8_t signature);
     virtual void eraseSignature(size_t k);
-    virtual const Certificate& getCert() const;
-    virtual Certificate& getCertForUpdate() { return const_cast<Certificate&>(const_cast<SPDU*>(this)->getCert());}
-    virtual void setCert(const Certificate& cert);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const SPDU& obj) {obj.parsimPack(b);}

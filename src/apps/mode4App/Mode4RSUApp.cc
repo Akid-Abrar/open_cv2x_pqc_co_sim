@@ -9,6 +9,8 @@ using nlohmann::json;
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <dirent.h>
+#include <sys/stat.h>
 
 #include "veins/modules/mobility/traci/TraCIMobility.h"
 #include "veins/base/modules/BaseMobility.h"
@@ -143,10 +145,35 @@ void Mode4RSUApp::openNonBlockingUdp_(int port)
     fcntl(sockFd_, F_SETFL, flags | O_NONBLOCK);
 }
 
+static void cleanSimulationLogs()
+{
+    static bool cleaned = false;
+    if (cleaned) return;
+    cleaned = true;
+
+    const std::string dir = "simulation_logs";
+    struct stat st;
+    if (::stat(dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+        DIR* d = ::opendir(dir.c_str());
+        if (d) {
+            struct dirent* ent;
+            while ((ent = ::readdir(d)) != nullptr) {
+                if (ent->d_name[0] == '.') continue;  // skip . and ..
+                std::string fpath = dir + "/" + ent->d_name;
+                ::remove(fpath.c_str());
+            }
+            ::closedir(d);
+        }
+    } else {
+        ::mkdir(dir.c_str(), 0755);
+    }
+}
+
 void Mode4RSUApp::initialize(int stage)
 {
     Mode4BaseApp::initialize(stage);
     if (stage==inet::INITSTAGE_LOCAL){
+        cleanSimulationLogs();
 
         binder_ = getBinder();
         cModule *ue = getParentModule();
@@ -162,11 +189,15 @@ void Mode4RSUApp::initialize(int stage)
         auto pkBytes = pqcdsa::fromHex(keyPair_.pubHex);
 
         cert_.setSubjectId(getParentModule()->getParentModule()->getFullName());
-        cert_.setAlgoName("Dilithium 2");   // (same label you used elsewhere)
+        cert_.setAlgoName(label.c_str());   // use auto-detected algo, not hardcoded
         cert_.setPublicKeyArraySize(pkBytes.size());
         for (size_t i = 0; i < pkBytes.size(); ++i) cert_.setPublicKey(i, pkBytes[i]);
-        cert_.setNotBefore(0);
-        cert_.setNotAfter(9223372036854775807LL);
+        cert_.setVersion(3);
+        cert_.setCertType(0);           // explicit
+        cert_.setIssuerType(1);         // self-signed
+        cert_.setAppPermPsid(0x40);     // ICA PSID
+        cert_.setValidityStart(0);
+        cert_.setValidityDuration(9223372036854775807LL);
 
 
         // ICA socket reading disabled — not using ICA right now
@@ -239,8 +270,14 @@ void Mode4RSUApp::broadcastIca(IcaWarn* w)
     auto duration_time = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
     emit(icaSignMs, duration_time/1000.0);
 
-    // 3) assemble IcaSpdu (payload + signature + cert)
+    // 3) assemble IcaSpdu (IEEE 1609.2 Ieee1609Dot2Data + payload + signature + cert)
     auto* spdu = new IcaSpdu("ICA_SPDU");
+    spdu->setProtocolVersion(3);
+    spdu->setPsid(0x40);               // ICA PSID
+    spdu->setGenerationTime((int64_t)(simTime().dbl() * 1e6));
+    spdu->setGenLocation_lat((int32_t)(pos.x * 1000));
+    spdu->setGenLocation_lon((int32_t)(pos.y * 1000));
+    spdu->setSignerType(1);            // certificate included
     spdu->setWarn(*w);                 // deep copy of the warn payload
     spdu->setCert(cert_);
 
@@ -260,7 +297,16 @@ void Mode4RSUApp::broadcastIca(IcaWarn* w)
     spdu->setControlInfo(ci);
 
     spdu->setTimestamp(simTime());
-    spdu->setByteLength(64 + spdu->getSignatureArraySize() + spdu->getCert().getPublicKeyArraySize());
+    // 1609.2 wrapper (28) + IcaWarn payload (64) + cert overhead (105)
+    long icaWrapperAndPayload = 28 + 64 + 105;
+    long icaDerPkSize = spdu->getCert().getPublicKeyArraySize();
+    std::string icaAlgo(spdu->getCert().getAlgoName());
+    bool icaIsEcdsa = (icaAlgo.find("ECDSA") != std::string::npos
+                    || icaAlgo.find("ecdsa") != std::string::npos
+                    || icaAlgo.find("P-256") != std::string::npos
+                    || icaAlgo.find("P-384") != std::string::npos);
+    long icaRawPkSize = icaIsEcdsa ? (icaDerPkSize - 26) : icaDerPkSize;
+    spdu->setByteLength(icaWrapperAndPayload + spdu->getSignatureArraySize() + icaRawPkSize);
 
     // 5) send
     Mode4BaseApp::sendLowerPackets(spdu);
@@ -333,16 +379,16 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     // RSU receiver position (meters)
     veins::Coord rsu = getNodePositionNow(this, simTime());
 
-    // Transmitter position (meters) carried in BSM
+    // Transmitter position recovered from J2735 integer fields
     const BSM& b = spdu->getBsm();
-    veins::Coord tx(b.getLatitude(), b.getLongitude(), 0.0);
+    veins::Coord tx(b.getLat() / 1000.0, b.getLon() / 1000.0, 0.0);
 
     // Distance in meters
     double dist_m = rsu.distance(tx);
 
-    // Verification
+    // Verification (must match sender's serialization exactly)
     std::ostringstream os;
-    os << b.getMsgId() << ',' << b.getLatitude() << ',' << b.getLongitude() << ',' << b.getHeading() << ',' << b.getSpeed();
+    os << b.getMsgId() << ',' << b.getLat() << ',' << b.getLon() << ',' << b.getHeading_j() << ',' << b.getSpeed_j();
     std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 
     const Certificate &c = spdu->getCert();
@@ -366,21 +412,35 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
             << " from " << spdu->getCert().getSubjectId()
             << "  -->  Verification: " << (ok ? "VALID" : "INVALID") << '\n';
 
-    int certSize = spdu->getCert().getPublicKeyArraySize();   // 2) Certificate size (approximate)
-    int sigSize  = spdu->getSignatureArraySize();             // 3) Signature size
-    int spduSize = spdu->getByteLength();                     // 4) Total SPDU size
+    int sigSize  = spdu->getSignatureArraySize();
+    int spduSize = spdu->getByteLength();
     int numberOfVehicles = getNumVehicles();
-//    const std::string header =
-//        "t,receiver,sender,msgId,lat,lon,heading,speed,dist_m,delay_ms,Numer of Vehicles,verified,cert_size,sig_size,spdu_size,Algorithm";
+
+    // SPDU size breakdown: pk_size + sig_size + bsm_data_size + metadata_size = spdu_size
+    long derPubKeySize = spdu->getCert().getPublicKeyArraySize();
+    std::string algo(spdu->getCert().getAlgoName());
+    bool isEcdsa = (algo.find("ECDSA") != std::string::npos
+                 || algo.find("ecdsa") != std::string::npos
+                 || algo.find("P-256") != std::string::npos
+                 || algo.find("P-384") != std::string::npos);
+    long pkSize = isEcdsa ? (derPubKeySize - 26) : derPubKeySize;
+    long bsmDataSize = 1 + 4 + 4 + 2 + 4 + 4 + 2  // msgCnt+msgId+tempId+secMark+lat+lon+elev
+                     + 1 + 1 + 2                    // semiMajor+semiMinor+semiMajorOrient
+                     + 1 + 2 + 2 + 1                // transmission+speed_j+heading_j+angle
+                     + 2 + 2 + 1 + 2                // accelLong+accelLat+accelVert+yawRate
+                     + 2                             // brakes
+                     + 2 + 1;                        // vehWidth+vehLength = 43 bytes
+    long metadataSize = spduSize - pkSize - sigSize - bsmDataSize;
+
     const std::string header =
-            "t,receiver,sender,msgId,lat,lon,dist_m,delay_ms,Numer of Vehicles,verified,cert_size,sig_size,spdu_size,Algorithm";
+            "t,receiver,sender,msgId,lat,lon,dist_m,delay_ms,Numer of Vehicles,verified,pk_size,sig_size,bsm_data_size,metadata_size,spdu_size,Algorithm";
 
     std::string algoName = spdu->getCert().getAlgoName();
     std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
-    std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLatitude();
-    std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLongitude();
-    std::ostringstream hdg; hdg << std::fixed << std::setprecision(6) << b.getHeading();
-    std::ostringstream spd; spd << std::fixed << std::setprecision(6) << b.getSpeed();
+    std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLat() / 1000.0;
+    std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLon() / 1000.0;
+    std::ostringstream hdg; hdg << std::fixed << std::setprecision(4) << b.getHeading_j() * 0.0125;
+    std::ostringstream spd; spd << std::fixed << std::setprecision(4) << b.getSpeed_j() * 0.02;
     std::ostringstream dms; dms << std::fixed << std::setprecision(3) << delay_ms;
     std::ostringstream dst; dst << std::fixed << std::setprecision(3) << dist_m;
     std::ostringstream senderName; senderName << spdu->getCert().getSubjectId();
@@ -398,8 +458,10 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
             dms.str(),
             std::to_string(numberOfVehicles),
             (ok ? "1" : "0"),
-            std::to_string(certSize),
+            std::to_string(pkSize),
             std::to_string(sigSize),
+            std::to_string(bsmDataSize),
+            std::to_string(metadataSize),
             std::to_string(spduSize),
             algoName
         });

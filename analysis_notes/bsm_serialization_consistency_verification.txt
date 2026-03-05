@@ -1,0 +1,192 @@
+================================================================================
+BSM SERIALIZATION CONSISTENCY VERIFICATION REPORT
+================================================================================
+Date: 2026-03-05
+Task: Verify that BSM serialization strings match EXACTLY across all three code
+      paths (sender, UE receiver, RSU receiver)
+
+================================================================================
+CRITICAL FINDING: SERIALIZATION IS CONSISTENT
+================================================================================
+
+All three code paths use IDENTICAL serialization strings for BSM signing/verification.
+
+================================================================================
+SERIALIZATION STRING COMPARISON
+================================================================================
+
+PATH 1: Sender (Mode4App.cc - generateAndSendSPDU)
+--------
+File: /home/veins/src/simulte/src/apps/mode4App/Mode4App.cc
+Line: 555
+Code:
+  os << bsm.getMsgId() << ',' << bsm.getLat() << ',' << bsm.getLon() << ',' << bsm.getHeading_j() << ',' << bsm.getSpeed_j();
+
+Full context (lines 554-556):
+  std::ostringstream os;
+  os << bsm.getMsgId() << ',' << bsm.getLat() << ',' << bsm.getLon() << ',' << bsm.getHeading_j() << ',' << bsm.getSpeed_j();
+  std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
+
+Encoding operations (lines 535-551):
+  bsm.setLat((int32_t)(me.x * 1000));      // multiply by 1000
+  bsm.setLon((int32_t)(me.y * 1000));      // multiply by 1000
+  bsm.setSpeed_j((uint16_t)(speed / 0.02));      // divide by 0.02
+  bsm.setHeading_j((uint16_t)(heading / 0.0125)); // divide by 0.0125
+
+
+PATH 2: UE Receiver (Mode4App.cc - handleLowerMessage)
+--------
+File: /home/veins/src/simulte/src/apps/mode4App/Mode4App.cc
+Line: 426
+Code:
+  os << b.getMsgId() << ',' << b.getLat() << ',' << b.getLon() << ',' << b.getHeading_j() << ',' << b.getSpeed_j();
+
+Full context (lines 425-427):
+  std::ostringstream os;
+  os << b.getMsgId() << ',' << b.getLat() << ',' << b.getLon() << ',' << b.getHeading_j() << ',' << b.getSpeed_j();
+  std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
+
+Decoding operations (line 459):
+  veins::Coord tx(b.getLat() / 1000.0, b.getLon() / 1000.0, 0.0);  // divide by 1000
+  (Speed and heading are NOT decoded for verification, only for display/analysis)
+
+
+PATH 3: RSU Receiver (Mode4RSUApp.cc - handleLowerMessage)
+--------
+File: /home/veins/src/simulte/src/apps/mode4App/Mode4RSUApp.cc
+Line: 384
+Code:
+  os << b.getMsgId() << ',' << b.getLat() << ',' << b.getLon() << ',' << b.getHeading_j() << ',' << b.getSpeed_j();
+
+Full context (lines 383-385):
+  std::ostringstream os;
+  os << b.getMsgId() << ',' << b.getLat() << ',' << b.getLon() << ',' << b.getHeading_j() << ',' << b.getSpeed_j();
+  std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
+
+Decoding operations (line 377):
+  veins::Coord tx(b.getLat() / 1000.0, b.getLon() / 1000.0, 0.0);  // divide by 1000
+  (Speed and heading are NOT decoded for verification, only for display/analysis)
+
+
+================================================================================
+SERIALIZATION STRING VERIFICATION: PASSED
+================================================================================
+
+IDENTICAL STRING:
+  os << b.getMsgId() << ',' << b.getLat() << ',' << b.getLon() << ',' << b.getHeading_j() << ',' << b.getSpeed_j();
+
+Occurrences:
+  1. Mode4App.cc:555 (Sender - generateAndSendSPDU)
+  2. Mode4App.cc:426 (UE Receiver - handleLowerMessage)
+  3. Mode4RSUApp.cc:384 (RSU Receiver - handleLowerMessage)
+
+Status: EXACT MATCH across all three code paths ✓
+
+
+================================================================================
+LAT/LON POSITION ENCODING/DECODING VERIFICATION
+================================================================================
+
+ENCODING (Sender side):
+  Multiplication factor: 1000
+  Line 535: bsm.setLat((int32_t)(me.x * 1000));
+  Line 536: bsm.setLon((int32_t)(me.y * 1000));
+  Type: int32_t fixed-point millimeters
+  Range: ±2,147,483.647 meters (covers typical road networks)
+
+DECODING (Both receiver sides):
+  Division factor: 1000.0
+
+  UE Receiver (Mode4App.cc:459):
+    veins::Coord tx(b.getLat() / 1000.0, b.getLon() / 1000.0, 0.0);
+
+  RSU Receiver (Mode4RSUApp.cc:377):
+    veins::Coord tx(b.getLat() / 1000.0, b.getLon() / 1000.0, 0.0);
+
+Verification:
+  - Encoding factor: 1000 ✓
+  - Decoding factor: 1000.0 ✓
+  - Factors MATCH ✓
+  - Both receiver sides use identical division factor ✓
+
+
+================================================================================
+OTHER FIELDS IN SERIALIZATION
+================================================================================
+
+Field: getMsgId()
+  Type: unsigned int
+  Serialized as: integer (no scaling)
+  Status: Present in all three code paths ✓
+
+Field: getHeading_j()
+  Type: uint16_t (J2735 quantized heading)
+  Serialized as: integer value
+  Scaling (for reference, not used in signing):
+    - Encode: heading_radians / 0.0125 (line 551)
+    - Decode: heading_j * 0.0125 (used in display, Mode4RSUApp.cc:430)
+  Status: Consistent factor (0.0125) ✓
+
+Field: getSpeed_j()
+  Type: uint16_t (J2735 quantized speed)
+  Serialized as: integer value
+  Scaling (for reference, not used in signing):
+    - Encode: speed_mps / 0.02 (line 550)
+    - Decode: speed_j * 0.02 (used in display, Mode4RSUApp.cc:431)
+  Status: Consistent factor (0.02) ✓
+
+
+================================================================================
+SIGNING AND VERIFICATION FLOW
+================================================================================
+
+SENDER (Mode4App.cc):
+  1. Serialize BSM fields to ostringstream (line 555)
+  2. Convert string to hex via pqcdsa::toHex() (line 556)
+  3. Sign hex with Falcon-512 private key (line 560)
+  4. Include signature and cert in SPDU packet (lines 581-585)
+
+UE RECEIVER (Mode4App.cc):
+  1. Extract BSM from SPDU packet
+  2. Serialize BSM fields to ostringstream IDENTICALLY (line 426)
+  3. Convert string to hex via pqcdsa::toHex() (line 427)
+  4. Extract signature and cert from SPDU packet
+  5. Verify hex against signature using public key (line 445)
+
+RSU RECEIVER (Mode4RSUApp.cc):
+  1. Extract BSM from SPDU packet
+  2. Serialize BSM fields to ostringstream IDENTICALLY (line 384)
+  3. Convert string to hex via pqcdsa::toHex() (line 385)
+  4. Extract signature and cert from SPDU packet
+  5. Verify hex against signature using public key (line 398)
+
+Status: Signing and verification paths are cryptographically consistent ✓
+
+
+================================================================================
+CONCLUSIONS
+================================================================================
+
+1. SERIALIZATION CONSISTENCY: PASS
+   All three code paths use the exact same serialization string format for
+   BSM signing and verification. This is critical for digital signatures to work.
+
+2. LAT/LON ENCODING/DECODING CONSISTENCY: PASS
+   Encoding uses multiplication by 1000, and both receiver sides use division
+   by 1000.0 to recover positions. The factors are correctly paired.
+
+3. FIXED-POINT REPRESENTATION: VERIFIED
+   - BSM lat/lon are stored as int32_t fixed-point millimeters
+   - This avoids int32_t overflow for typical road network coords (±2147 km)
+   - Both receivers decode correctly using the same factor
+
+4. CRYPTOGRAPHIC INTEGRITY: SOUND
+   - Sender and receivers serialize identically
+   - No endianness mismatches in the serialization
+   - Signature verification will succeed if sender and receivers are in sync
+
+5. RECOMMENDATION
+   This serialization scheme is robust and ready for deployment. No changes
+   needed to maintain consistency across all three communication paths.
+
+================================================================================

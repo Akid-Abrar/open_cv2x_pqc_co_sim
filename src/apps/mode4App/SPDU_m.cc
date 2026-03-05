@@ -224,8 +224,8 @@ SPDU::SPDU(const SPDU& other) : ::omnetpp::cPacket(other)
 SPDU::~SPDU()
 {
     drop(&this->bsm);
-    delete [] this->signature;
     drop(&this->cert);
+    delete [] this->signature;
 }
 
 SPDU& SPDU::operator=(const SPDU& other)
@@ -238,31 +238,58 @@ SPDU& SPDU::operator=(const SPDU& other)
 
 void SPDU::copy(const SPDU& other)
 {
+    this->protocolVersion = other.protocolVersion;
+    this->psid = other.psid;
+    this->generationTime = other.generationTime;
+    this->genLocation_lat = other.genLocation_lat;
+    this->genLocation_lon = other.genLocation_lon;
+    this->genLocation_elev = other.genLocation_elev;
     this->bsm = other.bsm;
     this->bsm.setName(other.bsm.getName());
+    this->signerType = other.signerType;
+    for (size_t i = 0; i < 8; i++) {
+        this->signerDigest[i] = other.signerDigest[i];
+    }
+    this->cert = other.cert;
+    this->cert.setName(other.cert.getName());
     delete [] this->signature;
     this->signature = (other.signature_arraysize==0) ? nullptr : new uint8_t[other.signature_arraysize];
     signature_arraysize = other.signature_arraysize;
     for (size_t i = 0; i < signature_arraysize; i++) {
         this->signature[i] = other.signature[i];
     }
-    this->cert = other.cert;
-    this->cert.setName(other.cert.getName());
 }
 
 void SPDU::parsimPack(omnetpp::cCommBuffer *b) const
 {
     ::omnetpp::cPacket::parsimPack(b);
+    doParsimPacking(b,this->protocolVersion);
+    doParsimPacking(b,this->psid);
+    doParsimPacking(b,this->generationTime);
+    doParsimPacking(b,this->genLocation_lat);
+    doParsimPacking(b,this->genLocation_lon);
+    doParsimPacking(b,this->genLocation_elev);
     doParsimPacking(b,this->bsm);
+    doParsimPacking(b,this->signerType);
+    doParsimArrayPacking(b,this->signerDigest,8);
+    doParsimPacking(b,this->cert);
     b->pack(signature_arraysize);
     doParsimArrayPacking(b,this->signature,signature_arraysize);
-    doParsimPacking(b,this->cert);
 }
 
 void SPDU::parsimUnpack(omnetpp::cCommBuffer *b)
 {
     ::omnetpp::cPacket::parsimUnpack(b);
+    doParsimUnpacking(b,this->protocolVersion);
+    doParsimUnpacking(b,this->psid);
+    doParsimUnpacking(b,this->generationTime);
+    doParsimUnpacking(b,this->genLocation_lat);
+    doParsimUnpacking(b,this->genLocation_lon);
+    doParsimUnpacking(b,this->genLocation_elev);
     doParsimUnpacking(b,this->bsm);
+    doParsimUnpacking(b,this->signerType);
+    doParsimArrayUnpacking(b,this->signerDigest,8);
+    doParsimUnpacking(b,this->cert);
     delete [] this->signature;
     b->unpack(signature_arraysize);
     if (signature_arraysize == 0) {
@@ -271,7 +298,66 @@ void SPDU::parsimUnpack(omnetpp::cCommBuffer *b)
         this->signature = new uint8_t[signature_arraysize];
         doParsimArrayUnpacking(b,this->signature,signature_arraysize);
     }
-    doParsimUnpacking(b,this->cert);
+}
+
+uint8_t SPDU::getProtocolVersion() const
+{
+    return this->protocolVersion;
+}
+
+void SPDU::setProtocolVersion(uint8_t protocolVersion)
+{
+    this->protocolVersion = protocolVersion;
+}
+
+uint32_t SPDU::getPsid() const
+{
+    return this->psid;
+}
+
+void SPDU::setPsid(uint32_t psid)
+{
+    this->psid = psid;
+}
+
+int64_t SPDU::getGenerationTime() const
+{
+    return this->generationTime;
+}
+
+void SPDU::setGenerationTime(int64_t generationTime)
+{
+    this->generationTime = generationTime;
+}
+
+int32_t SPDU::getGenLocation_lat() const
+{
+    return this->genLocation_lat;
+}
+
+void SPDU::setGenLocation_lat(int32_t genLocation_lat)
+{
+    this->genLocation_lat = genLocation_lat;
+}
+
+int32_t SPDU::getGenLocation_lon() const
+{
+    return this->genLocation_lon;
+}
+
+void SPDU::setGenLocation_lon(int32_t genLocation_lon)
+{
+    this->genLocation_lon = genLocation_lon;
+}
+
+int16_t SPDU::getGenLocation_elev() const
+{
+    return this->genLocation_elev;
+}
+
+void SPDU::setGenLocation_elev(int16_t genLocation_elev)
+{
+    this->genLocation_elev = genLocation_elev;
 }
 
 const BSM& SPDU::getBsm() const
@@ -282,6 +368,43 @@ const BSM& SPDU::getBsm() const
 void SPDU::setBsm(const BSM& bsm)
 {
     this->bsm = bsm;
+}
+
+uint8_t SPDU::getSignerType() const
+{
+    return this->signerType;
+}
+
+void SPDU::setSignerType(uint8_t signerType)
+{
+    this->signerType = signerType;
+}
+
+size_t SPDU::getSignerDigestArraySize() const
+{
+    return 8;
+}
+
+uint8_t SPDU::getSignerDigest(size_t k) const
+{
+    if (k >= 8) throw omnetpp::cRuntimeError("Array of size 8 indexed by %lu", (unsigned long)k);
+    return this->signerDigest[k];
+}
+
+void SPDU::setSignerDigest(size_t k, uint8_t signerDigest)
+{
+    if (k >= 8) throw omnetpp::cRuntimeError("Array of size 8 indexed by %lu", (unsigned long)k);
+    this->signerDigest[k] = signerDigest;
+}
+
+const Certificate& SPDU::getCert() const
+{
+    return this->cert;
+}
+
+void SPDU::setCert(const Certificate& cert)
+{
+    this->cert = cert;
 }
 
 size_t SPDU::getSignatureArraySize() const
@@ -350,24 +473,22 @@ void SPDU::eraseSignature(size_t k)
     signature_arraysize = newSize;
 }
 
-const Certificate& SPDU::getCert() const
-{
-    return this->cert;
-}
-
-void SPDU::setCert(const Certificate& cert)
-{
-    this->cert = cert;
-}
-
 class SPDUDescriptor : public omnetpp::cClassDescriptor
 {
   private:
     mutable const char **propertynames;
     enum FieldConstants {
+        FIELD_protocolVersion,
+        FIELD_psid,
+        FIELD_generationTime,
+        FIELD_genLocation_lat,
+        FIELD_genLocation_lon,
+        FIELD_genLocation_elev,
         FIELD_bsm,
-        FIELD_signature,
+        FIELD_signerType,
+        FIELD_signerDigest,
         FIELD_cert,
+        FIELD_signature,
     };
   public:
     SPDUDescriptor();
@@ -430,7 +551,7 @@ const char *SPDUDescriptor::getProperty(const char *propertyname) const
 int SPDUDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 3+basedesc->getFieldCount() : 3;
+    return basedesc ? 11+basedesc->getFieldCount() : 11;
 }
 
 unsigned int SPDUDescriptor::getFieldTypeFlags(int field) const
@@ -442,11 +563,19 @@ unsigned int SPDUDescriptor::getFieldTypeFlags(int field) const
         field -= basedesc->getFieldCount();
     }
     static unsigned int fieldTypeFlags[] = {
+        FD_ISEDITABLE,    // FIELD_protocolVersion
+        FD_ISEDITABLE,    // FIELD_psid
+        FD_ISEDITABLE,    // FIELD_generationTime
+        FD_ISEDITABLE,    // FIELD_genLocation_lat
+        FD_ISEDITABLE,    // FIELD_genLocation_lon
+        FD_ISEDITABLE,    // FIELD_genLocation_elev
         FD_ISCOMPOUND | FD_ISCOBJECT | FD_ISCOWNEDOBJECT,    // FIELD_bsm
-        FD_ISARRAY | FD_ISEDITABLE,    // FIELD_signature
+        FD_ISEDITABLE,    // FIELD_signerType
+        FD_ISARRAY | FD_ISEDITABLE,    // FIELD_signerDigest
         FD_ISCOMPOUND | FD_ISCOBJECT | FD_ISCOWNEDOBJECT,    // FIELD_cert
+        FD_ISARRAY | FD_ISEDITABLE,    // FIELD_signature
     };
-    return (field >= 0 && field < 3) ? fieldTypeFlags[field] : 0;
+    return (field >= 0 && field < 11) ? fieldTypeFlags[field] : 0;
 }
 
 const char *SPDUDescriptor::getFieldName(int field) const
@@ -458,20 +587,36 @@ const char *SPDUDescriptor::getFieldName(int field) const
         field -= basedesc->getFieldCount();
     }
     static const char *fieldNames[] = {
+        "protocolVersion",
+        "psid",
+        "generationTime",
+        "genLocation_lat",
+        "genLocation_lon",
+        "genLocation_elev",
         "bsm",
-        "signature",
+        "signerType",
+        "signerDigest",
         "cert",
+        "signature",
     };
-    return (field >= 0 && field < 3) ? fieldNames[field] : nullptr;
+    return (field >= 0 && field < 11) ? fieldNames[field] : nullptr;
 }
 
 int SPDUDescriptor::findField(const char *fieldName) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     int base = basedesc ? basedesc->getFieldCount() : 0;
-    if (fieldName[0] == 'b' && strcmp(fieldName, "bsm") == 0) return base+0;
-    if (fieldName[0] == 's' && strcmp(fieldName, "signature") == 0) return base+1;
-    if (fieldName[0] == 'c' && strcmp(fieldName, "cert") == 0) return base+2;
+    if (fieldName[0] == 'p' && strcmp(fieldName, "protocolVersion") == 0) return base+0;
+    if (fieldName[0] == 'p' && strcmp(fieldName, "psid") == 0) return base+1;
+    if (fieldName[0] == 'g' && strcmp(fieldName, "generationTime") == 0) return base+2;
+    if (fieldName[0] == 'g' && strcmp(fieldName, "genLocation_lat") == 0) return base+3;
+    if (fieldName[0] == 'g' && strcmp(fieldName, "genLocation_lon") == 0) return base+4;
+    if (fieldName[0] == 'g' && strcmp(fieldName, "genLocation_elev") == 0) return base+5;
+    if (fieldName[0] == 'b' && strcmp(fieldName, "bsm") == 0) return base+6;
+    if (fieldName[0] == 's' && strcmp(fieldName, "signerType") == 0) return base+7;
+    if (fieldName[0] == 's' && strcmp(fieldName, "signerDigest") == 0) return base+8;
+    if (fieldName[0] == 'c' && strcmp(fieldName, "cert") == 0) return base+9;
+    if (fieldName[0] == 's' && strcmp(fieldName, "signature") == 0) return base+10;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -484,11 +629,19 @@ const char *SPDUDescriptor::getFieldTypeString(int field) const
         field -= basedesc->getFieldCount();
     }
     static const char *fieldTypeStrings[] = {
+        "uint8_t",    // FIELD_protocolVersion
+        "uint32_t",    // FIELD_psid
+        "int64_t",    // FIELD_generationTime
+        "int32_t",    // FIELD_genLocation_lat
+        "int32_t",    // FIELD_genLocation_lon
+        "int16_t",    // FIELD_genLocation_elev
         "BSM",    // FIELD_bsm
-        "uint8_t",    // FIELD_signature
+        "uint8_t",    // FIELD_signerType
+        "uint8_t",    // FIELD_signerDigest
         "Certificate",    // FIELD_cert
+        "uint8_t",    // FIELD_signature
     };
-    return (field >= 0 && field < 3) ? fieldTypeStrings[field] : nullptr;
+    return (field >= 0 && field < 11) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **SPDUDescriptor::getFieldPropertyNames(int field) const
@@ -527,6 +680,7 @@ int SPDUDescriptor::getFieldArraySize(void *object, int field) const
     }
     SPDU *pp = (SPDU *)object; (void)pp;
     switch (field) {
+        case FIELD_signerDigest: return 8;
         case FIELD_signature: return pp->getSignatureArraySize();
         default: return 0;
     }
@@ -556,9 +710,17 @@ std::string SPDUDescriptor::getFieldValueAsString(void *object, int field, int i
     }
     SPDU *pp = (SPDU *)object; (void)pp;
     switch (field) {
+        case FIELD_protocolVersion: return ulong2string(pp->getProtocolVersion());
+        case FIELD_psid: return ulong2string(pp->getPsid());
+        case FIELD_generationTime: return int642string(pp->getGenerationTime());
+        case FIELD_genLocation_lat: return long2string(pp->getGenLocation_lat());
+        case FIELD_genLocation_lon: return long2string(pp->getGenLocation_lon());
+        case FIELD_genLocation_elev: return long2string(pp->getGenLocation_elev());
         case FIELD_bsm: {std::stringstream out; out << pp->getBsm(); return out.str();}
-        case FIELD_signature: return ulong2string(pp->getSignature(i));
+        case FIELD_signerType: return ulong2string(pp->getSignerType());
+        case FIELD_signerDigest: return ulong2string(pp->getSignerDigest(i));
         case FIELD_cert: {std::stringstream out; out << pp->getCert(); return out.str();}
+        case FIELD_signature: return ulong2string(pp->getSignature(i));
         default: return "";
     }
 }
@@ -573,6 +735,14 @@ bool SPDUDescriptor::setFieldValueAsString(void *object, int field, int i, const
     }
     SPDU *pp = (SPDU *)object; (void)pp;
     switch (field) {
+        case FIELD_protocolVersion: pp->setProtocolVersion(string2ulong(value)); return true;
+        case FIELD_psid: pp->setPsid(string2ulong(value)); return true;
+        case FIELD_generationTime: pp->setGenerationTime(string2int64(value)); return true;
+        case FIELD_genLocation_lat: pp->setGenLocation_lat(string2long(value)); return true;
+        case FIELD_genLocation_lon: pp->setGenLocation_lon(string2long(value)); return true;
+        case FIELD_genLocation_elev: pp->setGenLocation_elev(string2long(value)); return true;
+        case FIELD_signerType: pp->setSignerType(string2ulong(value)); return true;
+        case FIELD_signerDigest: pp->setSignerDigest(i,string2ulong(value)); return true;
         case FIELD_signature: pp->setSignature(i,string2ulong(value)); return true;
         default: return false;
     }

@@ -1,0 +1,141 @@
+==============================================================================
+IEEE 1609.2-2022 / SAE J2735 Compliance Audit
+Date: 2026-03-05
+Scope: BSM.msg, SPDU.msg, Certificate.msg, IcaSpdu.msg, Mode4App.cc, Mode4RSUApp.cc
+==============================================================================
+
+SUMMARY
+-------
+After restructuring, our message definitions follow the IEEE 1609.2 / J2735
+hierarchical layout (Ieee1609Dot2Data -> SignedData -> HeaderInfo -> payload).
+The simulation is structurally aligned but uses several simplifications that
+are deliberate and documented below.
+
+ECDSA SPDU total: ~295B  (literature reference: ~300B, delta = -5B)
+The small deficit comes from omitting accelSet/brakes/size in BSM and using
+simplified cert encoding. This is within acceptable simulation approximation.
+
+==============================================================================
+WHAT WE IMPLEMENT (ALIGNED WITH STANDARDS)
+==============================================================================
+
+IEEE 1609.2-2022:
+  [Y] Ieee1609Dot2Data.protocolVersion = 3
+  [Y] HeaderInfo.psid (0x20 = BSM, 0x40 = ICA)
+  [Y] HeaderInfo.generationTime (microseconds since epoch)
+  [Y] HeaderInfo.generationLocation (lat/lon/elev)
+  [Y] SignerIdentifier with type field (0=digest, 1=certificate, 2=self)
+  [Y] SignerIdentifier.digest placeholder (HashedId8, 8 bytes)
+  [Y] CertificateBase: version=3, type=explicit, issuerType, issuerDigest[8]
+  [Y] ToBeSignedCertificate: cracaId[3], crlSeries, validityStart/Duration
+  [Y] appPermissions with PSID
+  [Y] VerifyKeyIndicator with algorithm name and public key
+  [Y] Signature as raw byte array
+
+SAE J2735-2024 BSMcoreData (Part I):
+  [Y] msgCnt (0-127, wrapping counter)
+  [Y] TemporaryID (4 octets, derived from node ID)
+  [Y] DSecond / secMark (ms within minute, 0-65535)
+  [Y] Latitude / Longitude (int32, fixed-point encoding)
+  [Y] Elevation (int16, 0.1m units, default=unavailable)
+  [Y] PositionalAccuracy: semiMajor, semiMinor, semiMajorOrient (unavailable)
+  [Y] TransmissionState (default=7 unavailable)
+  [Y] Speed (uint16, 0.02 m/s units)
+  [Y] Heading (uint16, 0.0125 deg units)
+  [Y] SteeringWheelAngle (int8, default=127 unavailable)
+  [Y] AccelerationSet4Way: accelLong, accelLat, accelVert, yawRate (defaults=unavail)
+  [Y] BrakeSystemStatus (uint16 packed bitfield, default=0)
+  [Y] VehicleSize: vehWidth (uint16), vehLength (uint8) (defaults=unavailable)
+
+==============================================================================
+WHAT WE DO NOT IMPLEMENT (KNOWN GAPS)
+==============================================================================
+
+IEEE 1609.2 gaps:
+  [N] ASN.1 COER encoding — we use flat C++ struct fields, not wire-format
+      COER. This is standard practice in OMNeT++/Veins simulation.
+  [N] HashAlgorithm field (sha256 vs sha384) — implicit from algo choice
+  [N] Signature type indicator (ecdsaNistP256Signature, etc.) — implicit
+  [N] Certificate chain validation — self-signed only, no CA hierarchy
+  [N] HashedId8 computation (SHA-256 of cert, last 8 bytes) — placeholder
+  [N] Geographic region restrictions in certificates
+  [N] ServiceSpecificPermissions (SSP) bitmap
+  [N] P2pcd learning request / MissingCrlIdentifier
+  [N] EncryptedData support
+  [N] HeaderInfo.expiryTime
+  [N] Proper digest-based verification (signerType=0 path logs warning)
+
+SAE J2735 gaps:
+  [Y] AccelerationSet4Way (7 bytes: long/lat/vert accel + yaw rate) — NOW IMPLEMENTED
+  [Y] BrakeSystemStatus (2 bytes) — NOW IMPLEMENTED
+  [Y] VehicleSize (3 bytes: width + length) — NOW IMPLEMENTED
+  [N] Part II optional extensions
+  [N] ASN.1 UPER encoding — uses flat fields (standard OMNeT++ practice)
+
+==============================================================================
+DELIBERATE SIMULATION-SPECIFIC DEVIATIONS
+==============================================================================
+
+1. msgId (int32_t) in BSM
+   - NOT in J2735 standard (which only has msgCnt)
+   - Purpose: PDR tracking in simulation (monotonically increasing sequence)
+   - Counted in wire byte length (adds 4B to BSM)
+
+2. subjectId, algoName (strings) in Certificate
+   - NOT in 1609.2 wire format
+   - Purpose: simulation debugging and algorithm identification
+   - NOT counted in wire byte length
+
+3. Lat/Lon encoding uses millimeters (coord * 1000), not 1/10 micro-degrees
+   - J2735 defines lat/lon as 1/10 micro-degree for WGS84 GPS coordinates
+   - OMNeT++/SUMO uses Cartesian meters, not GPS. Multiplying by 1e7
+     overflows int32_t for meter-scale coordinates (e.g., 500m * 1e7 > 2^31)
+   - Using * 1000 gives millimeter precision, safely fits coords up to ~2147 km
+   - Decode consistently uses / 1000.0 on all receiver paths
+
+4. Public key stored as OpenSSL DER SubjectPublicKeyInfo internally
+   - ECDSA P-256: 91 bytes DER vs 65 bytes raw uncompressed point
+   - Wire byte length SUBTRACTS the 26-byte DER overhead for ECDSA
+   - PQC algorithms (Falcon, Dilithium) have no DER wrapper
+   - Algorithm detection is name-based (not size-based) for robustness
+
+5. Self-signed certificates only
+   - No CA hierarchy, no certificate chain validation
+   - All certs use issuerType=1 (self)
+
+==============================================================================
+BYTE LENGTH CALCULATION (ECDSA P-256)
+==============================================================================
+
+Component                    Our size    Standard
+-----------                  --------    --------
+SPDU wrapper/HeaderInfo         28B      ~20-28B
+BSM payload (fully compliant)   43B       39B (all J2735 fields present,
+                                               +4B sim msgId for PDR tracking)
+ECDSA signature (r||s)          64B       64B
+Certificate overhead           105B      ~105B
+Public key (raw P-256)          65B       65B (33B if compressed)
+-----------                  --------    --------
+TOTAL                          305B      ~300B
+
+Delta: +5B (simulation msgId=4B + rounding). Within acceptable simulation approximation.
+
+For PQC algorithms, signature and pubkey sizes are algorithm-dependent:
+  Falcon-512:   sig ~666B, pubkey 897B  -> SPDU ~1804B
+  Dilithium-2:  sig 2420B, pubkey 1312B -> SPDU ~3960B
+
+==============================================================================
+BUGS FOUND AND FIXED DURING AUDIT
+==============================================================================
+
+1. [FIXED] Mode4RSUApp.cc:192 hardcoded cert_.setAlgoName("Dilithium 2")
+   overriding the auto-detected algorithm from line 187. Would cause
+   signature verification failures when using ECDSA or Falcon.
+   Fix: changed to cert_.setAlgoName(label.c_str())
+
+2. [FIXED] BSM.msg comments said "1e7" but code uses "* 1000" (millimeters).
+   Fix: updated comments to match actual encoding.
+
+3. [FIXED] ICA SPDU byte length used raw DER pubkey size without subtracting
+   the 26B ASN.1 wrapper for ECDSA, inconsistent with SPDU calculation.
+   Fix: added same algo-name-based DER subtraction logic.

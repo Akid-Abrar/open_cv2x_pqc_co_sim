@@ -1,0 +1,234 @@
+================================================================================
+  DIFFERENTIATION ANALYSIS: Your Work vs. CHASM (Twardokus & Rahbari, Sep 2025)
+  Generated: 2026-03-03
+================================================================================
+
+CHASM SUMMARY (what they did):
+- Hybrid protocol: ECDSA + PQC dual signatures on every BSM
+- Certificate fragmentation: splits large hybrid certs across multiple SPDUs
+- Context-aware adaptive MCS: uses neighbor BSM locations to estimate SNR,
+  selects higher MCS for cert fragments to reach nearby vehicles faster
+- Formal security proofs: EUF-CMA unforgeability, replay resistance
+- Hardware validation: USRP X310 SDRs with srsRAN, over-the-air experiments
+- Simulation: Artery+C (OMNeT++ based, like yours) for scalability
+- Algorithms tested: Falcon-512, Falcon-1024, ML-DSA-44, ML-DSA-65
+- Metrics: verification delay, PER (packet error rate / system capacity)
+- Key result: CHASM+MCS keeps delay ~current IEEE 1609.2 levels, PER < 10%
+
+================================================================================
+WHAT CHASM DOES *NOT* DO (your opportunity space)
+================================================================================
+
+1. NO V2I (Vehicle-to-Infrastructure) ANALYSIS
+-----------------------------------------------
+CHASM is strictly V2V (vehicle-to-vehicle). They explicitly state:
+  "We limit our scope to the V2V exchange of safety messages" (Section III-D)
+
+Your work includes RSU (roadside unit) as a receiver AND as an ICA (Intersection
+Collision Avoidance) warning broadcaster. This is a fundamentally different
+communication pattern:
+  - RSU aggregates BSMs from many vehicles (fan-in)
+  - RSU broadcasts ICA warnings (fan-out, infrastructure-signed)
+  - RSU has different computational constraints (more powerful than OBU)
+
+CONTRIBUTION: "First evaluation of PQC impact on V2I sidelink communication,
+including RSU-based ICA warning services with PQC-signed broadcasts."
+
+2. NO ICA (Intersection Collision Avoidance) APPLICATION
+---------------------------------------------------------
+CHASM only evaluates BSM authentication. Your simulation includes:
+  - RSU receiving BSMs, detecting collision risks
+  - RSU signing and broadcasting ICA warning messages
+  - Vehicle receiving and verifying ICA warnings
+  - End-to-end ICA delay measurement (icaDelayMs)
+  - ICA PDR analysis at various distances
+
+This is a complete safety application pipeline, not just message signing.
+
+CONTRIBUTION: "End-to-end evaluation of a PQC-secured safety application
+(ICA) including detection, signing, broadcast, and verification latency."
+
+3. NO PDR (Packet Delivery Ratio) vs. DISTANCE ANALYSIS
+---------------------------------------------------------
+CHASM reports PER (packet error rate) as an aggregate metric at fixed vehicle
+densities. They do NOT analyze:
+  - PDR as a function of Tx-Rx distance
+  - Distance-binned PDR (your 0-100m, 100-200m, etc. analysis)
+  - Distance-filtered PDR at thresholds (100-500m)
+  - Per-sender PDR variation
+
+Your distance-dependent analysis reveals HOW the larger PQC packets degrade
+communication range — a nuance completely absent from CHASM.
+
+CONTRIBUTION: "Distance-dependent PDR analysis revealing PQC's impact on
+effective communication range, not just aggregate reliability."
+
+4. NO CBR (Channel Busy Ratio) ANALYSIS
+-----------------------------------------
+CHASM does not measure or report CBR. Your simulation tracks CBR, which is
+critical because:
+  - CBR drives the SPS resource selection in Mode 4
+  - Higher PQC overhead → more subchannels → higher CBR → more collisions
+  - This creates a feedback loop that aggregate PER misses
+
+CONTRIBUTION: "Analysis of PQC-induced channel congestion via CBR metrics,
+revealing the feedback loop between packet size and resource contention."
+
+5. NO SAE J3161 COMPLIANCE ANALYSIS
+-------------------------------------
+CHASM references SAE J3161/1 only for the 10% PER cap. Your work includes:
+  - Systematic J3161 compliance audit (7 issues identified and fixed)
+  - MCS/subchannel configuration aligned with J3161 Tables
+  - CBR-based parameter adjustment per J3161 Section 7
+  - SPS resource selection parameters per J3161
+
+CONTRIBUTION: "J3161-compliant simulation framework, unlike prior works that
+test PQC overhead without verifying radio parameter compliance."
+
+6. NO DILITHIUM-2 (ML-DSA-44 equivalent) DIRECT COMPARISON AT SAME LEVEL
+--------------------------------------------------------------------------
+CHASM tests ML-DSA-44 and ML-DSA-65 but in their HYBRID form (ECDSA + PQC).
+They never test PQC-ONLY. Your simulation tests:
+  - ECDSA P-256 alone (baseline)
+  - Falcon-512 alone (lattice-based, NIST standard)
+  - Dilithium-2 alone (lattice-based, NIST standard)
+
+This gives clean isolation of EACH algorithm's impact without the hybrid
+overhead confound. CHASM's results always include ECDSA overhead + PQC overhead
++ fragmentation overhead mixed together.
+
+CONTRIBUTION: "Isolated per-algorithm performance characterization showing
+the individual impact of Falcon-512 and Dilithium-2 without hybrid overhead."
+
+7. NO REAL CRYPTO TIMING IN SIMULATION
+----------------------------------------
+CHASM's simulation (Artery+C) "emulates QRC primitives (i.e., properly
+adjusting packet sizes to match actual values)" — meaning they only adjust
+PACKET SIZE but don't measure actual sign/verify computation time in sim.
+Their crypto timing comes only from the hardware testbed.
+
+Your simulation uses REAL cryptographic operations:
+  - pqcdsa.cc calls actual Falcon-512/Dilithium-2/ECDSA libraries
+  - Sign and verify times are measured with chrono and emitted as signals
+  - signatureTimeMs and verifyTimeMs reflect actual CPU cost per packet
+
+CONTRIBUTION: "Simulation with actual cryptographic operations (not emulated
+packet sizes), providing per-packet sign/verify timing distributions."
+
+8. NO MODE 4 SPS (Semi-Persistent Scheduling) FOCUS
+-----------------------------------------------------
+CHASM assumes generic C-V2X sidelink but doesn't specifically study Mode 4
+autonomous resource selection. Your work:
+  - Implements full SPS with sensing-based selection
+  - Studies how PQC packet size affects subchannel allocation
+  - Analyzes resource reselection counter behavior
+  - Evaluates the interaction between SPS and larger packets
+
+CONTRIBUTION: "First study of PQC impact on LTE-V2X Mode 4 SPS resource
+selection, where larger packets require more subchannels and directly affect
+the sensing-based allocation mechanism."
+
+9. NO IEEE 1609.2 STRUCTURAL GAP ANALYSIS
+-------------------------------------------
+CHASM claims 1609.2 compliance but doesn't provide a detailed mapping of their
+protocol structures to the ASN.1 definitions. Your gap analysis (already done)
+provides a systematic comparison.
+
+CONTRIBUTION: "Detailed IEEE 1609.2-2022 gap analysis identifying 28 specific
+deviations, categorized by severity, with recommendations."
+
+10. DIFFERENT SIMULATION PLATFORM
+-----------------------------------
+CHASM uses Artery+C [41] (also OMNeT++ based but with different models).
+Your work uses SimuLTE + VEINS + SUMO, which:
+  - Uses a different PHY/MAC stack (SimuLTE's LTE-V2X Mode 4)
+  - Integrates SUMO for realistic vehicular mobility
+  - Provides independent validation on a different simulation platform
+
+CONTRIBUTION: "Independent cross-validation on SimuLTE/VEINS/SUMO platform,
+complementing prior Artery+C results."
+
+================================================================================
+WHAT CHASM DOES THAT YOU DON'T (acknowledge these)
+================================================================================
+
+You should acknowledge these as CHASM's strengths / your limitations:
+
+A. HYBRID (dual) signatures — CHASM signs each BSM with BOTH ECDSA + PQC.
+   Your approach is PQC-only replacement (cleaner comparison but no backward
+   compatibility during transition period).
+
+B. Certificate fragmentation — CHASM fragments large certs across multiple
+   SPDUs. Your approach sends full cert every time (worst-case but simpler).
+
+C. Formal security proofs — CHASM provides EUF-CMA proofs. Your work is
+   empirical/simulation-based.
+
+D. Hardware validation — CHASM uses USRP SDRs for over-the-air experiments.
+   Your work is simulation-only.
+
+E. Adaptive MCS selection — CHASM's context-aware MCS uses neighbor locations
+   to estimate SNR. Your simulation uses standard MCS selection per J3161.
+
+================================================================================
+RECOMMENDED PAPER POSITIONING
+================================================================================
+
+OPTION A: "Complementary to CHASM" (cooperative framing)
+----------------------------------------------------------
+Position your work as filling the gaps CHASM left open:
+  "While CHASM [X] addresses the V2V hybrid authentication protocol with
+  formal security guarantees, our work provides complementary insights by:
+  (1) extending the analysis to V2I communication with ICA safety applications,
+  (2) providing distance-dependent PDR characterization absent from prior work,
+  (3) using actual cryptographic operations in simulation rather than packet
+  size emulation, and (4) validating on an independent simulation platform
+  (SimuLTE/VEINS) with J3161-compliant radio parameters."
+
+OPTION B: "Different research question" (orthogonal framing)
+-------------------------------------------------------------
+  "CHASM [X] asks 'how to deploy PQC in C-V2X without breaking it?' and
+  answers with a hybrid protocol + cross-layer optimization. We ask a
+  different question: 'what is the true radio-layer cost of PQC in
+  standards-compliant LTE-V2X Mode 4?' Our answer reveals distance-dependent
+  PDR degradation, channel congestion effects, and V2I impact that hybrid
+  protocol design alone cannot capture."
+
+OPTION C: "Broader scope" (encompassing framing)
+-------------------------------------------------
+  "Unlike protocol-focused works [X], we evaluate PQC's impact across
+  the full V2X stack: from MAC-layer SPS scheduling through PHY-layer
+  subchannel allocation to application-layer ICA safety services, providing
+  the first holistic assessment of post-quantum readiness in C-V2X."
+
+MY RECOMMENDATION: OPTION B is the strongest. It avoids direct comparison
+on CHASM's strengths (formal proofs, hardware, hybrid design) and instead
+positions your work as answering a DIFFERENT and COMPLEMENTARY question.
+
+================================================================================
+CONCRETE CONTRIBUTIONS LIST FOR YOUR PAPER
+================================================================================
+
+Given CHASM exists, here are 6 defensible contributions:
+
+C1. First evaluation of PQC (Falcon-512, Dilithium-2) impact on V2I sidelink
+    communication, including RSU-based ICA warning services.
+
+C2. Distance-dependent PDR characterization of PQC-secured BSMs, revealing
+    effective communication range degradation as a function of algorithm choice.
+
+C3. Per-algorithm isolated performance analysis (without hybrid overhead
+    confound), showing the individual radio-layer cost of each PQC candidate.
+
+C4. Channel congestion analysis via CBR metrics, demonstrating the feedback
+    loop between PQC packet size and Mode 4 SPS resource contention.
+
+C5. J3161-compliant simulation framework with actual cryptographic operations,
+    providing sign/verify timing distributions from real PQC libraries.
+
+C6. Independent cross-platform validation on SimuLTE/VEINS/SUMO, complementing
+    prior Artery+C results.
+
+================================================================================
+END OF ANALYSIS
+================================================================================
