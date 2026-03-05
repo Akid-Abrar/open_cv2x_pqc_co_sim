@@ -10,9 +10,35 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <dirent.h>
+#include <sys/stat.h>
 
 
 Define_Module(Mode4App);
+
+static void ensureSimulationLogsClean()
+{
+    static bool cleaned = false;
+    if (cleaned) return;
+    cleaned = true;
+
+    const std::string dir = "simulation_logs";
+    struct stat st;
+    if (::stat(dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+        DIR* d = ::opendir(dir.c_str());
+        if (d) {
+            struct dirent* ent;
+            while ((ent = ::readdir(d)) != nullptr) {
+                if (ent->d_name[0] == '.') continue;
+                std::string fpath = dir + "/" + ent->d_name;
+                ::remove(fpath.c_str());
+            }
+            ::closedir(d);
+        }
+    } else {
+        ::mkdir(dir.c_str(), 0755);
+    }
+}
 
 static inline void appendCsv(const std::string& path,
                              const std::string& header,
@@ -72,6 +98,7 @@ void Mode4App::initialize(int stage)
 {
     Mode4BaseApp::initialize(stage);
     if (stage==inet::INITSTAGE_LOCAL){
+        ensureSimulationLogsClean();
 
         binder_ = getBinder();
         cModule *ue = getParentModule();
@@ -95,8 +122,12 @@ void Mode4App::initialize(int stage)
         Cert.setPublicKeyArraySize(pkBytes.size());
         for (size_t i = 0; i < pkBytes.size(); ++i)
             Cert.setPublicKey(i, pkBytes[i]);
-        Cert.setNotBefore(0);
-        Cert.setNotAfter(9223372036854775807LL);
+        Cert.setVersion(3);
+        Cert.setCertType(0);           // explicit
+        Cert.setIssuerType(1);         // self-signed
+        Cert.setAppPermPsid(0x20);     // BSM
+        Cert.setValidityStart(0);
+        Cert.setValidityDuration(9223372036854775807LL);
 
         bsmSeq = 0;
         sendEvt = new cMessage("sendSPDU");
@@ -392,48 +423,57 @@ void Mode4App::handleLowerMessage(cMessage* msg)
 
         const BSM& b = spdu->getBsm();
         std::ostringstream os;
-        os << b.getMsgId() << ',' << b.getLatitude() << ',' << b.getLongitude() << ',' << b.getHeading() << ',' << b.getSpeed();
+        os << b.getMsgId() << ',' << b.getLat() << ',' << b.getLon() << ',' << b.getHeading_j() << ',' << b.getSpeed_j();
         std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 
-        const Certificate &c = spdu->getCert();
+        // Check SignerIdentifier type (IEEE 1609.2)
+        bool ok = false;
+        if (spdu->getSignerType() == 1) {
+            // signerType=certificate: verify using included cert (current behavior)
+            const Certificate &c = spdu->getCert();
             std::vector<uint8_t> pkBytes(c.getPublicKeyArraySize());
             for (size_t i = 0; i < pkBytes.size(); ++i)
                 pkBytes[i] = c.getPublicKey(i);
             std::string rawPubHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
             std::string pubKeyHex = pqcdsa::prefixKeyWithCertAlgo(rawPubHex, c.getAlgoName());
             std::vector<uint8_t> sigBytes(spdu->getSignatureArraySize());
-                for (size_t i = 0; i < sigBytes.size(); ++i)
-                    sigBytes[i] = spdu->getSignature(i);
-                std::string sigHex = pqcdsa::toHex(sigBytes.data(), sigBytes.size());
+            for (size_t i = 0; i < sigBytes.size(); ++i)
+                sigBytes[i] = spdu->getSignature(i);
+            std::string sigHex = pqcdsa::toHex(sigBytes.data(), sigBytes.size());
 
-        auto verifyStart = std::chrono::high_resolution_clock::now();
-        bool ok = pqcdsa::verify(bsmHex, sigHex, pubKeyHex);
-        auto verifyEnd = std::chrono::high_resolution_clock::now();
-        auto verifyUs = std::chrono::duration_cast<std::chrono::microseconds>(verifyEnd - verifyStart).count();
-        emit(verifyTimeMs_, verifyUs / 1000.0);
+            auto verifyStart = std::chrono::high_resolution_clock::now();
+            ok = pqcdsa::verify(bsmHex, sigHex, pubKeyHex);
+            auto verifyEnd = std::chrono::high_resolution_clock::now();
+            auto verifyUs = std::chrono::duration_cast<std::chrono::microseconds>(verifyEnd - verifyStart).count();
+            emit(verifyTimeMs_, verifyUs / 1000.0);
+        } else if (spdu->getSignerType() == 0) {
+            // signerType=digest: would need cached cert lookup (future)
+            EV_WARN << "RX SPDU with signerType=digest (HashedId8) — cert lookup not yet implemented, treating as unverified.\n";
+        } else {
+            EV_WARN << "RX SPDU with unknown signerType=" << (int)spdu->getSignerType() << ", treating as unverified.\n";
+        }
         if (ok) {
-            // Only count the event if the signature was valid
             emit(verified_, long(1));
         }
-        veins::Coord tx(b.getLatitude(), b.getLongitude(), 0.0);
+        // Recover position from fixed-point millimeters
+        veins::Coord tx(b.getLat() / 1000.0, b.getLon() / 1000.0, 0.0);
 
         // Distance in meters
         double dist_m = rx.distance(tx);
 
-        std::string algoName = spdu->getCert().getAlgoName();     // 1) Algorithm name
-        int certSize = spdu->getCert().getPublicKeyArraySize();   // 2) Certificate size (approximate)
-        int sigSize  = spdu->getSignatureArraySize();             // 3) Signature size
-        int spduSize = spdu->getByteLength();                     // 4) Total SPDU size
+        std::string algoName = spdu->getCert().getAlgoName();
+        int sigSize  = spdu->getSignatureArraySize();
+        int spduSize = spdu->getByteLength();
 
         const std::string header =
-            "t,host,msgId,lat,lon,heading,speed,delay_ms,dist_m,verified,cert_size,sig_size,spdu_size,Algorithm";
+            "t,host,msgId,lat,lon,heading,speed,delay_ms,dist_m,verified,sig_size,spdu_size,Algorithm";
 
         std::ostringstream dst; dst << std::fixed << std::setprecision(3) << dist_m;
         std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
-        std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLatitude();
-        std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLongitude();
-        std::ostringstream hdg; hdg << std::fixed << std::setprecision(6) << b.getHeading();
-        std::ostringstream spd; spd << std::fixed << std::setprecision(6) << b.getSpeed();
+        std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLat() / 1000.0;
+        std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLon() / 1000.0;
+        std::ostringstream hdg; hdg << std::fixed << std::setprecision(4) << b.getHeading_j() * 0.0125;
+        std::ostringstream spd; spd << std::fixed << std::setprecision(4) << b.getSpeed_j() * 0.02;
         std::ostringstream dms; dms << std::fixed << std::setprecision(3) << delay_ms;
 
 //        appendCsv(path, header, {
@@ -480,9 +520,20 @@ void Mode4App::generateAndSendSPDU()
     BSM bsm;
     bsm.setMsgId(bsmSeq);
 
+    // J2735 BSMcoreData fields
+    bsm.setMsgCnt(bsmSeq % 128);
+    {
+        std::ostringstream tid;
+        tid << std::hex << std::setfill('0') << std::setw(8) << (uint32_t)nodeId_;
+        bsm.setTempId(tid.str().c_str());
+    }
+    bsm.setSecMark((uint16_t)((int64_t)(simTime().dbl() * 1000) % 60000));
+
     veins::Coord me = getNodePositionNow(this, simTime());
-    bsm.setLatitude(me.x);
-    bsm.setLongitude(me.y);
+    // Store OMNeT++ coords as fixed-point millimeters (not 1e7 — that overflows
+    // int32_t for simulation coords in meters, e.g. 500m * 1e7 > INT32_MAX)
+    bsm.setLat((int32_t)(me.x * 1000));
+    bsm.setLon((int32_t)(me.y * 1000));
 
     // Fetch speed and heading from TraCI mobility
     double speed   = 0.0;
@@ -496,12 +547,12 @@ void Mode4App::generateAndSendSPDU()
             }
         }
     }
-    bsm.setSpeed(speed);
-    bsm.setHeading(heading);
+    bsm.setSpeed_j((uint16_t)(speed / 0.02));
+    bsm.setHeading_j((uint16_t)(heading / 0.0125));
 
-    // Serialize BSM to hex
+    // Serialize BSM to hex (using J2735 integer fields)
     std::ostringstream os;
-    os << bsm.getMsgId() << ',' << bsm.getLatitude() << ',' << bsm.getLongitude() << ',' << bsm.getHeading() << ',' << bsm.getSpeed();
+    os << bsm.getMsgId() << ',' << bsm.getLat() << ',' << bsm.getLon() << ',' << bsm.getHeading_j() << ',' << bsm.getSpeed_j();
     std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
 
     // Sign with Falcon
@@ -518,28 +569,76 @@ void Mode4App::generateAndSendSPDU()
 //    emit(icaVerifyMs_, duration_time/1000.0);
 
 
-    // Build the SPDU packet
+    // Build the SPDU packet (IEEE 1609.2 Ieee1609Dot2Data)
     SPDU* spdu = new SPDU("SPDU");
+    spdu->setProtocolVersion(3);
+    spdu->setPsid(0x20);
+    spdu->setGenerationTime((int64_t)(simTime().dbl() * 1e6));
+    spdu->setGenLocation_lat(bsm.getLat());   // already in mm fixed-point
+    spdu->setGenLocation_lon(bsm.getLon());
+    spdu->setSignerType(1);            // certificate included
     spdu->setBsm(bsm);
-//    spdu->setSignatureHex(sigHex.c_str());
     std::vector<uint8_t> sigBytes = pqcdsa::fromHex(sigHex);
-        spdu->setSignatureArraySize(sigBytes.size());
-        for (size_t i = 0; i < sigBytes.size(); ++i)
-            spdu->setSignature(i, sigBytes[i]);
+    spdu->setSignatureArraySize(sigBytes.size());
+    for (size_t i = 0; i < sigBytes.size(); ++i)
+        spdu->setSignature(i, sigBytes[i]);
     spdu->setCert(Cert);
 
-    // 1. Estimate BSM size: 1x int32 (4 bytes) + 4x double (8 bytes each) = 36 bytes
-    long bsmSize = sizeof(bsm.getMsgId()) + 4*(sizeof(bsm.getLatitude()));
+    // Wire-level byte length per IEEE 1609.2 / SAE J2735.
+    //
+    // 1. BSM: J2735 BSMcoreData Part I — fully compliant (39 bytes standard)
+    //    + msgId (4 bytes, simulation-only) = 43 bytes total
+    long bsmSize = sizeof(bsm.getMsgCnt())          // msgCnt:          1
+                 + sizeof(bsm.getMsgId())            // msgId:            4 (sim-only)
+                 + 4                                  // tempId:           4 octets (wire)
+                 + sizeof(bsm.getSecMark())          // secMark:          2
+                 + sizeof(bsm.getLat())              // lat:              4
+                 + sizeof(bsm.getLon())              // lon:              4
+                 + sizeof(bsm.getElev())             // elev:             2
+                 + sizeof(bsm.getSemiMajor())        // semiMajor:        1 (was uint16)
+                 + sizeof(bsm.getSemiMinor())        // semiMinor:        1 (was uint16)
+                 + sizeof(bsm.getSemiMajorOrient())  // semiMajorOrient:  2
+                 + sizeof(bsm.getTransmission())     // transmission:     1
+                 + sizeof(bsm.getSpeed_j())          // speed_j:          2
+                 + sizeof(bsm.getHeading_j())        // heading_j:        2
+                 + sizeof(bsm.getAngle())            // angle:            1
+                 + sizeof(bsm.getAccelLong())        // accelLong:        2
+                 + sizeof(bsm.getAccelLat())         // accelLat:         2
+                 + sizeof(bsm.getAccelVert())        // accelVert:        1
+                 + sizeof(bsm.getYawRate())          // yawRate:          2
+                 + sizeof(bsm.getBrakes())           // brakes:           2
+                 + sizeof(bsm.getVehWidth())         // vehWidth:         2
+                 + sizeof(bsm.getVehLength());       // vehLength:        1
+                                                      // Total:           43 (39 std + 4 sim)
 
-    // 2. Calculate Certificate size from its string fields and integers (8 bytes each)
-    long certSize = strlen(Cert.getSubjectId()) +
-                    strlen(Cert.getAlgoName()) +
-                    Cert.getPublicKeyArraySize() +
-                    sizeof(Cert.getNotBefore()) +
-                    sizeof(Cert.getNotAfter());
+    // 2. Certificate: 1609.2 explicit cert
+    //    version(1) + type(1) + issuer(9) + toBeSigned[cracaId(3) + crlSeries(2)
+    //    + validityPeriod(8) + appPermissions(~12) + verifyKeyIndicator(~2)]
+    //    + CA signature on cert (same algo): included in certOverhead
+    //    certOverhead covers all cert fields EXCEPT the raw verification key.
+    //    ECDSA: certOverhead(105) + pubkey(65) = 170B (matches literature ~170B)
+    //    PQC:   certOverhead(105) + pubkey(actual raw size from algorithm)
+    //
+    //    Internal storage uses DER (91B for ECDSA) but wire uses raw point (65B).
+    //    For PQC, internal and wire sizes are the same (no DER wrapper).
+    long certOverhead  = 105;
+    long derPubKeySize = Cert.getPublicKeyArraySize();  // internal storage size
+    // ECDSA keys are stored internally as DER SubjectPublicKeyInfo (91B for P-256),
+    // but the 1609.2 wire format uses the raw uncompressed EC point (65B).
+    // PQC keys (Falcon, Dilithium) have no DER wrapper — internal = wire size.
+    std::string algo(Cert.getAlgoName());
+    bool isEcdsa = (algo.find("ECDSA") != std::string::npos
+                 || algo.find("ecdsa") != std::string::npos
+                 || algo.find("P-256") != std::string::npos
+                 || algo.find("P-384") != std::string::npos);
+    long rawPubKeySize = isEcdsa ? (derPubKeySize - 26) : derPubKeySize;
+    long certSize = certOverhead + rawPubKeySize;
 
-
-    long totalByteLength = bsmSize + spdu->getSignatureArraySize() + certSize;
+    // 3. SPDU 1609.2 Ieee1609Dot2Data wrapper + HeaderInfo
+    //    protocolVersion(1) + contentType(1) + hashAlgorithm(1) + psid(~3)
+    //    + generationTime(8) + signerIdentifier(1) + encoding overhead(~13)
+    long spduOverhead = 28;
+    long totalByteLength = spduOverhead + bsmSize + spdu->getSignatureArraySize() + certSize;
     spdu->setByteLength(totalByteLength);
 
     EV_FATAL << "CRITICAL TEST: signature size : "<< spdu->getSignatureArraySize() <<endl;
