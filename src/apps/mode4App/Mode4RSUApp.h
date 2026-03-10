@@ -15,6 +15,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <array>
+#include <map>
 
 class Mode4RSUApp : public Mode4BaseApp
 {
@@ -37,6 +39,8 @@ class Mode4RSUApp : public Mode4BaseApp
     int          sockFd_ = -1;
     sockaddr_in  sockAddr_{};
     cMessage*    sockPollEvt_ = nullptr;
+
+    std::map<std::array<uint8_t,8>, Certificate> certCache_;  // receiver cert cache
 
     LteBinder* binder_;
     MacNodeId nodeId_;

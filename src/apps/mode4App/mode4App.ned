@@ -24,6 +24,7 @@ simple Mode4App like Mode4BaseApp
         int priority = default(3); // Priority of the packets sent
         int duration = default(1000); // MS before packet must be dropped
         double period @unit("s") = default(0.1s);
+        int certInterval = default(5); // Send full cert every N BSMs, digest otherwise (IEEE 1609.2 / J2945)
         int macNodeId = default(0);
         
         @signal[sentMsg];

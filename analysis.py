@@ -147,13 +147,33 @@ def main():
 
     df = df.dropna()
 
+    # Drop rows where sender is "unknown" (digest-mode packets whose cert
+    # was not yet cached — these are unverifiable and cannot be attributed
+    # to a specific vehicle, matching real-world RSU behavior).
+    unknown_count = (df["sender"] == "unknown").sum()
+    if unknown_count:
+        print(f"Dropping {unknown_count} rows with sender='unknown' (uncached digest)")
+    df = df[df["sender"] != "unknown"]
+
     if df.empty:
         print("No valid data after cleaning.")
         return
 
     # Extract global info
     algo_name = str(df.iloc[0]["Algorithm"])
-    spdu_size = int(df.iloc[0]["spdu_size"])
+    if "signerType" in df.columns:
+        cert_rows = df[df["signerType"] == 1]
+        digest_rows = df[df["signerType"] == 0]
+        spdu_size_cert = int(cert_rows["spdu_size"].iloc[0]) if not cert_rows.empty else None
+        spdu_size_digest = int(digest_rows["spdu_size"].iloc[0]) if not digest_rows.empty else None
+        if spdu_size_cert is not None and spdu_size_digest is not None:
+            spdu_size_label = f"{spdu_size_cert}B (cert) / {spdu_size_digest}B (digest)"
+        elif spdu_size_cert is not None:
+            spdu_size_label = f"{spdu_size_cert} B"
+        else:
+            spdu_size_label = f"{spdu_size_digest} B"
+    else:
+        spdu_size_label = f"{int(df.iloc[0]['spdu_size'])} B"
 
     # Load ground-truth sent counts (if available)
     sent_counts = load_sender_summary(SUMMARY_PATH)
@@ -248,7 +268,7 @@ def main():
         # Full title including PDR
         fig.suptitle(
             f"{car_name}. Algo: {algo_name}, "
-            f"SPDU Size: {spdu_size} B, PDR: {pdr_label}",
+            f"SPDU: {spdu_size_label}, PDR: {pdr_label}",
             fontsize=14,
             fontweight="bold"
         )
@@ -337,7 +357,7 @@ def main():
     ax.axhline(90, color="red", linestyle="--", linewidth=1.5, label="PDR = 90%")
     ax.set_title(
         f"Per-Vehicle PDR vs Average Distance from RSU\n"
-        f"Algorithm: {algo_name}, SPDU: {spdu_size} B, "
+        f"Algorithm: {algo_name}, SPDU: {spdu_size_label}, "
         f"Weighted PDR: {weighted_pdr * 100:.2f}% ({total_received}/{total_sent})",
         fontsize=13, fontweight="bold"
     )
@@ -383,7 +403,7 @@ def main():
     ax.axhline(90, color="red", linestyle="--", linewidth=1.5, label="PDR = 90%")
     ax.set_title(
         f"Weighted PDR vs Distance (binned, {bin_width}m intervals)\n"
-        f"Algorithm: {algo_name}, SPDU: {spdu_size} B, "
+        f"Algorithm: {algo_name}, SPDU: {spdu_size_label}, "
         f"Weighted PDR: {weighted_pdr * 100:.2f}% ({total_received}/{total_sent})",
         fontsize=13, fontweight="bold"
     )
@@ -445,7 +465,7 @@ def main():
     ax.set_ylim(0, 110)
     ax.set_title(
         f"Distance-Filtered PDR vs Range Threshold\n"
-        f"Algorithm: {algo_name}, SPDU: {spdu_size} B",
+        f"Algorithm: {algo_name}, SPDU: {spdu_size_label}",
         fontsize=13, fontweight="bold"
     )
     ax.grid(True, axis="y")
@@ -482,7 +502,7 @@ def main():
         ax.set_ylim(0, 115)
         ax.set_title(
             f"Per-Vehicle PDR (packets within 300m only)\n"
-            f"Algorithm: {algo_name}, SPDU: {spdu_size} B",
+            f"Algorithm: {algo_name}, SPDU: {spdu_size_label}",
             fontsize=13, fontweight="bold"
         )
         ax.grid(True, axis="y")
