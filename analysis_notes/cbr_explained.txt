@@ -1,0 +1,212 @@
+================================================================================
+  CHANNEL BUSY RATIO (CBR) — EXPLAINED
+  Date: 2026-03-10
+  Context: LTE-V2X Mode 4 Sidelink (C-V2X PC5)
+================================================================================
+
+1. WHAT IS CBR?
+================================================================================
+
+Channel Busy Ratio (CBR) is a measurement of how congested the radio channel is.
+It answers the question: "What fraction of the available radio resources are
+currently being used?"
+
+Definition (3GPP TS 36.214, Section 5.1.30):
+  CBR is the fraction of sub-channels in the resource pool whose S-RSSI
+  (Sidelink Received Signal Strength Indicator) exceeds a configured threshold,
+  measured over a 100ms observation window.
+
+In plain terms:
+  - The radio channel is divided into time slots and frequency sub-channels.
+  - In each time slot, each sub-channel is either "busy" (someone is
+    transmitting on it) or "idle".
+  - CBR = (number of busy sub-channels) / (total sub-channels observed)
+  - Measured over the last 100 subframes (= 100ms at 1ms subframe duration).
+
+Example:
+  - You have 10 sub-channels and observe 100 subframes = 1000 sub-channel slots.
+  - If 300 of those 1000 slots had signal above the threshold -> CBR = 0.30.
+
+Value range: 0.0 (channel completely idle) to 1.0 (every sub-channel busy).
+
+
+2. HOW IS CBR CALCULATED IN LTE-V2X MODE 4?
+================================================================================
+
+Step-by-step process:
+
+  a) SENSING WINDOW
+     Each vehicle continuously monitors the sidelink channel. The sensing
+     window for CBR is the most recent 100 subframes (100ms).
+
+  b) S-RSSI MEASUREMENT
+     For every sub-channel in every subframe within the window, the UE
+     measures S-RSSI — the total received power on that sub-channel,
+     including both signal and interference.
+
+  c) THRESHOLD COMPARISON
+     Each sub-channel measurement is compared against a threshold:
+       threshS-RSSI-CBR (SAE J3161 Table 10, #4)
+       Value = 9, which maps to: -112 + 9*2 = -94 dBm per sub-channel.
+     If S-RSSI >= -94 dBm -> sub-channel is counted as BUSY.
+     If S-RSSI <  -94 dBm -> sub-channel is counted as IDLE.
+
+  d) RATIO CALCULATION
+     CBR = (busy sub-channels in window) / (total sub-channels in window)
+
+     With our configuration:
+       - 10 sub-channels per subframe
+       - 100 subframes in the window
+       - Total = 1000 sub-channel observations
+       - CBR = busy_count / 1000
+
+  e) REPORTING
+     CBR is computed at the MAC/PHY layer and reported upward to the
+     application layer periodically. In our simulation, it's received via
+     a "CBR" message and emitted as the "cbr" signal.
+
+In our simulation (LteMacVUeMode4.cc / LtePhyVUeMode4.cc):
+  - The PHY layer measures RSSI on each sub-channel.
+  - Compares against thresholdRSSI = 9 (= -94 dBm).
+  - Counts busy sub-channels over the sensing window (pStep=100 subframes).
+  - Sends the CBR value up to the MAC and then to the application.
+
+
+3. HOW DOES CBR AFFECT PERFORMANCE?
+================================================================================
+
+CBR is the input to the Decentralized Congestion Control (DCC) mechanism
+defined in SAE J3161 Section 8.2.5 and Table 10. Here's the chain of effects:
+
+  HIGH CBR -> DCC restricts transmissions -> more packet drops -> lower PDR
+
+Specifically:
+
+  a) CBR LEVELS AND CR LIMITS
+     SAE J3161 Table 10 defines three CBR thresholds:
+
+     CBR Level    CBR Range         Action
+     ----------   ---------------   ----------------------------------------
+     Level 0      CBR < 0.30        No restriction. All vehicles can transmit
+                                    freely.
+     Level 1      0.30 <= CBR < 0.65  Moderate restriction. Channel Rate (CR)
+                                    limit tightened.
+     Level 2      CBR >= 0.65       Severe restriction. Most aggressive CR
+                                    limit. Packet dropping enabled.
+
+  b) CHANNEL RATE (CR) LIMITING
+     CR = fraction of sub-channels a single UE is allowed to use.
+     CR-limit = maximum allowed CR for a given CBR level and priority (PPPP).
+
+     SAE J3161 Table 14 gives CR limits:
+
+     PPPP (priority)   CBR Level 0   CBR Level 1   CBR Level 2
+     ---------------   -----------   -----------   -----------
+     1-2 (critical)      varies        varies        varies
+     3-8 (lower)         varies        varies        varies
+
+     When CBR rises, CR limits shrink. A vehicle that was using 4 sub-channels
+     per transmission might be forced to use 2, or skip transmissions entirely.
+
+  c) PACKET DROPPING
+     When a vehicle's CR exceeds the CR-limit for the current CBR level,
+     the MAC layer drops the packet BEFORE transmission. This is the
+     "packetDropDCC" signal in our simulation.
+
+     This means the packet is never sent on the air — it's silently discarded
+     at the sender side to reduce channel load.
+
+  d) TX PARAMETER ADAPTATION
+     Beyond CR limits, the DCC mechanism can also adapt:
+     - MCS (lower MCS = more robust but uses more sub-channels)
+     - Number of sub-channels (fewer sub-channels = smaller resource footprint)
+     - Retransmission policy
+
+     In our sidelink_configuration.xml, the CBR-based fallback tx parameters
+     define different MCS and sub-channel configs for each CBR level.
+
+
+4. WHY CBR MATTERS FOR PQC RESEARCH
+================================================================================
+
+This is the critical connection for your paper:
+
+  LARGER SIGNATURE -> LARGER PACKET -> MORE SUB-CHANNELS PER TX -> HIGHER CBR
+  -> MORE DCC RESTRICTIONS -> MORE DROPS -> LOWER PDR
+
+Concrete example:
+
+  Algorithm      SPDU Size (cert)  Sub-channels needed   Resource cost
+  -----------    ----------------  -------------------   -------------
+  ECDSA P-256      ~305 B            ~2 sub-channels      2/10 = 20%
+  Falcon-512      ~1733 B            ~5 sub-channels      5/10 = 50%
+  Dilithium-2     ~3908 B           ~10 sub-channels     10/10 = 100%
+
+  With 10 vehicles transmitting simultaneously:
+  - ECDSA:     10 * 2 = 20 sub-channels needed. With 10 per subframe,
+               this fits in 2 subframes. CBR contribution is low.
+  - Falcon:    10 * 5 = 50 sub-channels. Needs 5 subframes. Moderate CBR.
+  - Dilithium: 10 * 10 = 100 sub-channels. Needs 10 subframes per round.
+               That's 10% of the 100ms window just for one BSM round.
+
+  At 50 vehicles:
+  - ECDSA:     50 * 2 = 100 sub-channels per 100ms window. CBR ~ 0.10.
+  - Falcon:    50 * 5 = 250 sub-channels. CBR ~ 0.25. Approaching Level 1.
+  - Dilithium: 50 * 10 = 500 sub-channels. CBR ~ 0.50. In Level 1 territory.
+               DCC starts restricting. Packets get dropped.
+
+  At 100 vehicles:
+  - ECDSA:     CBR ~ 0.20. Still comfortable.
+  - Falcon:    CBR ~ 0.50. DCC active. Some drops.
+  - Dilithium: CBR ~ 1.00. CHANNEL SATURATED. Massive packet loss.
+
+  (These are rough estimates assuming no frequency reuse and worst-case cert
+  mode. Real numbers from simulation will be more nuanced due to digest mode,
+  spatial reuse, MCS adaptation, etc.)
+
+This is why CBR is arguably the MOST IMPORTANT KPI for your PQC paper after
+PDR. It explains the mechanism behind PDR degradation:
+  - PDR shows WHAT happens (packets are lost).
+  - CBR shows WHY it happens (channel congestion from larger packets).
+
+
+5. CBR IN THE SIMULATION CONFIG
+================================================================================
+
+Current settings in omnetpp.ini:
+
+  *.carNoIp[*].lteNic.mac.useCBR = true
+  *.carNoIp[*].lteNic.mac.crLimit = true
+  *.carNoIp[*].lteNic.mac.packetDropping = true
+  *.carNoIp[*].lteNic.phy.thresholdRSSI = 9     (= -94 dBm)
+
+  (Same for RSU)
+
+These are all J3161-compliant. CBR measurement, CR limiting, and DCC packet
+dropping are all enabled.
+
+In sidelink_configuration.xml:
+  CBR-based TX parameter sets define fallback configs for each CBR level,
+  with compliant MCS range (5-11) and minSubchannel >= 2.
+
+
+6. HOW TO INTERPRET CBR VALUES IN RESULTS
+================================================================================
+
+  CBR Value    Interpretation
+  ---------    ---------------------------------------------------------------
+  0.00 - 0.10  Very light load. No congestion. All algorithms perform well.
+  0.10 - 0.30  Light to moderate load. Still below DCC threshold.
+               Performance should be similar across algorithms.
+  0.30 - 0.50  Moderate load. DCC Level 1 kicks in. CR limits applied.
+               PQC algorithms may start showing higher drop rates.
+  0.50 - 0.65  Heavy load. Near the Level 2 boundary.
+               Expect noticeable PDR differences between algorithms.
+  0.65 - 0.80  Very heavy load. DCC Level 2. Aggressive packet dropping.
+               Dilithium-2 likely severely affected.
+  0.80 - 1.00  Channel near saturation. Only highest-priority, smallest
+               packets get through reliably.
+
+================================================================================
+END
+================================================================================

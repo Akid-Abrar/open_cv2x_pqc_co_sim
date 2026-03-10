@@ -33,6 +33,8 @@
 #include "apps/mode4App/pqcdsa.h"
 #include "apps/mode4App/IcaWarn_m.h"
 
+#include <array>
+#include <map>
 
 class Mode4App : public Mode4BaseApp {
 
@@ -81,6 +83,10 @@ protected:
 
     pqcdsa::KeyPair keyPair;
     Certificate     Cert;
+
+    int certInterval_ = 5;                                          // send full cert every N BSMs
+    std::array<uint8_t,8> ownDigest_;                               // cached HashedId8 of own cert
+    std::map<std::array<uint8_t,8>, Certificate> certCache_;        // receiver cert cache
 
     cMessage* sendEvt = nullptr;
     int       bsmSeq  = 0;

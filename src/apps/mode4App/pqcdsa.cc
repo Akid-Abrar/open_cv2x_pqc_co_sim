@@ -52,7 +52,7 @@ static const char* algTag(Alg a) {
 }
 
 static const char* oqsAlgId(Alg a) {
-    return (a == Alg::FALCON_512) ? OQS_SIG_alg_falcon_512
+    return (a == Alg::FALCON_512) ? OQS_SIG_alg_falcon_padded_512
                                   : OQS_SIG_alg_dilithium_2;
 }
 

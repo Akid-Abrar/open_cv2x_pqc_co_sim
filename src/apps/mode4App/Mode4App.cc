@@ -12,9 +12,32 @@
 #include <sstream>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <openssl/evp.h>
+#include <array>
+#include <cstring>
 
 
 Define_Module(Mode4App);
+
+// Compute HashedId8 = last 8 bytes of SHA-256 over canonical cert serialization
+// per IEEE 1609.2 Section 6.3.29
+static std::array<uint8_t,8> computeHashedId8(const Certificate& c) {
+    std::ostringstream os;
+    os << (int)c.getVersion() << '|' << (int)c.getCertType() << '|'
+       << (int)c.getIssuerType() << '|' << c.getSubjectId() << '|'
+       << (int)c.getAppPermPsid() << '|' << c.getAlgoName();
+    for (size_t i = 0; i < c.getPublicKeyArraySize(); i++)
+        os << (int)c.getPublicKey(i) << ',';
+    std::string s = os.str();
+
+    uint8_t hash[32];
+    unsigned int len = 0;
+    EVP_Digest(s.data(), s.size(), hash, &len, EVP_sha256(), nullptr);
+
+    std::array<uint8_t,8> id8;
+    std::memcpy(id8.data(), hash + 24, 8);  // last 8 bytes
+    return id8;
+}
 
 static void ensureSimulationLogsClean()
 {
@@ -130,6 +153,9 @@ void Mode4App::initialize(int stage)
         Cert.setValidityDuration(9223372036854775807LL);
 
         bsmSeq = 0;
+        certInterval_ = par("certInterval").intValue();
+        ownDigest_ = computeHashedId8(Cert);
+
         sendEvt = new cMessage("sendSPDU");
         scheduleAt(simTime() + 1, sendEvt);
 
@@ -414,7 +440,6 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         simtime_t delay = simTime() - spdu->getTimestamp();
 
         const char* hostName = getParentModule()->getFullName();
-//        std::string path = std::string("bsm_rx_") + hostName + ".txt";
         std::string path = std::string("bsm_rx_") + hostName + ".csv";
         const double delay_ms = (simTime() - spdu->getTimestamp()).dbl() * 1000.0;
 
@@ -428,14 +453,34 @@ void Mode4App::handleLowerMessage(cMessage* msg)
 
         // Check SignerIdentifier type (IEEE 1609.2)
         bool ok = false;
+        const Certificate* useCert = nullptr;
+
         if (spdu->getSignerType() == 1) {
-            // signerType=certificate: verify using included cert (current behavior)
-            const Certificate &c = spdu->getCert();
-            std::vector<uint8_t> pkBytes(c.getPublicKeyArraySize());
+            // signerType=certificate: use included cert and cache it
+            useCert = &spdu->getCert();
+            auto digest = computeHashedId8(*useCert);
+            certCache_[digest] = *useCert;
+        } else if (spdu->getSignerType() == 0) {
+            // signerType=digest: look up in cert cache
+            std::array<uint8_t,8> rxDigest;
+            for (int i = 0; i < 8; i++)
+                rxDigest[i] = spdu->getSignerDigest(i);
+            auto it = certCache_.find(rxDigest);
+            if (it != certCache_.end()) {
+                useCert = &it->second;
+            } else {
+                EV_WARN << "RX digest SPDU but cert not in cache -- cannot verify\n";
+            }
+        } else {
+            EV_WARN << "RX SPDU with unknown signerType=" << (int)spdu->getSignerType() << ", treating as unverified.\n";
+        }
+
+        if (useCert) {
+            std::vector<uint8_t> pkBytes(useCert->getPublicKeyArraySize());
             for (size_t i = 0; i < pkBytes.size(); ++i)
-                pkBytes[i] = c.getPublicKey(i);
+                pkBytes[i] = useCert->getPublicKey(i);
             std::string rawPubHex = pqcdsa::toHex(pkBytes.data(), pkBytes.size());
-            std::string pubKeyHex = pqcdsa::prefixKeyWithCertAlgo(rawPubHex, c.getAlgoName());
+            std::string pubKeyHex = pqcdsa::prefixKeyWithCertAlgo(rawPubHex, useCert->getAlgoName());
             std::vector<uint8_t> sigBytes(spdu->getSignatureArraySize());
             for (size_t i = 0; i < sigBytes.size(); ++i)
                 sigBytes[i] = spdu->getSignature(i);
@@ -446,11 +491,6 @@ void Mode4App::handleLowerMessage(cMessage* msg)
             auto verifyEnd = std::chrono::high_resolution_clock::now();
             auto verifyUs = std::chrono::duration_cast<std::chrono::microseconds>(verifyEnd - verifyStart).count();
             emit(verifyTimeMs_, verifyUs / 1000.0);
-        } else if (spdu->getSignerType() == 0) {
-            // signerType=digest: would need cached cert lookup (future)
-            EV_WARN << "RX SPDU with signerType=digest (HashedId8) — cert lookup not yet implemented, treating as unverified.\n";
-        } else {
-            EV_WARN << "RX SPDU with unknown signerType=" << (int)spdu->getSignerType() << ", treating as unverified.\n";
         }
         if (ok) {
             emit(verified_, long(1));
@@ -461,7 +501,7 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         // Distance in meters
         double dist_m = rx.distance(tx);
 
-        std::string algoName = spdu->getCert().getAlgoName();
+        std::string algoName = useCert ? useCert->getAlgoName() : "unknown";
         int sigSize  = spdu->getSignatureArraySize();
         int spduSize = spdu->getByteLength();
 
@@ -493,7 +533,7 @@ void Mode4App::handleLowerMessage(cMessage* msg)
 //            algoName
 //        });
 
-        EV_INFO << "RX BSM#" << b.getMsgId() << " from " << spdu->getCert().getSubjectId() << "  -->  " << (ok ? "VALID" : "INVALID") << '\n';
+        EV_INFO << "RX BSM#" << b.getMsgId() << " signerType=" << (int)spdu->getSignerType() << " from " << (useCert ? useCert->getSubjectId() : "unknown") << "  -->  " << (ok ? "VALID" : "INVALID") << '\n';
 
         delete msg;
     }
@@ -576,13 +616,23 @@ void Mode4App::generateAndSendSPDU()
     spdu->setGenerationTime((int64_t)(simTime().dbl() * 1e6));
     spdu->setGenLocation_lat(bsm.getLat());   // already in mm fixed-point
     spdu->setGenLocation_lon(bsm.getLon());
-    spdu->setSignerType(1);            // certificate included
+    // IEEE 1609.2 Section 6.3.12 / SAE J2945/1: alternate full cert vs digest
+    bool sendFullCert = (bsmSeq % certInterval_ == 0);
+
+    if (sendFullCert) {
+        spdu->setSignerType(1);       // certificate
+        spdu->setCert(Cert);
+    } else {
+        spdu->setSignerType(0);       // digest (HashedId8)
+        for (int i = 0; i < 8; i++)
+            spdu->setSignerDigest(i, ownDigest_[i]);
+    }
+
     spdu->setBsm(bsm);
     std::vector<uint8_t> sigBytes = pqcdsa::fromHex(sigHex);
     spdu->setSignatureArraySize(sigBytes.size());
     for (size_t i = 0; i < sigBytes.size(); ++i)
         spdu->setSignature(i, sigBytes[i]);
-    spdu->setCert(Cert);
 
     // Wire-level byte length per IEEE 1609.2 / SAE J2735.
     //
@@ -638,7 +688,8 @@ void Mode4App::generateAndSendSPDU()
     //    protocolVersion(1) + contentType(1) + hashAlgorithm(1) + psid(~3)
     //    + generationTime(8) + signerIdentifier(1) + encoding overhead(~13)
     long spduOverhead = 28;
-    long totalByteLength = spduOverhead + bsmSize + spdu->getSignatureArraySize() + certSize;
+    long certOrDigestSize = sendFullCert ? certSize : 8;  // HashedId8 = 8 bytes
+    long totalByteLength = spduOverhead + bsmSize + spdu->getSignatureArraySize() + certOrDigestSize;
     spdu->setByteLength(totalByteLength);
 
     EV_FATAL << "CRITICAL TEST: signature size : "<< spdu->getSignatureArraySize() <<endl;

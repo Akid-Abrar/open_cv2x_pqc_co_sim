@@ -1,0 +1,109 @@
+Falcon-512 Variable Signature Size - Authoritative References
+================================================================
+
+Research Date: 2026-03-09
+Query: Why do Falcon-512 signatures have variable sizes (typically 649-666 bytes)?
+
+REFERENCE 1: NIST PQC Official Comments (Round 2) - FALCON
+---------------------------------------------------------
+Source: CSRC NIST Official Comments
+URL: https://csrc.nist.gov/CSRC/media/Projects/post-quantum-cryptography/documents/round-2/official-comments/FALCON-round2-official-comment.pdf
+
+Key Finding:
+"The per-signature random nonce (40 bytes) is integrated in the signature format to ease
+interoperability and usage; this brings average signature size to about 651.59 bytes
+(with standard deviation of 2.55 bytes) for Falcon-512."
+
+Explanation:
+- Compressed format: ~651.59 bytes average (σ = 2.55 bytes)
+- Padded format: 666 bytes (fixed)
+- The variability comes from the compression of the signature encoding
+
+
+REFERENCE 2: Falcon API Specification (falcon.h)
+------------------------------------------------
+Source: Official Falcon Implementation Header
+URL: https://falcon-sign.info/impl/falcon.h.html
+
+Key Finding (from NIST PQC forum discussion):
+"For Falcon-512 (degree 512), the signature sizes are:
+- 666 bytes (PADDED format) - fixed size
+- 651.59 bytes on average (COMPRESSED format) - variable
+- 752 bytes maximum (COMPRESSED format max)"
+
+Three Signature Formats:
+
+1. COMPRESSED Format (variable length):
+   - Unpadded compressed signatures are variable length
+   - Average: 651.59 ± 2.55 bytes for Falcon-512
+   - Maximum: 752 bytes
+   - Saves space by removing trailing zeros
+
+2. PADDED Format (fixed length):
+   - Fixed at 666 bytes for Falcon-512
+   - "When a Falcon signature has the 'padded' format, it is in fact padded with zeros"
+   - Signing process is restarted with a random nonce if signature cannot be encoded
+     within target size
+
+3. CT (Constant Time) Format:
+   - Fixed length for a given Falcon degree
+   - Used for constant-time operations
+
+
+REFERENCE 3: Falcon Paper by Prest et al.
+-----------------------------------------
+Source: "Falcon: Fast-Fourier Lattice-based Compact Signatures over NTRU"
+Authors: Pierre-Alain Fouque, Jeffrey Hoffstein, Paul Kirchner, Vadim Lyubashevsky,
+         Thomas Pornin, Thomas Prest, Thomas Ricosset, Gregor Seiler
+URL: https://www.di.ens.fr/~prest/Publications/falcon.pdf
+Alternate URL: https://tprest.github.io/pdf/pub/falcon.pdf
+
+Technical Context:
+- Falcon uses a custom compressed signature encoding
+- Elements are on average close to 0, which enables compression
+- A public compression technique is applied to the signature during signing
+- The signing loop is repeated until the signature reaches the desired compression level
+- This typically reaches a sufficiently small size with high probability
+
+
+WHY VARIABLE SIZE?
+==================
+
+The variable signature size in Falcon-512 (649-666 bytes range) occurs because:
+
+1. **Compression Encoding**: Falcon uses a variable-length encoding that compresses
+   the signature by removing trailing zero bytes. The actual compressed size depends
+   on the specific signature values generated.
+
+2. **Statistical Distribution**: The signature components follow a distribution that
+   results in varying amounts of compressible data. The average is 651.59 bytes with
+   a standard deviation of 2.55 bytes.
+
+3. **Nonce Integration**: A 40-byte per-signature random nonce is integrated into the
+   signature format, contributing to the overall size.
+
+4. **Rejection Sampling**: If a signature cannot be compressed to fit within the target
+   size (752 bytes max for compressed, 666 for padded), the signing process restarts
+   with a new random nonce.
+
+5. **Format Choice**: Implementations can choose between:
+   - COMPRESSED (variable ~651 bytes avg) - smaller but variable
+   - PADDED (fixed 666 bytes) - larger but predictable
+   - CT (fixed, constant-time safe)
+
+
+CITATION FORMATS
+================
+
+For Academic Papers:
+"Official Comments (Round 2) - FALCON," NIST Post-Quantum Cryptography Standardization
+Project, https://csrc.nist.gov/CSRC/media/Projects/post-quantum-cryptography/documents/
+round-2/official-comments/FALCON-round2-official-comment.pdf
+
+Fouque, P.-A., Hoffstein, J., Kirchner, P., Lyubashevsky, V., Pornin, T., Prest, T.,
+Ricosset, T., & Seiler, G. "Falcon: Fast-Fourier Lattice-based Compact Signatures over
+NTRU," Specifications v1.2, 2020. https://falcon-sign.info/
+
+For Technical Documentation:
+See falcon.h API documentation at https://falcon-sign.info/impl/falcon.h.html for
+signature format specifications and size constants.

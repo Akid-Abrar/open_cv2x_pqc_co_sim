@@ -43,3 +43,33 @@ Summary
 Variable signature sizes for ECDSA and Falcon are expected behavior, produced
 by the underlying mathematical and encoding properties of each algorithm.
 Only Dilithium guarantees a fixed signature size.
+
+
+References for Falcon-512 Variable Signature Size
+==================================================
+
+[1] NIST PQC Official Comments (Round 2) — FALCON
+    https://csrc.nist.gov/CSRC/media/Projects/post-quantum-cryptography/documents/round-2/official-comments/FALCON-round2-official-comment.pdf
+
+    States: "The per-signature random nonce (40 bytes) is integrated in the
+    signature format to ease interoperability and usage; this brings average
+    signature size to about 651.59 bytes (with standard deviation of 2.55
+    bytes) for Falcon-512."
+
+    The COMPRESSED format produces variable-length signatures averaging
+    651.59 ± 2.55 bytes, while the PADDED format is fixed at 666 bytes.
+
+[2] Falcon Specification & API (falcon.h)
+    https://falcon-sign.info/impl/falcon.h.html
+
+    Falcon-512 supports three signature formats:
+      - COMPRESSED (variable): avg 651.59 bytes, max 752 bytes.
+        Removes trailing zero bytes from the encoded signature.
+      - PADDED (fixed): 666 bytes. Signing restarts with a new nonce
+        if the signature cannot fit within the target size.
+      - CT (constant-time, fixed): 809 bytes.
+
+    The variable size in COMPRESSED mode occurs because the compression
+    scheme removes trailing zeros, and the actual compressed length
+    depends on the specific coefficient values produced during signing
+    (which follow a discrete Gaussian distribution).
