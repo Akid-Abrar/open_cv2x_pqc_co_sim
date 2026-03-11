@@ -1,0 +1,41 @@
+================================================================================
+  POSTER ABSTRACT — 150 WORDS
+  Target: Poster Competition (Transportation Engineering)
+================================================================================
+
+Title: Impact of Post-Quantum Cryptographic Signatures on LTE-V2X Sidelink
+       Performance for Connected Vehicle Safety Messaging
+
+Abstract:
+
+Connected vehicle safety applications rely on digitally signed Basic Safety
+Messages (BSMs) broadcast over LTE-V2X (C-V2X) Mode 4 sidelink. Current
+deployments use ECDSA P-256 signatures per IEEE 1609.2, but the anticipated
+arrival of quantum computing threatens this cryptographic foundation. Post-
+quantum cryptography (PQC) algorithms such as Falcon-512 and Dilithium-2
+offer quantum-resistant alternatives, yet their significantly larger
+signatures and public keys — up to 12x the size of ECDSA — raise concerns
+about radio channel capacity. This study evaluates the impact of PQC
+algorithms on V2X sidelink performance using a standards-compliant
+simulation built on SimuLTE and SUMO, incorporating IEEE 1609.2 security
+structures, SAE J2735 BSM encoding, and SAE J3161 radio parameters. Key
+performance indicators including packet delivery ratio, end-to-end latency,
+channel busy ratio, and resource utilization are compared across algorithms
+under varying vehicle densities to assess the feasibility of PQC deployment
+in safety-critical transportation systems.
+
+(Word count: 150)
+
+================================================================================
+NOTES / VARIATIONS
+================================================================================
+
+If the competition requires keywords:
+  Keywords: Post-Quantum Cryptography, LTE-V2X, C-V2X Mode 4, Vehicle-to-
+  Everything (V2X), Basic Safety Message, IEEE 1609.2, Falcon-512,
+  Dilithium-2, Sidelink Performance
+
+If they want a shorter title:
+  "Post-Quantum Cryptography Impact on C-V2X Sidelink Performance"
+
+================================================================================
