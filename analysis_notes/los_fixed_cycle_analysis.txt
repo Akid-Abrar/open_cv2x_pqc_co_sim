@@ -1,0 +1,293 @@
+================================================================================
+  LOS A-F WITH FIXED CYCLE LENGTH (DEMAND-ONLY CHANGES)
+  Date: 2026-03-13
+  Reference: HCM 2010, Chapter 18
+================================================================================
+
+
+1. THE QUESTION
+================================================================================
+
+Can we achieve all six LOS levels (A through F) by only changing the vehicle
+flow rate in the SUMO route file, without modifying the signal timing?
+
+Short answer: YES — mathematically. d2 grows without bound as X increases
+past 1.0, so any target delay is achievable by increasing demand. But there
+are practical considerations (see Section 4).
+
+
+2. FIXED PARAMETERS
+================================================================================
+
+From current intersection.net.xml:
+  Cycle length:       C = 40s
+  Green per phase:    g = 17s
+  Yellow per phase:   y = 3s
+  Green ratio:        g/C = 17/40 = 0.425
+
+Capacity:
+  Saturation flow:    s = 1900 pc/h/ln × 2 lanes = 3800 veh/h
+  Capacity:           c = 3800 × 0.425 = 1615 veh/h (through + right)
+  Left turn capacity: ~255 veh/h (permitted, opposed)
+
+d1 bounds with C=40s:
+  d1_min (X→0):  0.5 × 40 × (0.575)² = 6.61 s/veh
+  d1_max (X=1):  6.61 / (1 - 1.0 × 0.425) = 6.61 / 0.575 = 11.50 s/veh
+
+  KEY: d1 is capped at 11.50 s/veh regardless of how much demand increases.
+  All additional delay beyond ~11.5s must come from d2.
+
+HCM constants:
+  k = 0.50 (pretimed signal)
+  I = 1.0 (isolated intersection)
+  T = 0.25 h (15-minute analysis period)
+  PF = 1.0 (random arrivals, isolated intersection)
+  Traffic split: 80% through, 10% left, 10% right
+
+
+3. CALCULATIONS FOR EACH LOS (C = 40s FIXED)
+================================================================================
+
+───────────────────────────────────────────────────────────────────────────────
+LOS A: delay <= 10.0 s/veh  [CURRENT CONFIG]
+───────────────────────────────────────────────────────────────────────────────
+
+  Demand: 800 veh/h per approach
+  Through+Right: 720 veh/h
+  X = 720 / 1615 = 0.446
+
+  d1 = 0.5 × 40 × (0.575)² / (1 - 0.446 × 0.425)
+     = 6.61 / (1 - 0.190)
+     = 6.61 / 0.810
+     = 8.16 s/veh
+
+  d2 = 900 × 0.25 × [(-0.554) + sqrt(0.307 + 8×0.5×1.0×0.446/(1615×0.25))]
+     = 225 × [(-0.554) + sqrt(0.307 + 0.00442)]
+     = 225 × [(-0.554) + 0.558]
+     = 225 × 0.004
+     = 0.9 s/veh
+
+  Total = 8.16 + 0.9 = 9.1 s/veh → LOS A
+
+  SUMO vehsPerHour: 640 through, 80 left, 80 right
+
+───────────────────────────────────────────────────────────────────────────────
+LOS B: 10.0 < delay <= 20.0 s/veh  — TARGET: ~15 s/veh
+───────────────────────────────────────────────────────────────────────────────
+
+  Demand: 1500 veh/h per approach
+  Through+Right: 1350 veh/h
+  X = 1350 / 1615 = 0.836
+
+  d1 = 6.61 / (1 - 0.836 × 0.425)
+     = 6.61 / (1 - 0.355)
+     = 6.61 / 0.645
+     = 10.25 s/veh
+
+  d2 = 225 × [(-0.164) + sqrt(0.0269 + 8×0.5×1.0×0.836/(1615×0.25))]
+     = 225 × [(-0.164) + sqrt(0.0269 + 0.00828)]
+     = 225 × [(-0.164) + 0.188]
+     = 225 × 0.024
+     = 5.3 s/veh
+
+  Total = 10.25 + 5.3 = 15.6 s/veh → LOS B
+
+  SUMO vehsPerHour: 1200 through, 150 left, 150 right
+
+───────────────────────────────────────────────────────────────────────────────
+LOS C: 20.0 < delay <= 35.0 s/veh  — TARGET: ~27 s/veh
+───────────────────────────────────────────────────────────────────────────────
+
+  Demand: 1800 veh/h per approach
+  Through+Right: 1620 veh/h
+  X = 1620 / 1615 = 1.003 (essentially at capacity)
+
+  d1 = 6.61 / (1 - min(1, 1.003) × 0.425)
+     = 6.61 / (1 - 0.425)
+     = 6.61 / 0.575
+     = 11.50 s/veh  [d1 is now at its maximum]
+
+  d2 = 225 × [(0.003) + sqrt((0.003)² + 8×0.5×1.0×1.003/(1615×0.25))]
+     = 225 × [0.003 + sqrt(0.000009 + 0.00993)]
+     = 225 × [0.003 + 0.0997]
+     = 225 × 0.103
+     = 23.1 s/veh
+
+  Total = 11.50 + 23.1 = 34.6 s/veh → LOS C (high end)
+
+  Slightly less demand for mid-range. Try 1750 veh/h:
+
+  Through+Right: 1575 veh/h
+  X = 1575 / 1615 = 0.975
+
+  d1 = 6.61 / (1 - 0.975 × 0.425)
+     = 6.61 / (1 - 0.414)
+     = 6.61 / 0.586
+     = 11.28 s/veh
+
+  d2 = 225 × [(-0.025) + sqrt(0.000625 + 8×0.5×1.0×0.975/(1615×0.25))]
+     = 225 × [(-0.025) + sqrt(0.000625 + 0.00966)]
+     = 225 × [(-0.025) + 0.101]
+     = 225 × 0.076
+     = 17.2 s/veh
+
+  Total = 11.28 + 17.2 = 28.5 s/veh → LOS C
+
+  SUMO vehsPerHour: 1400 through, 175 left, 175 right
+
+───────────────────────────────────────────────────────────────────────────────
+LOS D: 35.0 < delay <= 55.0 s/veh  — TARGET: ~45 s/veh
+───────────────────────────────────────────────────────────────────────────────
+
+  Demand: 1900 veh/h per approach
+  Through+Right: 1710 veh/h
+  X = 1710 / 1615 = 1.059
+
+  d1 = 6.61 / 0.575 = 11.50 s/veh  [capped, same for all X >= 1.0]
+
+  d2 = 225 × [(0.059) + sqrt((0.059)² + 8×0.5×1.0×1.059/(1615×0.25))]
+     = 225 × [0.059 + sqrt(0.00348 + 0.01049)]
+     = 225 × [0.059 + 0.118]
+     = 225 × 0.177
+     = 39.8 s/veh
+
+  Total = 11.50 + 39.8 = 51.3 s/veh → LOS D
+
+  SUMO vehsPerHour: 1520 through, 190 left, 190 right
+
+───────────────────────────────────────────────────────────────────────────────
+LOS E: 55.0 < delay <= 80.0 s/veh  — TARGET: ~65 s/veh
+───────────────────────────────────────────────────────────────────────────────
+
+  Demand: 2050 veh/h per approach
+  Through+Right: 1845 veh/h
+  X = 1845 / 1615 = 1.142
+
+  d1 = 11.50 s/veh  [capped]
+
+  d2 = 225 × [(0.142) + sqrt((0.142)² + 8×0.5×1.0×1.142/(1615×0.25))]
+     = 225 × [0.142 + sqrt(0.02016 + 0.01132)]
+     = 225 × [0.142 + 0.177]
+     = 225 × 0.319
+     = 71.9 s/veh
+
+  Total = 11.50 + 71.9 = 83.4 s/veh → too high, edge of LOS F
+
+  Reduce to 2000 veh/h:
+
+  Through+Right: 1800 veh/h
+  X = 1800 / 1615 = 1.115
+
+  d2 = 225 × [(0.115) + sqrt((0.115)² + 8×0.5×1.0×1.115/(1615×0.25))]
+     = 225 × [0.115 + sqrt(0.01322 + 0.01105)]
+     = 225 × [0.115 + 0.156]
+     = 225 × 0.271
+     = 61.0 s/veh
+
+  Total = 11.50 + 61.0 = 72.5 s/veh → LOS E
+
+  SUMO vehsPerHour: 1600 through, 200 left, 200 right
+
+───────────────────────────────────────────────────────────────────────────────
+LOS F: delay > 80.0 s/veh  — TARGET: ~100 s/veh
+───────────────────────────────────────────────────────────────────────────────
+
+  Demand: 2200 veh/h per approach
+  Through+Right: 1980 veh/h
+  X = 1980 / 1615 = 1.226
+
+  d1 = 11.50 s/veh  [capped]
+
+  d2 = 225 × [(0.226) + sqrt((0.226)² + 8×0.5×1.0×1.226/(1615×0.25))]
+     = 225 × [0.226 + sqrt(0.05108 + 0.01214)]
+     = 225 × [0.226 + 0.251]
+     = 225 × 0.477
+     = 107.3 s/veh
+
+  Total = 11.50 + 107.3 = 118.8 s/veh → LOS F
+
+  For a more moderate ~100 s/veh, try 2100 veh/h:
+
+  Through+Right: 1890 veh/h
+  X = 1890 / 1615 = 1.170
+
+  d2 = 225 × [(0.170) + sqrt((0.170)² + 8×0.5×1.0×1.170/(1615×0.25))]
+     = 225 × [0.170 + sqrt(0.0289 + 0.01160)]
+     = 225 × [0.170 + 0.201]
+     = 225 × 0.371
+     = 83.5 s/veh
+
+  Total = 11.50 + 83.5 = 95.0 s/veh → LOS F
+
+  SUMO vehsPerHour: 1680 through, 210 left, 210 right
+
+
+================================================================================
+4. SUMMARY TABLE (C = 40s FIXED)
+================================================================================
+
+LOS   Demand/appr  Through  Left  Right    X      d1      d2     Total
+      (veh/h)      (vph)   (vph)  (vph)          (s)     (s)      (s)
+────  ──────────   ──────  ─────  ─────  ─────  ──────  ──────  ──────
+ A       800        640     80     80    0.446    8.2     0.9     9.1
+ B      1500       1200    150    150    0.836   10.3     5.3    15.6
+ C      1750       1400    175    175    0.975   11.3    17.2    28.5
+ D      1900       1520    190    190    1.059   11.5    39.8    51.3
+ E      2000       1600    200    200    1.115   11.5    61.0    72.5
+ F      2100       1680    210    210    1.170   11.5    83.5    95.0
+
+
+================================================================================
+5. OBSERVATIONS
+================================================================================
+
+a) YES, it works mathematically. By only changing demand, you can cover all
+   six LOS levels with a single 40s cycle.
+
+b) Notice how d1 saturates at 11.5s once X >= 1.0. From LOS D onward,
+   d1 is identical (11.5s) — ALL additional delay comes from d2.
+
+c) The demand range is relatively narrow:
+     LOS A: 800 veh/h   →   LOS F: 2100 veh/h
+   That's a 2.6× range covering the entire LOS spectrum.
+
+d) The transition from LOS B to LOS D is very steep (1500 → 1900 veh/h).
+   The intersection is sensitive to demand in the 1500-2000 range because
+   capacity is only 1615 veh/h — small changes around X=1.0 produce large
+   delay swings.
+
+e) LOS D, E, F all have X > 1.0 (oversaturated). In SUMO, this means:
+     - Queues will grow beyond the approach road length
+     - Vehicles may not be able to depart (SUMO "teleports" stuck vehicles)
+     - The simulation must run long enough for queues to build up
+     - Consider extending approach road lengths for LOS E/F to hold queues
+
+   PRACTICAL CONCERN: At 2100 veh/h per approach with capacity of 1615,
+   the excess is 485 veh/h. Over a 15-minute period, that's ~121 vehicles
+   queuing beyond what the signal can serve. Make sure the SUMO approach
+   roads are long enough (at least 500-700m) to hold these queues without
+   spillback affecting vehicle generation.
+
+
+================================================================================
+6. ADVANTAGE OF FIXED CYCLE APPROACH
+================================================================================
+
+Using a fixed cycle length has a significant benefit for your research:
+
+  - ISOLATES THE DEMAND VARIABLE: All LOS differences come purely from
+    traffic volume changes, not signal timing changes. This makes your
+    experimental design cleaner.
+
+  - CONTROLS FOR SIGNAL TIMING: In your paper, you can state that signal
+    timing is held constant, and only vehicle density varies. This means
+    any PQC performance differences across LOS levels are attributable to
+    vehicle density (and thus channel congestion), not to different signal
+    timing creating different spatial distributions.
+
+  - SIMPLER SUMO SETUP: Only one .net.xml file needed. Just swap .rou.xml
+    files for each LOS scenario.
+
+================================================================================
+END
+================================================================================
