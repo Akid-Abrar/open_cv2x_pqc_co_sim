@@ -1,0 +1,304 @@
+Propagation and Fading Model Analysis for Mode4 Simulation
+============================================================
+
+Source: LteRealisticChannelModel.cc
+Based on: ITU-R M.2135-1 "Guidelines for evaluation of radio interface
+          technologies for IMT-Advanced"
+
+Configuration (from config_channel.xml):
+  - scenario        = ANALYTICAL
+  - carrierFrequency = 5.91 GHz
+  - shadowing        = true
+  - fading           = true
+  - fading-type      = NAKAGAMI
+  - fading-paths     = 6
+  - dynamic-los      = false
+  - fixed-los        = true
+
+
+=======================================================================
+PART 1: PROPAGATION MODEL (ANALYTICAL Pathloss)
+=======================================================================
+
+The ANALYTICAL scenario is specifically designed for D2D/sidelink links.
+Both transmitter and receiver heights are set to hUe (default 1.5m),
+reflecting vehicle-to-vehicle or vehicle-to-RSU communication.
+
+The implementation is in computeAnalyticalPathloss() at line 1738.
+
+1.1 Breakpoint Distance
+------------------------
+  d_BP = 4 * (h_BS - h_env) * (h_MS - h_env) * f_c / c
+
+  where:
+    h_BS = h_MS = hUe_ = 1.5 m  (both sides are UE-height for D2D)
+    h_env = 0 m  (environment/ground height)
+    f_c = 5.91e9 Hz
+    c = 3e8 m/s
+
+  For this config:
+    d_BP = 4 * 1.5 * 1.5 * 5.91e9 / 3e8 = 177.3 m
+
+  This means:
+    - For distances < 177.3m: LOS formula applies
+    - For distances >= 177.3m: NLOS-like formula applies (steeper slope)
+
+
+1.2 LOS Pathloss (d < d_BP)
+-----------------------------
+  PL_LOS = 22.7 * log10(d) + 27 + 20 * log10(f_c / 1e9)   [dB]
+
+  At f_c = 5.91 GHz:
+    PL_LOS = 22.7 * log10(d) + 27 + 20 * log10(5.91)
+           = 22.7 * log10(d) + 27 + 15.43
+           = 22.7 * log10(d) + 42.43   [dB]
+
+  Example values:
+    d = 10m:   PL = 22.7 * 1.0 + 42.43 = 65.1 dB
+    d = 50m:   PL = 22.7 * 1.7 + 42.43 = 81.0 dB
+    d = 100m:  PL = 22.7 * 2.0 + 42.43 = 87.8 dB
+    d = 177m:  PL = 22.7 * 2.25 + 42.43 = 93.5 dB
+
+  The slope is 22.7 dB/decade — moderate, between free-space (20) and
+  typical urban (30-40).
+
+
+1.3 Beyond-Breakpoint Pathloss (d >= d_BP)
+--------------------------------------------
+  PL = 40 * log10(d) + 7.56
+       - 17.3 * log10(h_BS - h_env)
+       - 17.3 * log10(h_MS - h_env)
+       + 2.7 * log10(f_c / 1e9)   [dB]
+
+  At f_c = 5.91 GHz, h_BS = h_MS = 1.5m:
+    PL = 40 * log10(d) + 7.56 - 17.3 * log10(1.5) - 17.3 * log10(1.5)
+         + 2.7 * log10(5.91)
+       = 40 * log10(d) + 7.56 - 6.09 - 6.09 + 2.08
+       = 40 * log10(d) - 2.54   [dB]
+
+  The slope is 40 dB/decade — very steep, representing significant
+  additional loss beyond the breakpoint. This models the two-ray
+  ground reflection effect at longer distances.
+
+  Example values:
+    d = 200m:  PL = 40 * 2.30 - 2.54 = 89.5 dB
+    d = 500m:  PL = 40 * 2.70 - 2.54 = 105.5 dB
+
+
+1.4 Free-Space Floor
+---------------------
+  PL_free = 20 * log10(d) + 46.4 + 20 * log10(f_c * 1e-9 / 5)   [dB]
+
+  The final pathloss is: PL = max(PL_computed, PL_free)
+
+  This ensures pathloss never falls below free-space propagation, which
+  is the theoretical minimum for any environment.
+
+
+1.5 Important Notes
+--------------------
+  - Minimum distance is clamped to 3 meters (prevents log10(0) and
+    unrealistic close-range values)
+  - Since your config has fixed-los=true and dynamic-los=false, only the
+    LOS formula (Section 1.2) is ever used. The beyond-breakpoint formula
+    (Section 1.3) still applies for d >= d_BP, but this is the LOS
+    two-ray breakpoint, not an NLOS model.
+  - The ANALYTICAL scenario does NOT support dynamic-los=true (it would
+    throw a runtime error). To get true NLOS behavior, you would need to
+    switch to URBAN_MICROCELL or URBAN_MACROCELL scenario.
+
+
+=======================================================================
+PART 2: SHADOWING MODEL (Log-Normal with Spatial Correlation)
+=======================================================================
+
+Shadowing models large-scale signal variations caused by obstacles
+(buildings, terrain) that are not captured by the deterministic pathloss.
+
+2.1 Distribution
+-----------------
+  Shadowing follows a log-normal distribution:
+
+    SF ~ N(0, sigma)   [dB]
+
+  where sigma (standard deviation) depends on the scenario:
+
+    Scenario              | LOS    | NLOS
+    ----------------------+--------+------
+    URBAN_MICROCELL       | 3 dB   | 4 dB
+    ANALYTICAL            | 3 dB   | 0 dB (falls through - effectively none)
+    URBAN_MACROCELL       | 4 dB   | 6 dB
+    RURAL_MACROCELL       | 4-6 dB | 8 dB
+    SUBURBAN_MACROCELL    | 4-6 dB | 8 dB
+
+  For your config (ANALYTICAL + LOS): sigma = 3 dB
+
+
+2.2 Spatial Correlation (AR(1) Model)
+---------------------------------------
+  Shadowing is NOT independent between successive computations. It uses
+  a first-order autoregressive model to create realistic spatial
+  correlation:
+
+  Step 1: Compute distance traveled since last shadowing update
+    d_traveled = (t_now - t_last) * speed
+
+  Step 2: If d_traveled > correlationDistance (default 50m), update:
+    a = exp(-0.5 * d_traveled / d_corr)
+    SF_new = a * SF_old + sqrt(1 - a^2) * N(0, sigma)
+
+  Step 3: If d_traveled <= correlationDistance, keep previous value:
+    SF_new = SF_old
+
+  Properties of this model:
+  - The correlation coefficient 'a' decays exponentially with distance
+  - The sqrt(1 - a^2) factor preserves the variance at sigma^2
+  - At d_traveled = 0: a = 1, shadowing is perfectly correlated (unchanged)
+  - At d_traveled >> d_corr: a -> 0, shadowing becomes independent
+  - At d_traveled = d_corr (50m): a = exp(-0.5) = 0.607 (moderate correlation)
+
+  This means a vehicle driving through the intersection will experience
+  slowly-varying shadowing that changes significantly only after traveling
+  50+ meters, which is physically realistic.
+
+
+2.3 Storage
+------------
+  Per-node shadowing values are stored in:
+    lastComputedSF_[nodeId] = {timestamp, shadowing_value}
+
+  This ensures each node maintains its own correlated shadowing trajectory.
+
+
+=======================================================================
+PART 3: FADING MODEL (Nakagami-m)
+=======================================================================
+
+Fading models rapid signal fluctuations caused by multipath propagation
+(reflections, scattering) at a time scale of milliseconds.
+
+3.1 The Nakagami-m Distribution
+---------------------------------
+  The Nakagami-m distribution describes the envelope of the received
+  signal in multipath environments. The key parameter is 'm' (shape
+  factor):
+
+    m = 1.0: Reduces to Rayleigh fading (no dominant path, severe fading)
+    m > 1.0: Less severe fading (stronger dominant path)
+    m -> infinity: No fading (deterministic channel)
+
+  Your config: m = 1.0 (shapeFactor_), so this is effectively
+  Rayleigh fading — the worst-case fading scenario, representing a
+  rich scattering environment with no dominant LOS component.
+
+  NOTE: This is somewhat contradictory — the pathloss uses LOS, but the
+  fading uses m=1 (no LOS component). A more realistic LOS configuration
+  would use m=2-4 for Nakagami (Rician-like behavior).
+
+
+3.2 Implementation
+-------------------
+  The Nakagami fading attenuation is generated using a Gamma distribution
+  (since the Nakagami power envelope follows a Gamma distribution):
+
+    fadingAttenuation = gamma_d(rng, m, PL_free / 1000 / m) * 1000
+
+  where:
+    gamma_d(rng, alpha, beta) draws from Gamma(alpha, beta)
+    alpha = m = shapeFactor_ (shape parameter)
+    beta = PL_free / 1000.0 / m (scale parameter)
+
+  The mean of this distribution is:
+    E[fading] = alpha * beta = m * (PL_free / 1000 / m) = PL_free / 1000
+
+  After scaling by 1000, the expected fading attenuation equals PL_free.
+
+  For m=1 (your config), the Gamma distribution becomes Exponential:
+    fadingAttenuation ~ Exponential(PL_free / 1000) * 1000
+
+  This creates high variance — the fading can make the signal much
+  stronger or much weaker than the mean, with deep fades being common.
+
+
+3.3 Important Limitation: Asymmetric Application
+--------------------------------------------------
+  Nakagami fading is ONLY applied in getRSRP_D2D() (the D2D RSRP
+  computation used for sensing/resource selection). It is NOT applied in:
+    - getSINR() (downlink/uplink SINR)
+    - getSINR_D2D() (D2D SINR for actual data reception)
+
+  The SINR computation paths only support JAKES and RAYLEIGH fading types
+  — they have no NAKAGAMI branch.
+
+  This means: Nakagami fading affects how vehicles SENSE the channel
+  (for SPS resource selection), but the actual packet reception SINR
+  may use a different fading model or no Nakagami fading at all,
+  depending on which code path is taken for D2D SINR computation.
+
+
+3.4 Comparison with Jakes Fading (the alternative)
+-----------------------------------------------------
+  Jakes fading (also available in this simulator) is a more detailed
+  model that:
+  - Generates time-correlated fading using a sum-of-sinusoids approach
+  - Models Doppler spread based on vehicle speed
+  - Uses multiple taps (fading-paths=6 in your config)
+  - Produces frequency-selective fading across the bandwidth
+  - Has a delay-RMS parameter (default 363 ns)
+
+  Nakagami, by contrast, generates a single fading value per link
+  per computation — it is flat (frequency-nonselective) and
+  time-uncorrelated (independent draws each time).
+
+
+=======================================================================
+PART 4: COMPLETE SIGNAL MODEL
+=======================================================================
+
+The total received power at the receiver is:
+
+  P_rx = P_tx + G_tx + G_rx - PL - SF - FL - CL + other   [dB]
+
+  where:
+    P_tx = transmit power (23 dBm for both cars and RSU in your config)
+    G_tx = transmitter antenna gain (3 dB for UE in your config)
+    G_rx = receiver antenna gain (3 dB for UE)
+    PL   = pathloss from ANALYTICAL model (Section 1)
+    SF   = shadowing attenuation (Section 2, sigma=3dB for LOS)
+    FL   = fading attenuation (Section 3, Nakagami m=1)
+    CL   = cable loss (2 dB in your config)
+
+  Example link budget at d=100m:
+    P_rx = 23 + 3 + 3 - 87.8 - SF - FL - 2
+         = -60.8 - SF - FL   [dBm]
+
+  With thermal noise at -104 dBm (for 10 MHz BW) + 9 dB UE noise figure:
+    Noise floor = -104 + 9 = -95 dBm
+    SNR (no fading/shadowing) = -60.8 - (-95) = 34.2 dB
+
+  This is a very high SNR — even with 3 dB shadowing and Rayleigh fading
+  dips, the link remains strong. This explains why PDR is >99% in your
+  simulation.
+
+
+=======================================================================
+PART 5: WHY THE CURRENT CONFIG IS OPTIMISTIC
+=======================================================================
+
+1. LOS-only pathloss (22.7 dB/decade) is much less severe than typical
+   NLOS urban models (30-40 dB/decade). At 200m, the difference can be
+   15-25 dB.
+
+2. Nakagami m=1 with LOS pathloss is contradictory — if the path is
+   truly LOS, fading should be less severe (m=2-4).
+
+3. Nakagami fading is only applied to sensing (RSRP), not to the actual
+   SINR used for packet decoding, which may mean the data reception path
+   experiences less fading than expected.
+
+4. The ANALYTICAL scenario returns sigma=0 for NLOS shadowing (code
+   falls through without returning a value), so if you switch to
+   fixed-los=false, shadowing effectively disappears.
+
+5. UE antenna gain of 3 dB on both sides adds 6 dB to the link budget,
+   which is generous for vehicular antennas.

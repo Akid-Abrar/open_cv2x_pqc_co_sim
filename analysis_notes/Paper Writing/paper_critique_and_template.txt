@@ -1,0 +1,277 @@
+================================================================================
+  CRITICAL REVIEW OF THIS WORK + OVERLEAF TEMPLATE RECOMMENDATION
+  Date: 2026-03-13
+================================================================================
+
+
+SECTION A: OVERLEAF TEMPLATE RECOMMENDATION
+================================================================================
+
+For a transportation engineering venue, use one of these:
+
+1. IEEE Conference (VTC, VNC, ITSC):
+   Template: "IEEE Conference Template"
+   Overleaf: https://www.overleaf.com/latex/templates/ieee-conference-template/grfzhhncsfqn
+   Format: 2-column, 6-8 pages
+
+2. IEEE Transactions (TVT, TITS):
+   Template: "IEEE Transactions Template (journal)"
+   Overleaf: https://www.overleaf.com/latex/templates/ieee-journal-paper-template/jbhdbhpvwpnk
+   Format: 2-column, 12-15 pages
+
+3. Transportation Research Record (TRR / SAGE):
+   Template: "SAGE Journal Article Template"
+   Overleaf: https://www.overleaf.com/latex/templates/sage-journal-article-template/jjbrvkrgsvhk
+   Format: Single-column, ~7500 words
+
+RECOMMENDATION:
+  - For a poster competition abstract, the IEEE conference format works.
+  - For the full paper, if targeting transportation audience: TRR (SAGE).
+  - If targeting a security/networking audience: IEEE TVT or VTC.
+
+  Search Overleaf for "IEEE Conference" or "IEEE Transactions" — they are
+  the most commonly used templates. Pick the one matching your target venue.
+
+
+================================================================================
+SECTION B: CRITICAL REVIEW — AS A HOSTILE REVIEWER
+================================================================================
+
+I am reviewing this as Reviewer 2 — the tough one. I will be blunt.
+
+Overall assessment: The work addresses a timely and important problem (PQC
+migration for V2X), but in its current state, the experimental evidence is
+INSUFFICIENT to support several of the claimed contributions. The simulator
+infrastructure is solid, but the paper needs significantly more simulation
+runs, longer durations, and rigorous statistical treatment before it is
+publishable.
+
+Score: MAJOR REVISION (not reject — the foundation is strong, but the
+evidence gap is substantial).
+
+
+─────────────────────────────────────────────────────────────────────────
+STRENGTH 1: REAL CRYPTOGRAPHIC OPERATIONS
+─────────────────────────────────────────────────────────────────────────
+
+Unlike many V2X security simulation studies that model signatures as fixed
+byte arrays with artificial delays, this work integrates actual liboqs and
+OpenSSL cryptographic operations. Sign and verify times are measured from
+real computations, not assumed from benchmarks. This is a genuine strength.
+
+
+─────────────────────────────────────────────────────────────────────────
+STRENGTH 2: BUG DISCOVERY AND STANDARDS COMPLIANCE
+─────────────────────────────────────────────────────────────────────────
+
+The documentation of 23 bugs (3 critical PHY-layer bugs that invalidated
+prior SimuLTE results) is valuable to the community. The SAE J3161
+compliance audit is thorough. These are real contributions independent of
+the PQC analysis.
+
+
+─────────────────────────────────────────────────────────────────────────
+STRENGTH 3: DILITHIUM-2 INFEASIBILITY PROOF
+─────────────────────────────────────────────────────────────────────────
+
+The analytical proof that Dilithium-2 SPDUs (~3,800 bytes) exceed the
+maximum Transport Block Size (2,481 bytes at MCS 11 with 10 subchannels)
+is mathematically rigorous and an important result. This alone is worth
+reporting.
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 1 (CRITICAL): INSUFFICIENT SIMULATION EVIDENCE
+─────────────────────────────────────────────────────────────────────────
+
+The paper claims "multi-scenario comparative analysis" but the evidence
+shows:
+  - Only BASE scenario results exist with the current (post-bug-fix) config
+  - NLOS and High-Density results are from OLD runs (pre-bug-fix, Feb 2026)
+    or are analytical PROJECTIONS, not actual simulation
+  - Highway scenarios are configured but apparently never executed
+  - Simulation duration appears to be ~60 seconds, not the claimed 300s
+
+A reviewer will ask: "How many replications were run? What are the
+confidence intervals? Where is the statistical significance test?"
+
+FIX REQUIRED:
+  - Run at minimum: 3 algorithms × 3+ vehicle densities × 5 replications
+    × 300s each = 45+ simulation runs
+  - Report mean ± 95% confidence interval for every metric
+  - Use different random seeds for each replication
+  - Run post-bug-fix NLOS and high-density scenarios
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 2 (CRITICAL): NO MEANINGFUL PDR DIFFERENCE AT TESTED DENSITY
+─────────────────────────────────────────────────────────────────────────
+
+The existing results show:
+  ECDSA PDR = 78.4%, Falcon PDR = 77.5% (delta = -0.9%)
+
+At 60 vehicles, the difference is negligible. The analysis itself explains
+why: losses are SCI-dominated (control channel), and SCI size is identical
+for both algorithms. The larger Falcon TB doesn't cause additional losses.
+
+This is a problem because the paper's THESIS is that PQC packet size
+impacts performance. At the tested density, it doesn't.
+
+A reviewer will say: "Your own results show PQC has no meaningful impact
+on PDR. Why should I care about this paper?"
+
+FIX REQUIRED:
+  - You MUST run high-density scenarios (100, 150, 200 vehicles) where
+    resource contention actually manifests
+  - The analytical projection (88% resource occupancy at 110 vehicles for
+    Falcon vs 22% for ECDSA) is compelling but MUST be validated by actual
+    simulation
+  - Show the density at which Falcon PDR begins to diverge from ECDSA —
+    this is the key result the paper needs
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 3 (HIGH): CBR IS THE STRONGEST ARGUMENT BUT NOT ANALYZED
+─────────────────────────────────────────────────────────────────────────
+
+CBR data shows Falcon = 0.212 vs ECDSA = 0.086 (2.5× difference). This
+is actually the most compelling result — even when PDR is similar, channel
+load is dramatically different. At higher densities, this CBR difference
+would trigger DCC and cause PDR divergence.
+
+But CBR is reported as a single average number. No time series, no
+distribution, no correlation with vehicle count, no DCC trigger analysis.
+
+FIX REQUIRED:
+  - Plot CBR vs time, CBR vs vehicle count
+  - Show the density at which Falcon's CBR crosses the 0.30 and 0.65
+    DCC thresholds while ECDSA remains below
+  - Count DCC packet drops per algorithm
+  - This would be the STRONGEST figure in the paper
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 4 (HIGH): NO COMPARISON WITH RELATED WORK RESULTS
+─────────────────────────────────────────────────────────────────────────
+
+The paper positions against CHASM (Twardokus & Rahbari, 2025) but does
+not compare results quantitatively. CHASM reports specific PDR and latency
+numbers for hybrid PQC schemes. This paper should either:
+  (a) Reproduce CHASM's scenario and show comparable/better results, or
+  (b) Clearly explain why the scenarios differ and what additional insight
+      this work provides
+
+A reviewer will ask: "CHASM already studied PQC in V2X. What new
+knowledge does this paper add?" The differentiation exists in the notes
+but must be made explicit in the paper with side-by-side result comparison.
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 5 (HIGH): CLAIMED ICA CONTRIBUTION NOT DEMONSTRATED
+─────────────────────────────────────────────────────────────────────────
+
+The paper claims "V2I + ICA safety application" as a differentiator from
+CHASM (which is V2V only). ICA (Intersection Collision Avoidance) code
+exists in Mode4RSUApp.cc, but:
+  - No ICA-specific PDR or latency results are shown
+  - No analysis of ICA warning delivery reliability
+  - No comparison of ICA performance under PQC vs ECDSA
+
+If you claim ICA as a contribution, you must show ICA results. Otherwise,
+drop the claim.
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 6 (MEDIUM): CERTIFICATE CACHING NOT ANALYZED
+─────────────────────────────────────────────────────────────────────────
+
+The implementation supports cert caching (digest mode), which reduces
+Falcon SPDU from ~1,739B to ~745B (57% reduction). This is a MAJOR
+mitigation strategy for PQC overhead. But:
+  - No analysis comparing PDR with cert caching ON vs OFF
+  - No analysis of the cert interval parameter's effect
+  - "Hashing" and "No_Hashing" result folders exist but are not compared
+
+This is a missed opportunity. Cert caching could be the difference between
+"Falcon is feasible" and "Falcon is infeasible at high density."
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 7 (MEDIUM): SINGLE INTERSECTION TOPOLOGY
+─────────────────────────────────────────────────────────────────────────
+
+All results are from a single 4-way intersection. The paper should
+acknowledge this limitation explicitly. Different topologies (highway,
+urban grid, rural) produce different spatial distributions, vehicle
+densities, and channel characteristics.
+
+The highway scenarios are configured but not run. Running at least one
+highway scenario would significantly strengthen the paper.
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 8 (MEDIUM): MISSING LATENCY ANALYSIS
+─────────────────────────────────────────────────────────────────────────
+
+End-to-end latency (delay_ms) is recorded in the CSV but never analyzed.
+For safety-critical BSMs, the 100ms latency requirement (SAE J3161) is as
+important as PDR. PQC signing and verification times contribute to this
+delay. A reviewer will ask: "Do PQC operations cause BSMs to miss the
+100ms deadline?"
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 9 (LOW): SPS + ONE-SHOT NOT IMPLEMENTED
+─────────────────────────────────────────────────────────────────────────
+
+SAE J3161 Section 7.3.3 mandates one-shot transmission alongside SPS.
+This is not implemented. While it doesn't invalidate the PQC comparison
+(both algorithms suffer equally), it means the simulation doesn't capture
+the full collision avoidance mechanism. A knowledgeable reviewer may flag
+this.
+
+Mitigation: Acknowledge as a limitation. State that one-shot would equally
+benefit both algorithms and thus doesn't bias the comparison.
+
+
+─────────────────────────────────────────────────────────────────────────
+WEAKNESS 10 (LOW): NO HARDWARE-IN-THE-LOOP VALIDATION
+─────────────────────────────────────────────────────────────────────────
+
+CHASM includes hardware OBU measurements. This work is pure simulation.
+While simulation is valid for system-level analysis, a reviewer may argue
+that real hardware constraints (CPU scheduling, memory latency, OS jitter)
+could affect crypto timing measurements.
+
+Mitigation: Acknowledge. Note that simulation provides controlled,
+repeatable conditions and that the crypto operations use real libraries
+(not models), giving realistic timing.
+
+
+================================================================================
+SECTION C: PRIORITIZED ACTION LIST FOR PUBLICATION READINESS
+================================================================================
+
+MUST DO (paper will be rejected without these):
+  1. Run high-density scenarios showing PDR divergence (100-200 vehicles)
+  2. Run each scenario for 300s with 5+ replications
+  3. Report confidence intervals for all metrics
+  4. Analyze CBR time-series and DCC drops
+  5. Add latency analysis (CDF, comparison to 100ms threshold)
+
+SHOULD DO (significantly strengthens the paper):
+  6. Cert caching ON vs OFF comparison
+  7. Run at least one highway scenario
+  8. SPDU size breakdown stacked bar chart
+  9. Distance-filtered PDR (300m, 500m per J3161)
+  10. Compare sign/verify times across algorithms
+
+NICE TO HAVE (bonus for thoroughness):
+  11. ICA-specific results (if claiming ICA contribution)
+  12. MCS/subchannel distribution analysis
+  13. IPG/jitter analysis
+  14. LOS A-F variation results
+
+================================================================================
+END
+================================================================================

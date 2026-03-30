@@ -1,0 +1,120 @@
+Dilithium-2 SPDU Capacity Analysis
+====================================
+
+Error:
+  "On generating the grant there was no subchannel configuration which
+  could hold the capacity of the packet: exiting."
+  -- in module (LteMacVUeMode4) Highway.carNoIp[0].lteNic.mac (id=27),
+     at t=1.1s, event #31926
+
+Root Cause:
+  The Dilithium-2 SPDU is too large for the current sidelink subchannel
+  configuration. Even at maximum settings (maxSubchannel=10, maxMCS=11),
+  the transport block cannot carry the packet.
+
+Size Comparison:
+  | Algorithm   | Signature | Public Key | SPDU ~total |
+  |-------------|-----------|------------|-------------|
+  | Falcon-512  | ~654 B    | 897 B      | ~1,624 B    |
+  | Dilithium-2 | 2,420 B   | 1,312 B    | ~3,800 B    |
+
+Capacity Calculation:
+  - Current config: subchannelSize=10, maxSubchannel=10, maxMCS=11
+  - MCS 11 -> 16QAM, itbs index = mcs - j = 11 - 9 = 2 (row index 2)
+  - Total RBs = 10 subchannels * 10 RBs - 2 (SCI) = 98 RBs
+  - TBS lookup: row 2, index 97 = 19,848 bits = 2,481 bytes
+  - Dilithium-2 SPDU needs ~3,800 bytes = ~30,400 bits
+  - 2,481 bytes < 3,800 bytes -> DOES NOT FIT
+
+  Even at the highest 16QAM row (index 6, MCS 15 equivalent):
+    row 6, index 97 = 25,456 bits = 3,182 bytes -> still not enough.
+
+  J3161 Section 8.6 forbids MCS 8, 9, 10. The code skips these.
+  MCS 0-7 use QPSK (less capacity), MCS 11 uses 16QAM (max allowed
+  before the forbidden range). So MCS 11 is effectively the highest
+  usable MCS under current J3161 compliance.
+
+Options:
+  1. Allow higher MCS values (e.g., maxMCS=20 using 64QAM)
+     - MCS 17+ uses 64QAM, giving much more capacity
+     - But MCS 8-10 are already skipped per J3161, so using MCS 17+
+       may not be standards-compliant for all deployments
+     - 64QAM row 2, index 97 would give ~31,704 bits = 3,963 bytes
+       -> Dilithium-2 would fit
+
+  2. Increase subchannel size (e.g., subchannelSize=15 or 20)
+     - More RBs per subchannel = larger transport blocks
+     - Requires matching numBands in omnetpp.ini (total bandwidth)
+
+  3. Fragment the SPDU across multiple transmissions
+     - Significant implementation effort
+     - Adds latency and complexity
+
+Relevant Files:
+  - simulations/Mode4/sidelink_configuration.xml (MCS/subchannel limits)
+  - simulations/Mode4/omnetpp.ini (subchannelSize parameter)
+  - src/stack/mac/layer/LteMacVUeMode4.cc:1057-1096 (grant generation)
+  - src/stack/mac/amc/LteMcs.cc:102-109 (TBS lookup tables)
+
+
+Channel Width & Subchannel Analysis
+====================================
+
+Current Configuration:
+  - numBands = 100 RBs -> 20 MHz channel (100 x 180 kHz = 18 MHz usable)
+  - This matches J3161's required 20 MHz channel width
+  - subchannelSize = 10, numSubchannels = 10 -> 10 x 10 = 100 RBs (full bandwidth)
+
+Can we increase subchannels within 20 MHz?
+  subchannelSize x numSubchannels must equal numBands (100).
+  Different splits (e.g., 5x20, 4x25) give the same total RBs.
+  A single transmission can use up to maxSubchannel-NumberPSSCH subchannels.
+  Max data RBs per TX = maxSubchannels x subchannelSize - 2 (SCI overhead).
+  With 100 total RBs, maximum usable = 98 RBs regardless of split.
+  Conclusion: changing subchannel layout does NOT increase capacity.
+
+
+MCS Required for Dilithium-2
+====================================
+
+Dilithium-2 SPDU: ~3,800 bytes = ~30,400 bits
+Data RBs available: 98 (TBS table index 97)
+
+16QAM TBS at index 97 (98 RBs):
+  | MCS | itbs (mcs-9) | TBS (bits) | TBS (bytes) | Fits?          |
+  |-----|--------------|------------|-------------|----------------|
+  |  11 |      2       |   19,848   |   2,481     | NO             |
+  |  12 |      3       |   22,152   |   2,769     | NO             |
+  |  13 |      4       |   25,456   |   3,182     | NO             |
+  |  14 |      5       |   28,336   |   3,542     | NO             |
+  |  15 |      6       |   29,296   |   3,662     | NO             |
+  |  16 |      7       |   30,576   |   3,822     | YES (barely)   |
+
+64QAM TBS at index 97 (98 RBs):
+  | MCS | itbs (mcs-15) | TBS (bits) | TBS (bytes) | Fits?          |
+  |-----|---------------|------------|-------------|----------------|
+  |  17 |       2       |   35,160   |   4,395     | YES            |
+  |  18 |       3       |   39,232   |   4,904     | YES            |
+  |  19 |       4       |   42,368   |   5,296     | YES            |
+  |  20 |       5       |   45,352   |   5,669     | YES            |
+
+Key Finding:
+  MCS 16 (16QAM) is the MINIMUM MCS that fits Dilithium-2.
+  - TBS = 30,576 bits (3,822 bytes) vs packet ~30,400 bits (3,800 bytes)
+  - Only 176 bits (22 bytes) of headroom -- very tight margin
+  - If actual SPDU exceeds 3,822 bytes, MCS 16 will fail too
+
+  MCS 17 (64QAM) gives comfortable margin:
+  - TBS = 35,160 bits (4,395 bytes) -- 595 bytes of headroom
+
+J3161 Compliance:
+  - J3161 Section 8.6 forbids MCS 8, 9, 10 only
+  - MCS 11-16 (16QAM) and MCS 17+ (64QAM) are NOT forbidden
+  - The current config uses maxMCS=11, which is unnecessarily restrictive
+  - Setting maxMCS=16 would allow Dilithium-2 with 16QAM (tight fit)
+  - Setting maxMCS=17 would allow Dilithium-2 with 64QAM (comfortable)
+
+Recommended Fix:
+  Change maxMCS-PSSCH from 11 to 16 (conservative) or 20 (with margin)
+  in both sidelink_configuration.xml and omnetpp.ini (if applicable).
+  No code changes needed -- only configuration.

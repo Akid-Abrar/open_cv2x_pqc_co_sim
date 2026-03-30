@@ -1,0 +1,105 @@
+==============================================================================
+  4-SCENARIO METRIC COMPARISON — 2026-02-26
+==============================================================================
+
+All scenarios: 60 cars + 1 RSU, packetSize=2300, numBands=100,
+subchannelSize=10, numSubchannels=10, adjacencyPSCCH=true, probResourceKeep=0.8
+
+PDR scalars: icaPDR = 0 for all cars in all scenarios (ICA disabled)
+
+==============================================================================
+ 1. RSU[0] METRICS
+==============================================================================
+
+Metric               | ECC_Base    | Falcon_Base | ECC_NLOS    | Falcon_NLOS
+---------------------|-------------|-------------|-------------|------------
+tbReceived:sum       |   19,348    |   19,348    |   19,348    |   19,348
+tbDecoded:sum        |   15,166    |   14,992    |    4,264    |    4,246
+tbFailedDueToNoSCI   |    4,182    |    4,356    |   15,084    |   15,102
+tbFailedDueToInterf  |        0    |        0    |        0    |        0
+tbFailedDueToProp    |        0    |        0    |        0    |        0
+sciDecoded:sum       |   15,166    |   14,992    |    4,264    |    4,246
+cbr:mean             |   0.0642    |   0.1590    |   0.0640    |   0.1603
+subchannelRecvd:mean |   3.7579    |   0.0000    |   3.6783    |   0.0000
+
+RSU Decode Rate      |   78.4%     |   77.5%     |   22.0%     |   21.9%
+
+==============================================================================
+ 2. AGGREGATE CAR METRICS (sum across 60 cars)
+==============================================================================
+
+Metric               | ECC_Base    | Falcon_Base | ECC_NLOS    | Falcon_NLOS
+---------------------|-------------|-------------|-------------|------------
+tbReceived:sum       |  753,370    |  758,404    |  753,503    |  758,836
+tbDecoded:sum        |  438,925    |  436,905    |   62,134    |   62,624
+sciDecoded:sum       |  438,925    |  436,905    |   62,134    |   62,624
+sciReceived:sum      |  753,370    |  758,404    |  753,503    |  758,836
+tbFailedDueToNoSCI   |  314,445    |  321,499    |  691,369    |  696,212
+tbFailedHalfDuplex   |    5,748    |      714    |    5,618    |      280
+tbFailedDueToInterf  |        0    |        0    |        0    |        0
+tbFailedDueToProp    |        0    |        0    |        0    |        0
+subchannelSent:sum   |   72,708    |        0    |   71,168    |        0
+packetDropDCC:sum    |        0    |        0    |        0    |        0
+cbr:mean (avg cars)  |   0.0864    |   0.2122    |   0.0855    |   0.2152
+
+Car Decode Rate      |   58.3%     |   57.6%     |    8.2%     |    8.3%
+
+==============================================================================
+ 3. COMPUTED PDR (tbDecoded / tbReceived)
+==============================================================================
+
+                     | ECC_Base    | Falcon_Base | ECC_NLOS    | Falcon_NLOS
+---------------------|-------------|-------------|-------------|------------
+RSU PDR              |   78.4%     |   77.5%     |   22.0%     |   21.9%
+Car aggregate PDR    |   58.3%     |   57.6%     |    8.2%     |    8.3%
+
+==============================================================================
+ 4. KEY OBSERVATIONS
+==============================================================================
+
+A) BASE (LOS) vs NLOS:
+   - NLOS scenarios have massive tbFailedDueToNoSCI increase (~691k vs ~315k
+     for cars), causing PDR to drop from ~58% to ~8%.
+   - RSU PDR drops from ~78% to ~22%.
+   - Interference and propagation failures are 0 in ALL scenarios — the NLOS
+     model is causing SCI decode failures, not propagation losses per se.
+     The NLOS effect manifests as SCI loss (tbFailedDueToNoSCI).
+
+B) ECC vs FALCON (same propagation model):
+   - tbDecoded is nearly identical between ECC and Falcon in matching
+     propagation conditions (438,925 vs 436,905 Base; 62,134 vs 62,624 NLOS).
+   - PDR difference is negligible: <1 percentage point in all cases.
+   - Falcon doubles the CBR: ~0.086 -> 0.212 (Base), ~0.085 -> 0.215 (NLOS).
+   - Falcon has subchannelSent:sum = 0 for all cars and subchannelReceived:mean
+     = 0 for RSU. This is anomalous — likely the subchannel counter is not
+     being recorded when the larger Falcon packet uses a different subchannel
+     allocation path (or the subchannelSent stat is only counted for certain
+     MCS/subchannel combos).
+   - Falcon has dramatically fewer tbFailedHalfDuplex (714 vs 5748 Base;
+     280 vs 5618 NLOS) — consistent with the larger packet occupying more
+     subchannels, changing the half-duplex collision pattern.
+
+C) CBR IMPACT:
+   - Falcon ~2.5x the CBR of ECC in both Base and NLOS.
+   - Despite this CBR increase, no additional interference failures or
+     meaningful PDR degradation. The channel is not yet saturated.
+
+D) NO INTERFERENCE OR PROPAGATION TB FAILURES in any scenario.
+   All TB losses are from SCI decode failures or half-duplex collisions.
+
+==============================================================================
+ 5. ANOMALIES / ITEMS TO INVESTIGATE
+==============================================================================
+
+1. subchannelSent:sum = 0 for ALL Falcon car nodes — this needs
+   investigation. The cars are clearly transmitting (RSU receives 19,348 TBs).
+   Possibly the PHY stat counter is bypassed for Falcon's subchannel path.
+
+2. subchannelReceived:mean = 0 for RSU in Falcon scenarios — same root cause.
+
+3. icaPDR = 0 everywhere — ICA is disabled as expected.
+
+4. NLOS PDR of ~8% for cars and ~22% for RSU is very low. The NLOS model
+   is causing the SCI to be undecodable for most transmissions. This is
+   consistent with the NLOS channel attenuating the PSCCH below the SCI
+   decode threshold.

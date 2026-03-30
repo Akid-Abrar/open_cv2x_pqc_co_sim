@@ -1,0 +1,161 @@
+# Plan: Resolve Paper Review Criticisms
+
+## Context
+The critical review identified 10 weaknesses. This plan addresses the 4 critical/high weaknesses that would cause rejection, plus the medium ones that strengthen the paper. ICA is excluded per user preference.
+
+The plan has two phases: **code changes** (extend the simulator and analysis script) and **experimental campaign** (run simulations and generate results). Code changes come first since they enable the experiments.
+
+---
+
+## Phase 1: Code Changes
+
+### Step 1.1 — Add verify_time_ms and CBR to CSV logging (Mode4RSUApp.cc)
+
+**Why:** Currently sign/verify time and CBR are only in OMNeT++ .vec/.sca files. Adding them to the CSV makes analysis much simpler — everything in one file.
+
+**Changes:**
+- `src/apps/mode4App/Mode4RSUApp.h` — Add member variable `double lastCbr_ = 0.0;`
+- `src/apps/mode4App/Mode4RSUApp.cc`:
+  - Line ~381: After `emit(cbr_, channel_load);` add `lastCbr_ = channel_load;`
+  - Line ~452: Capture verify time in a local: `double verifyMs = verifyUs / 1000.0;` (use 0.0 if useCert is null)
+  - Line ~503: Extend CSV header: append `",verify_time_ms,cbr"`
+  - Line ~534: Extend appendCsv data: append verify time and lastCbr_ values
+
+### Step 1.2 — Add sign_time_ms to sender_summary CSV (Mode4App.cc)
+
+**Why:** Signature generation time per vehicle enables sign time comparison across algorithms.
+
+**Changes:**
+- `src/apps/mode4App/Mode4App.cc`:
+  - Add member variables to track cumulative sign time and count
+  - In the signing code (~line 603): accumulate sign time
+  - In `finish()`: write average sign time to sender_summary.csv or a separate sign_times.csv
+
+### Step 1.3 — Create automated run script
+
+**Why:** No automation exists. Need to run 2 algorithms × multiple densities × multiple replications systematically.
+
+**Create:** `simulations/Mode4/run_campaign.sh`
+- Loops over: algorithms (ECDSA, Falcon-512), configs (Base, Stress-HighDensity, plus additional density variants), replications (3-5 seeds)
+- For each run: exports `PQCDSA_ALGO`, runs simulation, archives results to structured folder
+- Uses different random seeds via `-r` flag or ini seed parameter
+
+### Step 1.4 — Create SUMO route files for intermediate densities
+
+**Why:** Current scenarios jump from 800 veh/h (Base) to 1800 veh/h (Stress). Need intermediate densities to show the PDR divergence point between ECDSA and Falcon.
+
+**Create new route files** in `simulations/Mode4/intersections/`:
+- `intersection_1200vph.rou.xml` — 1200 veh/h per approach
+- `intersection_1500vph.rou.xml` — 1500 veh/h per approach
+- `intersection_2000vph.rou.xml` — 2000 veh/h per approach
+
+**Create matching .sumocfg and .launchd.xml files** for each.
+
+**Add omnetpp.ini config sections** for each density variant.
+
+### Step 1.5 — Extend analysis.py for multi-algorithm, multi-KPI analysis
+
+**Why:** Currently processes one CSV at a time. Need comparative plots across algorithms.
+
+**Changes to `analysis.py`:**
+- Accept command-line arguments: `--results-dir <path>` pointing to a campaign results folder
+- Auto-discover algorithm/scenario subfolders
+- Generate comparative plots:
+  - **PDR vs Vehicle Density** — one line per algorithm (CRITICAL: addresses Weakness 2)
+  - **Latency CDF** — one curve per algorithm (addresses Weakness 8)
+  - **Latency box plot** — per algorithm
+  - **CBR vs Time** — one curve per algorithm (addresses Weakness 3)
+  - **CBR vs Vehicle Count** — scatter per algorithm
+  - **SPDU Size Breakdown** — stacked bar per algorithm
+  - **Sign/Verify Time** — box plot per algorithm
+  - **DCC Drops** — bar chart per algorithm (extract from .sca files via scavetool)
+- Compute and print mean +/- 95% confidence intervals across replications
+- Generate summary statistics CSV for tables in paper
+
+---
+
+## Phase 2: Experimental Campaign
+
+### Step 2.1 — Run full simulation matrix
+
+**Matrix:**
+| Algorithm | Density (veh/h/approach) | Config | Replications |
+|-----------|-------------------------|--------|-------------|
+| ECDSA P-256 | 800, 1200, 1500, 1800, 2000 | Base + density variants | 3 each |
+| Falcon-512 | 800, 1200, 1500, 1800, 2000 | Base + density variants | 3 each |
+
+Total: 2 x 5 x 3 = **30 runs**
+
+Each run: 300s simulation time (extend `sim-time-limit` in omnetpp.ini from 60s to 300s).
+
+### Step 2.2 — Archive and organize results
+
+Structure:
+```
+campaign_results/
+  ECDSA/
+    800vph/
+      run1/ (appl_logs.csv, sender_summary.csv, Base-#0.sca)
+      run2/
+      run3/
+    1200vph/
+    1500vph/
+    1800vph/
+    2000vph/
+  Falcon/
+    800vph/
+    1200vph/
+    1500vph/
+    1800vph/
+    2000vph/
+```
+
+### Step 2.3 — Run analysis and generate all figures
+
+Execute `analysis.py --results-dir campaign_results/` to produce:
+1. PDR vs Vehicle Density (the KEY figure — shows divergence point)
+2. Latency CDF comparison
+3. CBR vs Vehicle Density
+4. SPDU Size Breakdown stacked bar
+5. Sign/Verify Time comparison
+6. DCC Drops vs Density
+7. Per-algorithm PDR vs Distance at selected densities
+
+---
+
+## Phase 3: Verification
+
+- Confirm PDR divergence appears at some density > 800 veh/h (the thesis)
+- Confirm CBR crosses 0.30 DCC threshold for Falcon before ECDSA
+- Confirm latency stays within 100ms for both algorithms (or document if not)
+- Verify confidence intervals are tight enough (small relative to differences)
+- Run `analysis.py` end-to-end and confirm all plots generate without errors
+
+---
+
+## Files to Modify
+- `src/apps/mode4App/Mode4RSUApp.cc` — Add CSV columns (verify_time, cbr)
+- `src/apps/mode4App/Mode4RSUApp.h` — Add lastCbr_ member
+- `src/apps/mode4App/Mode4App.cc` — Add sign time logging
+- `simulations/Mode4/omnetpp.ini` — Add density config sections, extend sim-time-limit
+- `analysis.py` — Multi-algorithm comparative analysis
+
+## Files to Create
+- `simulations/Mode4/run_campaign.sh` — Automated run script
+- `simulations/Mode4/intersections/intersection_1200vph.rou.xml`
+- `simulations/Mode4/intersections/intersection_1500vph.rou.xml`
+- `simulations/Mode4/intersections/intersection_2000vph.rou.xml`
+- Matching `.sumocfg` and `.launchd.xml` for each new density
+
+## Criticism -> Resolution Mapping
+| Criticism | Severity | Resolution |
+|-----------|----------|------------|
+| W1: Insufficient simulation evidence | CRITICAL | Steps 1.3, 1.4, 2.1 — 30 runs across 5 densities |
+| W2: No PDR difference at tested density | CRITICAL | Step 1.4, 2.1 — test higher densities where divergence occurs |
+| W3: CBR not analyzed | HIGH | Steps 1.1, 1.5 — add CBR to CSV, generate time-series plots |
+| W4: No comparison with related work | HIGH | Step 1.5 — quantitative tables enable comparison |
+| W6: Cert caching not analyzed | MEDIUM | Step 1.5 — analyze signerType=0 vs 1 from existing CSV data |
+| W7: Single topology | MEDIUM | Acknowledged as limitation (multiple densities compensate) |
+| W8: Missing latency analysis | MEDIUM | Steps 1.1, 1.5 — delay_ms already in CSV, just need plots |
+| W9: SPS+One-Shot missing | LOW | Acknowledged as limitation in paper |
+| W10: No hardware validation | LOW | Acknowledged as limitation in paper |
