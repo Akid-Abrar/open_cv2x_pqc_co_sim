@@ -1,0 +1,502 @@
+============================================================
+ WHY ECDSA AND FALCON SHOW SIMILAR PDR
+ Analysis of result_storage — 2026-02-26
+============================================================
+
+SHORT ANSWER:
+The PDR loss is dominated by SCI decoding failure (PSCCH
+propagation), NOT by packet size or channel saturation.
+Since SCI is transmitted separately from the data (TB),
+and SCI size is the same for both algorithms, both
+scenarios experience nearly identical loss patterns.
+
+============================================================
+1. KEY METRICS COMPARISON
+============================================================
+
+                        ECC_Base   Falcon_Base   ECC_NLOS   Falcon_NLOS
+                        --------   -----------   --------   -----------
+Subchannel/pkt            2           7            2           7
+MCS used                  6          11            6          11
+CBR (avg cars)          0.086       0.212        0.086       0.215
+RSU tbReceived         19,348      19,348       19,348      19,348
+RSU tbDecoded          15,166      14,992        4,264       4,246
+RSU tbFailedNoSCI       4,182       4,356       15,084      15,102
+RSU PDR                78.4%       77.5%        22.0%       21.9%
+Car PDR (aggregate)    58.3%       57.6%         8.2%        8.3%
+
+============================================================
+2. ROOT CAUSE: ALL LOSSES ARE SCI FAILURES
+============================================================
+
+The dominant loss mechanism across ALL four scenarios is
+"tbFailedDueToNoSCI" — the Transport Block (data) arrived
+at the receiver but could NOT be decoded because the
+corresponding SCI (Sidelink Control Information) was not
+successfully received.
+
+Critically:
+  - tbFailedDueToInterference = 0  (all scenarios)
+  - tbFailedDueToProp = 0          (all scenarios)
+
+This means:
+  a) When the SCI IS decoded, the TB is ALWAYS decoded too
+  b) Channel congestion (interference) is NOT causing losses
+  c) The only bottleneck is SCI reception (PSCCH sensing)
+
+============================================================
+3. WHY PACKET SIZE DOESN'T MATTER HERE
+============================================================
+
+In C-V2X Mode 4, the SCI (PSCCH) and TB (PSSCH) use
+SEPARATE radio resources:
+  - SCI always occupies exactly 2 RBs (fixed, small)
+  - TB occupies the remaining subchannels
+
+The SCI carries the scheduling info needed to locate and
+decode the TB. If a receiver can't decode the SCI, it
+doesn't even attempt to decode the TB — regardless of
+how many subchannels the TB occupies.
+
+Since SCI is identical in size for both ECDSA and Falcon,
+the SCI decode probability is the same for both → same PDR.
+
+The actual packet size differences are real and significant:
+  - ECDSA: ~204 bytes → 2 subchannels, MCS 6
+  - Falcon: ~1,629 bytes → 7 subchannels, MCS 11
+
+But since the TB decode success rate (conditioned on SCI
+being received) is 100% in both cases, the larger Falcon
+packet doesn't cause additional losses.
+
+============================================================
+4. WHY CBR DIFFERENCE DOESN'T CAUSE PDR DIFFERENCE
+============================================================
+
+Falcon causes 2.5x higher CBR (0.212 vs 0.086) because
+each Falcon transmission occupies 7 subchannels vs 2.
+
+However, with 60 vehicles and 10 available subchannels,
+even at CBR ~0.21, the channel is NOT saturated enough for
+resource collisions to dominate. The sensing-based SPS
+algorithm avoids most collisions effectively.
+
+The near-zero tbFailedDueToInterference confirms this.
+
+============================================================
+5. WHY NLOS CRUSHES PDR (BUT EQUALLY FOR BOTH)
+============================================================
+
+In NLOS (Stress-NLOS config), the propagation model
+significantly attenuates signals. The PSCCH sensing
+probability drops dramatically:
+
+  Base: ~78% SCI decode rate at RSU
+  NLOS: ~22% SCI decode rate at RSU
+
+This is purely a propagation effect on the SCI channel.
+Since the SCI is identical for both algorithms, NLOS
+affects both equally → PDR drops equally.
+
+============================================================
+6. ANOMALY: subchannelSent=0 FOR ALL FALCON NODES
+============================================================
+
+All Falcon car nodes report subchannelSent:sum = 0 and
+subchannelReceived:mean = 0. This is a STAT RECORDING BUG,
+not a functional issue (cars clearly transmit — RSU receives
+19,348 TBs). The subchannel stat counter is likely bypassed
+in the code path that handles Falcon's larger subchannel
+allocations. This should be investigated separately.
+
+============================================================
+7. WHEN WOULD FALCON PDR DIVERGE FROM ECDSA?
+============================================================
+
+Falcon's larger packets WOULD cause measurably lower PDR
+under conditions that cause TB-level failures:
+
+  a) Higher vehicle density (>100 vehicles) where channel
+     congestion causes resource collisions → Falcon's 7
+     subchannels would overlap with more neighbors than
+     ECDSA's 2 subchannels
+
+  b) Marginal SINR conditions where the higher MCS (11)
+     required by Falcon has lower decode probability than
+     MCS 6 used by ECDSA (higher MCS = less robust)
+
+  c) Retransmission scenarios where Falcon consumes more
+     resources per retransmission attempt
+
+Currently, with 60 vehicles and strong LOS/sensing, the
+bottleneck is PSCCH reception — and that's algorithm-
+agnostic.
+
+============================================================
+CONCLUSION (Part 1)
+============================================================
+The simulation is behaving correctly. Similar PDR for
+ECDSA and Falcon is expected under these conditions
+because the loss mechanism (SCI decode failure) is
+independent of the payload/TB size. To see differentiation,
+you need scenarios where TB-level interference or MCS
+robustness becomes the bottleneck rather than SCI reception.
+
+
+============================================================
+============================================================
+ PART 2: WHY SO MANY SCIs FAIL EVEN IN BASE (LOS)
+ Appended 2026-02-26
+============================================================
+============================================================
+
+============================================================
+8. SCI FAILURE BREAKDOWN — ALL FOUR SCENARIOS
+============================================================
+
+The SCI path has 4 possible failure modes. Here is the
+complete breakdown (all nodes aggregated, including RSU):
+
+                      ECC_Base    Falcon_Base   ECC_NLOS   Falcon_NLOS
+                      --------    -----------   --------   -----------
+sciReceived          772,718      777,752      772,851     778,184
+sciDecoded           454,091      451,897       66,398      66,870
+sciUnsensed          318,490      320,657      706,453     711,314
+sciFailedInterf          137        5,198            0           0
+sciFailedProp              0            0            0           0
+sciFailedHalfDup       5,748          714        5,618         280
+                      --------    -----------   --------   -----------
+Unsensed %             41.2%        41.2%        91.4%       91.4%
+
+KEY FINDING: "sciUnsensed" is the OVERWHELMINGLY dominant
+failure mode — responsible for 98%+ of all SCI losses in
+every scenario.
+
+============================================================
+9. WHAT IS "sciUnsensed" — THE SENSING PROBABILITY MODEL
+============================================================
+
+Before the simulator even attempts SCI SINR decoding, it
+applies a probabilistic sensing gate at line 1521-1529 of
+LtePhyVUeMode4.cc:
+
+  erfParam = (TxPower - attenuation - (-90.5)) / (3*sqrt(2))
+  packetSensingRatio = 0.5 * (1 + erf(erfParam))
+  if (random >= packetSensingRatio) → SCI is UNSENSED
+
+This models the probability that a receiver's PSCCH
+energy detector actually detects the incoming SCI signal
+above the noise floor. The parameters are:
+
+  TxPower    = 23 dBm (configured d2dTxPower)
+  threshold  = -90.5 dBm (hardcoded sensing threshold)
+  sigma      = 3 dB (hardcoded log-normal shadowing std)
+  attenuation = path loss from channel model (distance-
+                dependent, in dB)
+
+The sensing probability follows a sigmoid (error function):
+
+  received_power = TxPower - attenuation = 23 - attenuation
+  margin = received_power - (-90.5) = 113.5 - attenuation
+
+  attenuation < 109 dB  →  sensing prob ≈ 100% (always sensed)
+  attenuation ≈ 113.5 dB →  sensing prob = 50%  (coin flip)
+  attenuation > 118 dB  →  sensing prob ≈ 0%   (never sensed)
+
+The transition zone is ~9 dB wide (±3σ around 113.5 dB),
+which corresponds to a range band of roughly 100-200m
+depending on the propagation model.
+
+============================================================
+10. WHY 41% UNSENSED RATE IN BASE (LOS) SCENARIO
+============================================================
+
+The highway scenario has vehicles spread over a long road.
+The mean Tx-Rx distance across all received packets varies
+significantly per node:
+
+  RSU mean distance:   337 m   → unsensed rate: 21.6%
+  car[0] mean dist:    405 m   → unsensed rate: 29.0%
+  car[1] mean dist:    533 m   → unsensed rate: 43.4%
+  car[5] mean dist:    (far)   → unsensed rate: 53.5%
+  car[7] mean dist:    (far)   → unsensed rate: 55.5%
+  car[14] mean dist:   (close) → unsensed rate: 23.0%
+
+The correlation is clear: vehicles that are on average
+farther from the bulk of transmitters have higher unsensed
+rates. On a highway with 60 vehicles, many Tx-Rx pairs
+are 400-800m apart, where the path loss pushes attenuation
+into the 110-120 dB range — right in the sigmoid transition
+zone where sensing probability drops rapidly.
+
+This is PHYSICALLY REALISTIC behavior:
+  - At 5.9 GHz (C-V2X band), free-space path loss alone
+    is ~88 dB at 300m and ~94 dB at 600m
+  - With the WINNER+ B1 or similar vehicular channel model,
+    attenuation at 400-600m easily reaches 110-118 dB
+  - At these levels, the SCI energy detector genuinely
+    cannot reliably detect the signal above thermal noise
+
+============================================================
+11. PER-NODE UNSENSED RATE VARIATION (ECC Base)
+============================================================
+
+  Node             sciReceived  sciUnsensed  Unsensed%
+  ----             -----------  -----------  ---------
+  RSU[0]             19,348       4,177       21.6%
+  car[0]             18,444       5,357       29.0%
+  car[4]             18,541       4,555       24.5%
+  car[8]             18,618       4,493       24.1%
+  car[14]            18,107       4,176       23.0%
+  car[1]             18,599       8,084       43.4%
+  car[3]             18,541       7,619       41.0%
+  car[5]             18,365       9,832       53.5%
+  car[7]             18,592      10,330       55.5%
+
+Nodes with ~24% unsensed are centrally located (closer
+to most transmitters). Nodes with ~55% unsensed are at
+the highway edges (far from many transmitters). The RSU
+at 21.6% is in a favorable central position.
+
+============================================================
+12. WHY NLOS PUSHES UNSENSED TO 91%
+============================================================
+
+In the NLOS (Stress-NLOS) scenario, the propagation model
+adds significant additional attenuation (e.g., building
+obstruction, diffraction losses). This shifts the path
+loss curve upward by 15-25 dB, pushing nearly all Tx-Rx
+pairs well beyond the 118 dB sensing cliff:
+
+  Base:  many pairs in 100-115 dB range → ~41% unsensed
+  NLOS:  most pairs in 120-140 dB range → ~91% unsensed
+
+The SCI content and size is unchanged — the radio signal
+carrying the SCI is simply too weak to be detected.
+
+============================================================
+13. IS THIS A BUG OR REALISTIC?
+============================================================
+
+This is EXPECTED and REALISTIC behavior, not a bug.
+
+In real C-V2X deployments:
+  - SAE J3161 specifies an awareness range of 300m for
+    safety-critical BSMs
+  - Beyond 300-400m, packet reception is not guaranteed
+    and not required by the standard
+  - The 23 dBm Tx power combined with the -90.5 dBm
+    sensing threshold gives an effective sensing range
+    of approximately 300-500m depending on conditions
+
+The ~41% unsensed rate in Base reflects the fact that the
+simulation includes ALL transmitted packets from ALL 60
+vehicles, including those 500-800m away that are outside
+the effective communication range. If you filtered PDR
+by distance (e.g., only counting packets from transmitters
+within 300m), the PDR would be significantly higher.
+
+============================================================
+14. SCI FAILURE BUDGET SUMMARY (ECC Base)
+============================================================
+
+  Total SCI received:           772,718  (100.0%)
+  ├─ SCI decoded successfully:  454,091  ( 58.8%)
+  ├─ SCI unsensed (too weak):   318,490  ( 41.2%)  ← DOMINANT
+  ├─ SCI failed half-duplex:      5,748  (  0.7%)
+  └─ SCI failed interference:      137  (  0.0%)
+
+The 41.2% unsensed rate directly translates to the
+~41.7% aggregate car PDR loss (58.3% PDR = 100% - 41.7%).
+
+The remaining ~0.7% half-duplex losses occur when a node
+is transmitting its own SCI/TB at the exact moment another
+node's SCI arrives — it can't receive while transmitting.
+
+============================================================
+15. SUMMARY
+============================================================
+
+The high SCI failure count even in Base conditions is
+caused by the PHYSICAL SENSING MODEL, not by any code
+defect. The probabilistic sensing gate (erf-based energy
+detection at -90.5 dBm threshold) correctly models that
+distant vehicles (>400m) on the highway cannot reliably
+detect each other's SCI signals above thermal noise.
+
+This is consistent with:
+  - Real C-V2X range limitations (~300-500m effective)
+  - 3GPP specifications for sidelink sensing
+  - SAE J3161 awareness range requirements
+  - The distance-dependent per-node unsensed rates
+
+To improve PDR, potential approaches include:
+  1. Increase d2dTxPower (e.g., to 30 dBm)
+  2. Lower the sensing threshold (currently -90.5 dBm)
+  3. Use shorter highway / fewer vehicles (reduce mean
+     Tx-Rx distances)
+  4. Filter PDR metrics by distance (e.g., only count
+     within 300m) for a fairer comparison
+
+
+============================================================
+============================================================
+ PART 3: DISTANCE-FILTERED PDR — FEASIBILITY & APPROACH
+ Appended 2026-02-26
+============================================================
+============================================================
+
+============================================================
+16. THE CHALLENGE
+============================================================
+
+You correctly identified the hard part: vehicles are
+MOBILE. A sender might be:
+
+  t=10s:  800m away (out of range)
+  t=20s:  400m away (marginal)
+  t=25s:  150m away (in range)     ← only count these
+  t=30s:  300m away (in range)     ← only count these
+  t=40s:  600m away (out of range)
+
+For distance-filtered PDR we need:
+  - NUMERATOR: packets received while sender was within R
+  - DENOMINATOR: packets SENT while sender was within R
+
+The numerator is easy — the CSV already has dist_m for
+every received packet (the RSU-to-sender distance at
+reception time). We just filter: dist_m <= R.
+
+The denominator is the hard part. We need to know which
+packets were sent while the sender was within R meters
+of the RSU, INCLUDING packets that were sent but LOST.
+Lost packets don't appear in the CSV at all.
+
+============================================================
+17. WHY IT IS ACTUALLY FEASIBLE
+============================================================
+
+The good news: we CAN compute the denominator accurately.
+Here's why:
+
+  a) Each sender has a monotonically incrementing msgId
+     (BSM sequence number: 0, 1, 2, 3, ...)
+
+  b) The CSV records EVERY successfully received packet
+     with its msgId AND dist_m at reception time
+
+  c) Packets are sent at a fixed interval (RRI, e.g.,
+     every 100ms), so msgId maps directly to time
+
+  d) Vehicle motion is continuous — if a car is at 200m
+     at msgId=50 and at 250m at msgId=55, it was within
+     range for ALL msgIds 50-55
+
+So the approach is:
+
+  1. For each sender, sort received packets by msgId
+  2. Identify the "in-range window": the contiguous range
+     of msgIds where dist_m <= R
+  3. The DENOMINATOR = total msgIds in that window
+     (including gaps = lost packets)
+  4. The NUMERATOR = received packets in that window
+
+============================================================
+18. PROPOSED IMPLEMENTATION IN analysis.py
+============================================================
+
+def compute_range_filtered_pdr(df, range_m=300):
+    """
+    Compute PDR counting only packets sent while the
+    sender was within range_m of the RSU.
+
+    Approach:
+    - For each sender, find the first and last msgId
+      where dist_m <= range_m among RECEIVED packets.
+    - Assume the sender was within range for all msgIds
+      between those two bounds (continuous motion).
+    - denominator = last_in_range_msgId - first_in_range_msgId + 1
+    - numerator = count of received packets with
+      dist_m <= range_m
+    """
+    results = {}
+    for sender, grp in df.groupby("sender"):
+        in_range = grp[grp["dist_m"] <= range_m]
+        if in_range.empty:
+            results[sender] = {"PDR": 0, "Sent": 0,
+                               "Received": 0}
+            continue
+
+        first_id = in_range["msgId"].min()
+        last_id  = in_range["msgId"].max()
+        sent_estimate = last_id - first_id + 1
+        received = len(in_range)
+
+        results[sender] = {
+            "PDR": received / sent_estimate,
+            "Sent": sent_estimate,
+            "Received": received,
+            "first_msgId": first_id,
+            "last_msgId": last_id,
+        }
+    return results
+
+============================================================
+19. EDGE CASES & REFINEMENTS
+============================================================
+
+A) MULTIPLE PASSES THROUGH RANGE:
+   A vehicle could pass through range, leave, and re-enter
+   (e.g., on a circular route). The simple first/last msgId
+   approach would overcount the denominator. However, on a
+   straight highway this won't happen — vehicles make a
+   single pass.
+
+   For robustness, a better approach would group contiguous
+   in-range segments:
+
+   - Walk through msgIds in order
+   - Mark each as "in-range" if it was received with
+     dist_m <= R, or "gap" if it was not received
+   - Split into segments when a received packet OUTSIDE
+     range appears (dist_m > R), confirming the sender
+     has left range
+
+B) BOUNDARY PRECISION:
+   dist_m is measured at RECEPTION time, not transmission
+   time. At 100ms RRI and ~30 m/s highway speed, the car
+   moves ~3m between send and receive — negligible compared
+   to a 300m range threshold.
+
+C) CHOOSING THE RANGE THRESHOLD (R):
+   - 300m: SAE J3161 awareness range for safety BSMs
+   - 500m: Extended range for highway scenarios
+   - Recommend computing PDR at multiple ranges:
+     100m, 200m, 300m, 400m, 500m
+     and plotting PDR vs Range to see the decay curve
+
+D) THE DENOMINATOR INCLUDES LOST IN-RANGE PACKETS:
+   If a sender transmits msgIds 10-30 while in range but
+   only msgIds 10,11,13,15,17,20,25,30 are received, the
+   denominator is 21 (30-10+1) and numerator is 8.
+   The msgId gaps (12,14,16,18,19,21-24,26-29) represent
+   real losses that SHOULD be counted against PDR.
+
+============================================================
+20. PLOT IDEAS
+============================================================
+
+  a) Bar chart: PDR at different range thresholds
+     (100m, 200m, 300m, 400m, 500m) — expect PDR
+     increasing as range decreases
+
+  b) Per-sender PDR (within 300m) vs overall PDR
+     — should show significant improvement for senders
+     who transit close to RSU
+
+  c) PDR vs Range curve (line plot) — a smooth decay
+     showing the communication reliability envelope
+
+  d) Overlay ECDSA vs Falcon at each range threshold
+     — this is where the crypto difference might emerge
+     if TB-level effects matter at shorter ranges

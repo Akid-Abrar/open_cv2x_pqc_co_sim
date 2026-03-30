@@ -1,0 +1,252 @@
+Stress-Test Configuration Analysis for PQC Impact on V2I
+(J3161-Compliant — No Sidelink Parameter Modifications)
+==========================================================
+
+PROBLEM STATEMENT
+-----------------
+With the current "Base" configuration, Falcon-512 (SPDU ~1600-1800 B)
+achieves >99% PDR identical to ECDSA (~150 B SPDU). The 10x larger
+PQC packets have zero measurable impact. This document defines
+J3161-compliant stress scenarios that vary ONLY the deployment
+environment (channel model) and traffic density.
+
+
+=======================================================================
+J3161 FIXED PARAMETERS (NOT MODIFIED IN ANY SCENARIO)
+=======================================================================
+
+  Parameter                    J3161 Reference      Value
+  ───────────────────────────────────────────────────────────
+  subchannelSize               Table 8, #16         10 RBs (N10)
+  numSubchannels               Table 8, #17         10 (n10)
+  minMCS-PSSCH                 Table 11, #1         5 (QPSK)
+  maxMCS-PSSCH                 Table 11, #2         11 (16QAM)
+  minSubchannel-NumberPSSCH    Table 11, #3         2
+  maxSubchannel-NumberPSSCH    Table 11, #4         10
+  sl-bandwidth                 Table 8, #10         100 RBs (N100)
+  maxTxPower                   Table 8, #19         23 dBm
+  probResourceKeep             Table 8, #21         0.8
+  RRI (pStep)                  Table 8, #20         100 ms
+  thresholdRSSI                Table 10, #4         9
+  reselectAfter                Table 8, #22         6
+  maxHarqRtx                   Table 8              0
+  adjacencyPSCCH-PSSCH         Table 8, #15         true
+
+
+=======================================================================
+WHAT CAN BE VARIED (DEPLOYMENT ENVIRONMENT)
+=======================================================================
+
+The following are NOT defined by J3161 — they describe the deployment
+scenario, not the radio parameters:
+
+  1. Channel propagation model (LOS vs NLOS)
+     - J3161 specifies radio parameters, not the physical environment
+     - An urban intersection with buildings naturally creates NLOS
+     - LOS-only is unrealistic for intersection scenarios
+
+  2. Vehicle density (traffic load)
+     - J3161 does not specify how many vehicles exist
+     - Higher density = more simultaneous transmitters = higher CBR
+
+  3. Simulation duration
+     - Longer runs capture rare events (congestion spikes, persistent
+       SPS collisions) that short runs miss
+
+  4. Number/placement of RSUs
+     - Deployment choice, not a standard parameter
+
+
+=======================================================================
+CURRENT BASELINE ("Base" Config)
+=======================================================================
+
+  Channel:     LOS-only (ANALYTICAL, fixed-los=true)
+  Vehicles:    1200/approach (4800 total, ~65-70 simultaneous)
+  Sim time:    300s (5 min)
+  Resource occupancy at peak: ~56%
+  Result:      PDR >99% for ALL algorithms
+
+  Why no differentiation:
+  - LOS gives high SINR → all packets decode successfully
+  - 56% occupancy → enough resources for Falcon's 8 subchannels
+  - No congestion control triggered (CBR < 0.65)
+
+
+=======================================================================
+PACKET SIZE COMPARISON (J3161 MCS 5-11, 10 subchannels)
+=======================================================================
+
+  Algorithm     Sig (B)   PubKey (B)   BSM (B)   Total SPDU (B)
+  ──────────────────────────────────────────────────────────────
+  ECDSA          64         33           36         ~150
+  Falcon-512    ~660        897          36         ~1600
+  Dilithium-2   2420        1312         36         ~3800
+
+  Subchannels needed at MCS 11 (max capacity per subchannel ≈240 B):
+    ECDSA:       1-2 subchannels  → uses 10-20% of pool per TX
+    Falcon-512:  7-8 subchannels  → uses 70-80% of pool per TX
+    Dilithium-2: 10 subchannels   → uses 100% of pool per TX
+
+  Resource slots consumed per 100ms (with N simultaneous vehicles):
+    Available: 100 subframes × 10 subchannels = 1000 slots
+
+    At 70 vehicles:
+      ECDSA:    70 × 2  = 140 slots  → 14% occupancy
+      Falcon:   70 × 8  = 560 slots  → 56% occupancy
+      Dilithium:70 × 10 = 700 slots  → 70% occupancy
+
+    At 110 vehicles:
+      ECDSA:    110 × 2  = 220 slots  → 22% occupancy
+      Falcon:   110 × 8  = 880 slots  → 88% occupancy  ← collisions!
+      Dilithium:110 × 10 = 1100 slots → 110% ← OVERLOADED
+
+
+=======================================================================
+STRESS SCENARIO 1: NLOS Channel  [Config Stress-NLOS]
+=======================================================================
+
+What changes:
+  - config_channel_nlos.xml replaces config_channel.xml
+  - Scenario: URBAN_MICROCELL (proper NLOS pathloss formula)
+  - fixed-los = false → all links use NLOS pathloss
+  - Everything else identical to Base
+
+Why this matters:
+  - NLOS pathloss for URBAN_MICROCELL:
+      PL_NLOS = 36.7*log10(d) + 22.7 + 26*log10(fc/1e9)   [dB]
+    vs LOS (ANALYTICAL):
+      PL_LOS  = 22.7*log10(d) + 27 + 20*log10(fc/1e9)      [dB]
+
+  - At d=200m:
+      LOS:  22.7×2.3 + 42.4 = 94.6 dB
+      NLOS: 36.7×2.3 + 22.7 + 20.1 = 127.2 dB
+      Difference: 32.6 dB
+
+  - 32 dB lower SINR means:
+    → Effective MCS drops from 11 to 5-7 at moderate distance
+    → Lower MCS = smaller TB capacity per subchannel
+    → Larger packets (Falcon) need MORE subchannels or FAIL to decode
+    → Small packets (ECDSA) still fit and decode at lower MCS
+
+  - Shadowing sigma increases from 3 dB (LOS) to 4 dB (NLOS)
+    → More variance in link quality → more intermittent failures
+
+Expected PDR impact (at current 1200 veh/h per approach):
+  ECDSA:       ~90-97%  (small packets tolerate low SINR)
+  Falcon-512:  ~75-90%  (large packets need higher SINR to decode)
+  Dilithium-2: ~50-75%  (very large packets fail first at low SINR)
+
+
+=======================================================================
+STRESS SCENARIO 2: High Vehicle Density  [Config Stress-HighDensity]
+=======================================================================
+
+What changes:
+  - intersection_stress.rou.xml: 1800 veh/h per approach (7200 total)
+  - ~100-110 simultaneous vehicles at peak
+  - Channel remains LOS (Base channel model)
+
+Why this matters:
+  - Resource occupancy calculation at 110 vehicles:
+      ECDSA:    110 × 2  = 220/1000 = 22% → no congestion
+      Falcon:   110 × 8  = 880/1000 = 88% → frequent SPS collisions
+      Dilithium:110 × 10 = 1100/1000 = 110% → resource overload
+
+  - When occupancy > ~70%, SPS sensing-based selection cannot find
+    enough clean resources. Vehicles are forced to pick subframes
+    where other vehicles already reserved, causing persistent
+    collisions every RRI (100ms).
+
+  - CBR will exceed 0.65 for Falcon/Dilithium but NOT for ECDSA.
+    This triggers CBR-based congestion control (CR-limiting), which
+    further restricts Falcon/Dilithium transmissions while ECDSA
+    remains unaffected.
+
+  - This creates asymmetric congestion: same traffic load, same
+    standard parameters, but PQC algorithms experience congestion
+    while ECDSA does not — purely due to packet size.
+
+Expected PDR impact:
+  ECDSA:       ~95-99%  (low resource usage, no congestion)
+  Falcon-512:  ~70-85%  (SPS collisions + CBR congestion control)
+  Dilithium-2: ~40-65%  (resource overload + MAC drops)
+
+
+=======================================================================
+STRESS SCENARIO 3: NLOS + High Density  [Config Stress-Combined]
+  (RECOMMENDED FOR PUBLICATION)
+=======================================================================
+
+What changes:
+  - NLOS channel (config_channel_nlos.xml)
+  - High density (1800 veh/h per approach, intersection_stress routes)
+  - All J3161 sidelink parameters unchanged
+
+Why this is the recommended scenario:
+  - It represents a REALISTIC urban intersection:
+    → Buildings create NLOS conditions (common in cities)
+    → 7200 veh/h total is a busy but not extreme intersection
+    → Signal timing with 40s cycle (LOS A) keeps traffic flowing
+
+  - The two stress factors compound:
+    → NLOS lowers SINR → effective MCS drops → TB capacity shrinks
+    → Lower TB capacity means Falcon needs even MORE subchannels
+    → More subchannels per TX + more vehicles = resource exhaustion
+    → ECDSA remains comfortable due to small packet size
+
+  - This is the FAIREST comparison because:
+    → No J3161 parameters are violated
+    → The environment is realistic (not artificially degraded)
+    → Both algorithms face the same channel and traffic conditions
+    → The ONLY differentiator is packet size — exactly what we want
+
+Expected PDR impact:
+  ECDSA:       ~85-95%  (some NLOS failures, but small packets cope)
+  Falcon-512:  ~55-75%  (NLOS + congestion = significant drops)
+  Dilithium-2: ~25-50%  (cannot fit in reduced-capacity TBs)
+
+
+=======================================================================
+HOW TO RUN
+=======================================================================
+
+Each scenario uses the same sidelink_configuration.xml (J3161 compliant).
+Run each 3 times with different PQCDSA_ALGO values:
+
+  # Scenario 1: NLOS only
+  PQCDSA_ALGO=falcon512  ./run -c Stress-NLOS
+  PQCDSA_ALGO=ecdsa      ./run -c Stress-NLOS
+  PQCDSA_ALGO=dilithium2 ./run -c Stress-NLOS
+
+  # Scenario 2: High density only
+  PQCDSA_ALGO=falcon512  ./run -c Stress-HighDensity
+  PQCDSA_ALGO=ecdsa      ./run -c Stress-HighDensity
+  PQCDSA_ALGO=dilithium2 ./run -c Stress-HighDensity
+
+  # Scenario 3: Combined (recommended)
+  PQCDSA_ALGO=falcon512  ./run -c Stress-Combined
+  PQCDSA_ALGO=ecdsa      ./run -c Stress-Combined
+  PQCDSA_ALGO=dilithium2 ./run -c Stress-Combined
+
+Collect per scenario:
+  - PDR per vehicle
+  - Average delay (ms)
+  - CBR over time
+  - Number of MAC-layer drops
+  - Subchannels allocated per TX
+
+
+=======================================================================
+SUMMARY
+=======================================================================
+
+  Scenario          Channel  Density    ECDSA PDR  Falcon PDR  Dilithium PDR
+  ──────────────────────────────────────────────────────────────────────────
+  Base (current)    LOS      1200/appr  >99%       >99%        >99%
+  Stress-NLOS       NLOS     1200/appr  ~90-97%    ~75-90%     ~50-75%
+  Stress-HighDens   LOS      1800/appr  ~95-99%    ~70-85%     ~40-65%
+  Stress-Combined   NLOS     1800/appr  ~85-95%    ~55-75%     ~25-50%
+
+  All scenarios use identical J3161-compliant sidelink parameters.
+  The ONLY variables are deployment environment and traffic density.
