@@ -1,0 +1,303 @@
+\documentclass[letterpaper,journal]{IEEEtran}
+\usepackage{amsmath,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{array}
+\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+\usepackage{textcomp}
+\usepackage{stfloats}
+\usepackage{url}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{placeins}
+\usepackage{booktabs}
+
+% highlights
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+\usepackage{soul}    % for text highlight
+\soulregister\cite7  % so that \cite doesn't break highlighting
+\soulregister\ref7   % so that \ref doesn't break highlighting
+
+
+\hyphenation{op-tical net-works semi-conduc-tor IEEE-Xplore}
+% updated with editorial comments 8/9/2021
+
+\begin{document}
+
+\title{Performance Evaluation of Post-Quantum Cryptographic Algorithms on C-V2X Sidelink Communications}
+
+\author{%
+Akid Abrar,~\IEEEmembership{Student Member,~IEEE},
+Sagar Dasgupta,
+Abdullah Al Mamun,
+Mizanur Rahman,~\IEEEmembership{Senior Member,~IEEE},
+Ahmad Alsharif,
+and Mashrur Chowdhury
+
+\thanks{Akid Abrar, Sagar Dasgupta,Ahmad Alsharif and Mizanur Rahman are with the Department of Civil, Construction \& Environmental Engineering, The University of Alabama, Smart Communities and Innovation Building (SCIB), 28 Kirkbride Lane, Tuscaloosa, AL 35487-0288 USA (emails: aabrar@crimson.ua.edu; sdasgupta@ua.edu; mizan.rahman@ua.edu; aalsharif1@ua.edu.).}%
+\thanks{Alican Sevim and Eren Erman Ozguven are with the Glenn Department of Civil Engineering, Clemson University, Clemson, SC 29634 USA. (emails: abdullm@clemson.edu; mac@clemson.edu).}%
+\thanks{Copyright (c) 20xx IEEE. Personal use of this material is permitted. However, permission to use this material for any other purposes must be obtained from the IEEE by sending a request to pubs-permissions@ieee.org.}
+}
+
+% The paper headers
+% \markboth{Journal of \LaTeX\ Class Files,~Vol.~14, No.~8, August~2021}%
+% {Shell \MakeLowercase{\textit{et al.}}: A Sample Article Using IEEEtran.cls for IEEE Journals}
+
+\IEEEpubid{0000--0000/00\$00.00~\copyright~2025 IEEE}
+% Remember, if you use this you must call \IEEEpubidadjcol in the second
+% column for its text to clear the IEEEpubid mark.
+
+
+\maketitle
+
+\begin{abstract}
+Wireless connectivity, such as Cellular-Vehicle-to-Everything (C-V2X), between vehicles and transportation infrastructure promises significant roadway safety benefits by providing 360-degree views of their surroundings. However, wireless connectivity in intelligent transportation systems is vulnerable to deliberate cyber threats. Security of wireless connectivity relies on traditional cryptographic techniques as specified in the IEEE 1609.2 standard. The anticipated advent of quantum computing can compromise this cryptographic foundation. Post-quantum cryptographic (PQC) algorithms offer quantum-resistant alternatives. However, the significantly larger size of PQC signatures and public keys poses a challenge to meet communication latency for safety-critical transportation applications. This study conducts a comprehensive evaluation of standardized PQC algorithms on C-V2X sidelink performance to assess the feasibility of implementing PQC in safety-critical transportation applications. Key C-V2X sidelink performance indicators, including packet delivery ratio, end-to-end latency, channel busy ratio, and resource utilization, are compared across PQC algorithms at varying vehicle densities to confirm their applicability.
+
+\end{abstract}
+
+\begin{IEEEkeywords}
+C-V2X, post-quantum cryptography, sidelink, Mode~4, Falcon-512, ECDSA, IEEE~1609.2, SAE~J3161, vehicle-to-everything
+\end{IEEEkeywords}
+
+\section{Introduction}
+\IEEEPARstart{C}{ellular} Vehicle-to-Everything (C-V2X) communication enables vehicles to exchange safety-critical messages such as Basic Safety Messages (BSMs) over the PC5 sidelink interface at 10~Hz, providing each vehicle with a 360-degree awareness of its surrounding traffic environment~\cite{molina2017lte}. The C-V2X Mode~4 sidelink, standardized by 3GPP in Release~14 and profiled for deployment by SAE~J3161~\cite{sae_j3161}, operates without cellular infrastructure by allowing vehicles to autonomously select radio resources through a sensing-based Semi-Persistent Scheduling (SPS) mechanism. This infrastructure-independent operation makes Mode~4 particularly attractive for safety applications in areas lacking network coverage, such as rural highways and intersection approaches.
+
+The integrity and authenticity of V2X messages are ensured through digital signatures as specified in the IEEE~1609.2 security standard~\cite{ieee_16092}. Currently, IEEE~1609.2 mandates the Elliptic Curve Digital Signature Algorithm (ECDSA) with the NIST P-256 curve, which produces compact 64-byte signatures and 65-byte public keys. These sizes impose minimal overhead on the sidelink transport block, and the V2X ecosystem---including the Security Credential Management System (SCMS)~\cite{brecht2018scms}---has been designed around these compact parameters.
+
+However, the anticipated emergence of cryptographically relevant quantum computers poses a fundamental threat to elliptic-curve-based cryptography. Shor's algorithm~\cite{shor1994algorithms} can efficiently solve the elliptic curve discrete logarithm problem, rendering ECDSA insecure. While the timeline for such quantum capabilities remains uncertain, the long deployment lifecycle of transportation infrastructure (15--20~years for vehicles and roadside equipment) demands proactive migration planning~\cite{campagna2020pqc_migration}. The National Institute of Standards and Technology (NIST) has responded by standardizing post-quantum cryptographic (PQC) algorithms resistant to quantum attacks, including lattice-based digital signature schemes such as ML-DSA (Dilithium, FIPS~204)~\cite{fips204} and FN-DSA (Falcon, FIPS~206)~\cite{fips206}.
+
+The central challenge in adopting PQC for V2X lies in the significantly larger signature and public key sizes of post-quantum algorithms. Falcon-512, the most compact NIST PQC signature scheme, produces signatures of 649--666~bytes and public keys of 897~bytes---an order of magnitude larger than ECDSA. Dilithium-2 is even larger, with 2420-byte signatures and 1312-byte public keys. These inflated sizes directly increase the SPDU payload that must be accommodated within the C-V2X sidelink transport block, which is constrained by the MCS index, subchannel allocation, and congestion control parameters mandated by SAE~J3161. Whether the sidelink can absorb this overhead without degrading safety-critical KPIs such as packet delivery ratio and latency is an open question.
+
+Existing studies on PQC in vehicular contexts have focused primarily on computational benchmarking on embedded hardware~\cite{kumar2024pqc_automotive} or on abstract protocol-level analysis without considering the radio resource constraints of the C-V2X physical layer. To the best of the authors' knowledge, no prior work has evaluated the end-to-end impact of PQC digital signatures on C-V2X Mode~4 sidelink performance within a standards-compliant simulation environment that models the full protocol stack from application-layer signing through MAC-layer resource allocation to physical-layer transmission.
+
+\IEEEpubidadjcol
+
+The key contributions of this study are as follows:
+\begin{itemize}
+    \item This study presents the first implementation and evaluation of NIST-standardized PQC digital signature algorithms within a C-V2X PC5 Mode~4 sidelink simulation that maintains compliance with SAE~J3161 deployment parameters and IEEE~1609.2 security services.
+    \item A feasibility assessment is conducted to determine whether PQC algorithms can be adopted without modifications to the application layer (e.g., packet segmentation or hybrid cryptographic schemes) or to the lower-layer radio resource configuration (e.g., MCS adaptation beyond the J3161-specified range).
+    \item A cross-layer performance evaluation quantifies the impact of PQC signature and public key overhead on sidelink key performance indicators (KPIs), including packet delivery ratio (PDR), end-to-end latency, channel busy ratio (CBR), and subchannel resource utilization.
+    \item Multiple urban intersection scenarios with varying vehicle densities (levels of service) are evaluated to identify the density thresholds at which PQC-induced overhead begins to degrade sidelink performance relative to the incumbent ECDSA baseline.
+\end{itemize}
+
+The remainder of this paper is organized as follows. Section~\ref{sec:background} provides background on C-V2X Mode~4 sidelink and PQC algorithms. Section~\ref{sec:related} reviews related work. Section~\ref{sec:method} describes the simulation methodology and setup. Section~\ref{sec:results} presents the evaluation outcomes. Section~\ref{sec:discussion} discusses the findings and their implications, and Section~\ref{sec:conclusion} concludes the paper.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Background}
+\label{sec:background}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{C-V2X Mode~4 and SAE J3161}
+\label{sec:cv2x}
+
+Cellular Vehicle-to-Everything (C-V2X) is a 3GPP-standardized radio access technology that enables direct vehicle-to-vehicle (V2V) communication over the PC5 sidelink interface without requiring cellular network infrastructure~\cite{3gpp_36213}. The PC5 interface operates in the 5.9~GHz Intelligent Transportation Systems (ITS) band and supports two transmission modes: Mode~3, where a base station schedules sidelink resources, and Mode~4, where vehicles autonomously select resources using a sensing-based Semi-Persistent Scheduling (SPS) mechanism~\cite{molina2017lte}.
+
+In Mode~4, each vehicle monitors the sidelink spectrum over a sensing window of 1000~ms and identifies candidate single-subframe resources within a selection window. Resources whose received power exceeds a threshold (Reference Signal Received Power, RSRP) are excluded from the candidate set. The vehicle then randomly selects a resource from the remaining candidates and reserves it for a configurable Resource Reservation Interval (RRI). A reselection counter determines how many consecutive transmissions use the reserved resource before triggering a new selection~\cite{3gpp_36321}. At each reselection event, the vehicle retains the current resource with a probability $p_\text{keep}$ (typically 0.0, 0.2, 0.4, 0.6, or 0.8) or selects a new resource from the updated candidate set.
+
+The transmission payload is carried on the Physical Sidelink Shared Channel (PSSCH), while the associated Sidelink Control Information (SCI) is transmitted on the Physical Sidelink Control Channel (PSCCH). Adjacent PSCCH--PSSCH mapping is typically employed, where control and data subchannels occupy contiguous resource blocks within the same subframe. The Modulation and Coding Scheme (MCS) applied to the PSSCH determines the transport block size and, consequently, the maximum payload that can be accommodated within a given number of subchannels.
+
+SAE~J3161~\cite{sae_j3161} specifies the deployment profile for C-V2X V2V communication in the 5.9~GHz band. It mandates a 10~MHz channel bandwidth corresponding to 50 resource blocks per subframe, a subchannel size of 10 or 20 resource blocks, and an RRI of 100~ms aligned with the Basic Safety Message (BSM) generation rate specified in SAE~J2945/1. The standard further defines congestion control through Channel Busy Ratio (CBR) monitoring and specifies MCS ranges and maximum subchannel allocations as a function of measured CBR. These constraints collectively determine the maximum packet size that the sidelink can carry, which directly impacts the feasibility of deploying cryptographic algorithms with large signature and key sizes.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Post-Quantum Cryptography}
+\label{sec:pqc}
+
+Current V2X security, as specified in IEEE~1609.2~\cite{ieee_16092}, relies on the Elliptic Curve Digital Signature Algorithm (ECDSA) with the NIST P-256 curve for message authentication. An ECDSA P-256 signature is 64~bytes (raw $r \| s$ format), and the corresponding public key is 65~bytes (uncompressed point), resulting in modest overhead that is readily accommodated within the sidelink transport block~\cite{ieee_16092}.
+
+The anticipated advent of large-scale quantum computers threatens to break ECDSA and other elliptic-curve-based schemes through Shor's algorithm~\cite{shor1994algorithms}. In response, the National Institute of Standards and Technology (NIST) conducted a multi-year standardization process and selected several post-quantum cryptographic algorithms for standardization~\cite{nist_pqc_report}. Among the digital signature schemes, two are particularly relevant to V2X applications:
+
+\textbf{ML-DSA (Dilithium).} ML-DSA, formerly known as CRYSTALS-Dilithium, is a lattice-based digital signature scheme standardized as FIPS~204~\cite{fips204}. At security level~2, Dilithium-2 produces signatures of 2420~bytes with a public key of 1312~bytes. While Dilithium offers strong security guarantees and deterministic signing, its signature and key sizes are substantially larger than ECDSA.
+
+\textbf{FN-DSA (Falcon).} FN-DSA, formerly known as Falcon, is a lattice-based signature scheme based on NTRU lattices and fast Fourier sampling, standardized as FIPS~206~\cite{fips206}. Falcon-512 produces compact signatures of approximately 649--666~bytes (variable length) with a public key of 897~bytes. Falcon offers the smallest combined signature and key size among the NIST-selected PQC signature schemes, making it the most promising candidate for bandwidth-constrained applications such as V2X sidelink.
+
+Table~\ref{tab:crypto_sizes} summarizes the signature and public key sizes for the three algorithms evaluated in this study.
+
+\begin{table}[!htbp]
+    \caption{Cryptographic Algorithm Parameter Sizes}
+    \label{tab:crypto_sizes}
+    \centering
+    \begin{tabular}{lccc}
+    \toprule
+    \textbf{Algorithm} & \textbf{Signature (B)} & \textbf{Public Key (B)} & \textbf{Security Level} \\
+    \midrule
+    ECDSA P-256    & 64        & 65      & Classical 128-bit \\
+    Falcon-512     & 649--666  & 897     & NIST Level~1 \\
+    Dilithium-2    & 2420      & 1312    & NIST Level~2 \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Related Work}
+\label{sec:related}
+
+Prior research related to this study can be categorized into three areas: (1)~C-V2X Mode~4 sidelink performance evaluation, (2)~V2X security and IEEE~1609.2 authentication overhead, and (3)~post-quantum cryptography for vehicular and IoT systems.
+
+\subsection{C-V2X Mode~4 Performance Evaluation}
+
+Several studies have evaluated the performance of LTE-V2X Mode~4 sidelink communication through analytical modeling and simulation. Gonzalez-Martin et al.~\cite{gonzalez2019analytical} developed analytical models to characterize Mode~4 PDR as a function of vehicle density, demonstrating that the SPS mechanism can sustain high reliability at low-to-moderate densities but degrades under congestion due to persistent packet collisions. Bazzi et al.~\cite{bazzi2017performance} compared IEEE~802.11p and LTE-V2V performance, showing that C-V2X achieves superior range and reliability under highway scenarios. McCarthy et al.~\cite{mccarthy2020opencvx} introduced openCV2X, the first open-source Mode~4 simulation model built on SimuLTE and OMNeT++, and demonstrated its cross-layer fidelity for evaluating aperiodic traffic patterns. Toghi et al.~\cite{toghi2019congestion} analyzed Mode~4 performance under highly congested conditions, highlighting the role of CBR-based congestion control in maintaining channel stability. These studies collectively establish the baseline performance characteristics of Mode~4 sidelink; however, none of them incorporate the impact of cryptographic overhead on sidelink KPIs.
+
+\subsection{V2X Security and Authentication Overhead}
+
+The IEEE~1609.2 standard~\cite{ieee_16092} defines the security services for V2X, including ECDSA-based digital signatures and a certificate management framework. Qu et al.~\cite{qu2015security} provided a comprehensive review of VANET security challenges, identifying message authentication as a key bottleneck for high-frequency BSM transmission. Brecht et al.~\cite{brecht2018scms} described the SCMS architecture for V2X certificate management in the United States, noting that the system was designed around the compact size of ECDSA P-256 credentials. Lu et al.~\cite{lu2018survey_v2x_security} surveyed security and privacy for 5G V2X, emphasizing that any migration to new cryptographic primitives must satisfy the strict latency requirements of safety-critical applications. While these works thoroughly address the security architecture, they do not evaluate the radio resource impact of alternative cryptographic algorithms on the sidelink physical layer.
+
+\subsection{Post-Quantum Cryptography for Vehicular Systems}
+
+The application of PQC to vehicular systems has received growing attention following the NIST standardization process. Fernandez et al.~\cite{fernandez2023pqc_v2x} reviewed post-quantum approaches for securing vehicular blockchain systems, identifying Falcon as a promising candidate due to its compact signature size. Kumar et al.~\cite{kumar2024pqc_automotive} benchmarked PQC algorithms on automotive-grade embedded platforms, demonstrating that Falcon-512 signing completes in approximately 0.21~ms and verification in 0.05~ms on ARM processors, while Dilithium-2 exhibits comparable verification times but larger signatures. Hasan et al.~\cite{hasan2022pqc_v2v} proposed a practical post-quantum authentication framework for V2V, evaluating Falcon and Dilithium in terms of computational cost but without modeling their impact on the radio access layer. Shen et al.~\cite{shen2025pqc_analysis} analyzed PQC signature performance for intelligent transportation systems, providing an implementation-focused review that highlighted the tension between PQC key sizes and the bandwidth limitations of vehicular communication channels. A recent SAE technical paper~\cite{sae2026pqc_twowheeler} evaluated PQC feasibility on embedded systems for two-wheeler security, confirming that computational overhead is manageable on modern hardware but leaving radio resource impact unexamined.
+
+\subsection{Research Gap}
+
+While existing literature has separately addressed C-V2X Mode~4 sidelink performance, V2X security frameworks, and PQC algorithm benchmarking, no prior study has jointly evaluated these aspects within a single, standards-compliant simulation. Specifically, the impact of PQC signature and key sizes on sidelink radio resource allocation, packet delivery, and latency under realistic SAE~J3161 deployment parameters has not been quantified. This study addresses this gap by implementing PQC algorithms within a full-stack C-V2X Mode~4 simulator and evaluating their end-to-end impact on sidelink KPIs across varying traffic densities.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Methodology}
+\label{sec:method}
+
+This section describes the simulation framework, the traffic scenarios, the IEEE~1609.2-compliant packet structure, and the KPIs used for evaluation.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Simulation Framework}
+\label{sec:sim_framework}
+
+The simulation environment is built upon the openCV2X implementation of SimuLTE~\cite{virdis2014simulte}, an open-source C-V2X simulator developed for the OMNeT++ discrete-event simulation platform~\cite{varga2019omnetpp}. SimuLTE models the full LTE protocol stack, including the physical layer, MAC layer with Mode~4 SPS resource allocation, RLC, and PDCP layers. The simulator is coupled with Veins~\cite{sommer2019veins} for vehicular networking abstractions and with SUMO (Simulation of Urban MObility)~\cite{lopez2018sumo} for realistic microscopic traffic simulation.
+
+The sidelink physical layer is configured with a carrier frequency of 5915~MHz in the 5.9~GHz ITS band. The channel bandwidth is 10~MHz, providing 50 resource blocks per subframe in the uplink. A subchannel size of 10 resource blocks is used, yielding 10 subchannels per subframe. The MCS index ranges from 5 to 11, consistent with the SAE~J3161 deployment profile. Preconfigured transmission parameters are used, and CBR-based congestion control with channel occupancy ratio (CR) limiting is enabled. Each vehicle transmits at 23~dBm and reserves resources with an RRI of 100~ms. The resource keep probability is set to $p_\text{keep} = 0.8$, and the RSSI-based sensing threshold is 9~dB.
+
+The PQC algorithms are implemented using the liboqs library~\cite{stebila2020liboqs}, which provides reference implementations of NIST-standardized post-quantum algorithms. ECDSA P-256 is implemented using OpenSSL. The cryptographic algorithm is selected at runtime via an environment variable, allowing the same simulation binary to evaluate ECDSA, Falcon-512, and Dilithium-2 without recompilation. Each vehicle generates a fresh key pair at initialization and performs real-time signing and verification of every BSM, capturing actual computational overhead in the simulation timing.
+
+Table~\ref{tab:sim_params} summarizes the key simulation parameters.
+
+\begin{table}[!htbp]
+    \caption{Simulation Parameters}
+    \label{tab:sim_params}
+    \centering
+    \begin{tabular}{lc}
+    \toprule
+    \textbf{Parameter} & \textbf{Value} \\
+    \midrule
+    Carrier frequency          & 5915~MHz \\
+    Channel bandwidth          & 10~MHz \\
+    Number of resource blocks  & 50 per subframe \\
+    Subchannel size            & 10~RBs \\
+    Number of subchannels      & 10 \\
+    MCS range                  & 5--11 \\
+    Transmit power             & 23~dBm \\
+    Resource reservation interval (RRI) & 100~ms \\
+    Resource keep probability ($p_\text{keep}$) & 0.8 \\
+    RSSI sensing threshold     & 9~dB \\
+    BSM generation rate        & 10~Hz (100~ms) \\
+    Simulation duration        & 60~s \\
+    Congestion control         & CBR-based with CR limiting \\
+    HARQ retransmissions       & 0 \\
+    Cryptographic library (PQC)  & liboqs \\
+    Cryptographic library (ECDSA) & OpenSSL \\
+    Traffic simulator          & SUMO \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{IEEE 1609.2 Compliant Packet Structure}
+\label{sec:packet_structure}
+
+Each transmitted packet follows the IEEE~1609.2 Signed Personal Safety Message (SPDU) structure~\cite{ieee_16092}. The SPDU encapsulates a J2735 BSM Part~I (BSMcoreData), which contains vehicle position, speed, heading, and other kinematic data totaling 39~bytes per the J2735 standard~\cite{sae_j2735}.
+
+The IEEE~1609.2 \texttt{Ieee1609Dot2Data} wrapper adds a protocol version, content type, hash algorithm identifier, Provider Service Identifier (PSID), generation time, generation location, and encoding overhead, contributing approximately 28~bytes of fixed overhead. The \texttt{SignerIdentifier} field alternates between including the full explicit certificate and a compact \texttt{HashedId8} digest (8~bytes), following the certificate inclusion strategy specified in SAE~J2945/1~\cite{sae_j29451}. When the full certificate is included, it comprises a fixed overhead of approximately 105~bytes (version, type, issuer identifier, validity period, application permissions, and verification key indicator) plus the raw public key of the signing algorithm.
+
+The total SPDU size for each algorithm, when transmitting with a full certificate, is:
+\begin{equation}
+    S_\text{SPDU} = S_\text{hdr} + S_\text{BSM} + S_\text{sig} + S_\text{cert}
+    \label{eq:spdu_size}
+\end{equation}
+where $S_\text{hdr} = 28$~bytes is the IEEE~1609.2 header overhead, $S_\text{BSM} = 39$~bytes is the BSM payload, $S_\text{sig}$ is the digital signature size, and $S_\text{cert} = 105 + S_\text{pk}$ is the certificate size including the raw public key. Table~\ref{tab:spdu_sizes} presents the resulting SPDU sizes.
+
+\begin{table}[!htbp]
+    \caption{SPDU Sizes with Full Certificate}
+    \label{tab:spdu_sizes}
+    \centering
+    \begin{tabular}{lccc}
+    \toprule
+    \textbf{Algorithm} & \textbf{Sig (B)} & \textbf{Cert (B)} & \textbf{Total SPDU (B)} \\
+    \midrule
+    ECDSA P-256    & 64   & 170  & $\sim$301 \\
+    Falcon-512     & 666  & 1002 & $\sim$1735 \\
+    Dilithium-2    & 2420 & 1417 & $\sim$3904 \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Traffic Scenario}
+\label{sec:traffic_scenario}
+
+The traffic scenario models a four-leg signalized urban intersection generated using SUMO. Vehicles are injected on each approach at rates corresponding to different Levels of Service (LOS), enabling evaluation under varying congestion conditions. The vehicles follow the Krauss car-following model with default SUMO parameters. Multiple simulation runs are conducted for each combination of cryptographic algorithm and vehicle density to ensure statistical reliability.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Key Performance Indicators}
+\label{sec:kpis}
+
+The following KPIs are used to evaluate sidelink performance:
+
+\begin{itemize}
+    \item \textbf{Packet Delivery Ratio (PDR):} The ratio of successfully received BSMs to the total number of BSMs transmitted, computed across all vehicle pairs within communication range. PDR is the primary indicator of communication reliability.
+    \item \textbf{End-to-End Latency:} The time elapsed between BSM creation at the application layer of the sender and successful reception at the application layer of the receiver. This metric captures queuing, scheduling, and propagation delays.
+    \item \textbf{Channel Busy Ratio (CBR):} The fraction of subchannels measured as occupied within a 100~ms measurement window. CBR reflects the overall channel congestion and drives the congestion control mechanism defined in SAE~J3161.
+    \item \textbf{Subchannel Resource Utilization:} The number of subchannels required to accommodate the SPDU transport block for each algorithm at a given MCS. This metric directly quantifies the radio resource cost of PQC overhead.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation Outcomes}
+\label{sec:results}
+
+\hl{TODO: Results section.}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Resource Allocation Analysis}
+
+\hl{TODO: Resource allocation analysis showing subchannel requirements per algorithm.}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Performance Comparison}
+
+\hl{TODO: KPI comparison between ECDSA and Falcon-512 under varying LOS.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Discussion}
+\label{sec:discussion}
+
+\hl{TODO: Discussion section.}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+\label{sec:conclusion}
+
+%Conclusion will have three paragraphs
+
+%Paragraph-1: Give an overview
+
+%Paragraph-2: results and what is your opinions
+
+%Paragraph-3: Limitations and future study
+
+
+\section*{Acknowledgments}
+
+
+\section*{Authors Contribution}
+
+
+%%%%%%%%%%%% REFERENCES %%%%%%%%%%%%%%
+\bibliographystyle{IEEEtran}
+\bibliography{main}
+
+
+\newpage
+\vspace{-33pt}
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/mizan.png}}]{Mizanur Rahman} (Senior Member, IEEE) received the B.Sc. degree in civil engineering from Bangladesh University of Engineering and Technology, Dhaka, Bangladesh, in 2008, and the M.Sc. and Ph.D. degrees in civil engineering (transportation systems) from Clemson University, Clemson, SC, USA, in 2013 and 2018, respectively. He is an Assistant Professor in the Department of Civil, Construction, and Environmental Engineering at The University of Alabama, Tuscaloosa, AL, USA. His research focuses on transportation cyber--physical systems/transportation digital twin, and transportation cybersecurity.
+\end{IEEEbiography}
+
+\vfill
+
+\end{document}
+
