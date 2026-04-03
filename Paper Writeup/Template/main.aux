@@ -58,6 +58,8 @@
 \citation{ieee_16092}
 \citation{sae_j2735}
 \citation{sae_j29451}
+\citation{lopez2018sumo}
+\citation{hcm2010}
 \@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Simulation Parameters}}{4}{}\protected@file@percent }
 \newlabel{tab:sim_params}{{II}{4}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}IEEE 1609.2 Compliant Packet Structure}{4}{}\protected@file@percent }
@@ -67,15 +69,51 @@
 \newlabel{tab:spdu_sizes}{{III}{4}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Traffic Scenario}{4}{}\protected@file@percent }
 \newlabel{sec:traffic_scenario}{{\mbox  {IV-C}}{4}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Key Performance Indicators}{4}{}\protected@file@percent }
-\newlabel{sec:kpis}{{\mbox  {IV-D}}{4}}
-\@writefile{toc}{\contentsline {section}{\numberline {V}Evaluation Outcomes}{4}{}\protected@file@percent }
-\newlabel{sec:results}{{V}{4}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Resource Allocation Analysis}{4}{}\protected@file@percent }
+\newlabel{eq:flow_density}{{2}{4}}
+\newlabel{eq:vc_ratio}{{3}{4}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Traffic Density Scenarios}}{4}{}\protected@file@percent }
+\newlabel{tab:traffic_scenarios}{{IV}{4}}
+\citation{itur_m2135}
+\citation{itur_m2135}
+\citation{3gpp_36213}
+\citation{3gpp_36213}
+\citation{twardokus2025chasm}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Channel Propagation Model}{5}{}\protected@file@percent }
+\newlabel{sec:channel_model}{{\mbox  {IV-D}}{5}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}1}LOS Propagation Model}{5}{}\protected@file@percent }
+\newlabel{eq:pl_los}{{4}{5}}
+\newlabel{eq:breakpoint}{{5}{5}}
+\newlabel{eq:pl_free}{{6}{5}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}2}NLOS Propagation Model}{5}{}\protected@file@percent }
+\newlabel{eq:pl_nlos}{{7}{5}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}3}Small-Scale Fading}{5}{}\protected@file@percent }
+\newlabel{eq:nakagami}{{8}{5}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Sidelink Resource Allocation Feasibility}{5}{}\protected@file@percent }
+\newlabel{sec:resource_feasibility}{{\mbox  {IV-E}}{5}}
+\newlabel{eq:nprb}{{9}{5}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Minimum Subchannels Required per Algorithm and MCS}}{5}{}\protected@file@percent }
+\newlabel{tab:tbs_feasibility}{{V}{5}}
+\citation{3gpp_36321}
+\citation{sae_j29451}
+\citation{twardokus2025chasm}
+\citation{sae_j29451}
 \bibstyle{IEEEtran}
 \bibdata{main}
 \bibcite{molina2017lte}{1}
 \bibcite{sae_j3161}{2}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-E}1}Impact of Certificate Inclusion Strategy on SPS Grants}{6}{}\protected@file@percent }
+\newlabel{eq:grant_size}{{10}{6}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-F}}Key Performance Indicators}{6}{}\protected@file@percent }
+\newlabel{sec:kpis}{{\mbox  {IV-F}}{6}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Evaluation Outcomes}{6}{}\protected@file@percent }
+\newlabel{sec:results}{{V}{6}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Resource Allocation Analysis}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Performance Comparison}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Discussion}{6}{}\protected@file@percent }
+\newlabel{sec:discussion}{{VI}{6}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Conclusion}{6}{}\protected@file@percent }
+\newlabel{sec:conclusion}{{VII}{6}}
+\@writefile{toc}{\contentsline {section}{References}{6}{}\protected@file@percent }
 \bibcite{ieee_16092}{3}
 \bibcite{brecht2018scms}{4}
 \bibcite{shor1994algorithms}{5}
@@ -103,12 +141,9 @@
 \bibcite{stebila2020liboqs}{27}
 \bibcite{sae_j2735}{28}
 \bibcite{sae_j29451}{29}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Performance Comparison}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VI}Discussion}{5}{}\protected@file@percent }
-\newlabel{sec:discussion}{{VI}{5}}
-\@writefile{toc}{\contentsline {section}{\numberline {VII}Conclusion}{5}{}\protected@file@percent }
-\newlabel{sec:conclusion}{{VII}{5}}
-\@writefile{toc}{\contentsline {section}{References}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{Biographies}{6}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{Mizanur Rahman}{6}{}\protected@file@percent }
-\gdef \@abspage@last{6}
+\bibcite{hcm2010}{30}
+\bibcite{itur_m2135}{31}
+\bibcite{twardokus2025chasm}{32}
+\@writefile{toc}{\contentsline {section}{Biographies}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{Mizanur Rahman}{8}{}\protected@file@percent }
+\gdef \@abspage@last{8}
