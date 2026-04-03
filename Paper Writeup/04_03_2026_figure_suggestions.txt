@@ -1,0 +1,204 @@
+===========================================================================
+  SUGGESTED FIGURES, DIAGRAMS, AND FLOWCHARTS FOR THE PAPER
+===========================================================================
+
+Note: IEEE journal papers typically contain 8-15 figures. Below are
+suggestions organized by paper section, with format recommendations.
+
+
+===========================================================================
+SECTION: BACKGROUND / SYSTEM OVERVIEW
+===========================================================================
+
+1. SYSTEM ARCHITECTURE DIAGRAM (Block Diagram)
+   - Show the full simulation stack: SUMO <-> Veins <-> openCV2X/OMNeT++
+   - Layers: Application (Mode4App + PQC signing) -> PDCP -> RLC -> MAC
+     (Mode 4 SPS) -> PHY (channel model)
+   - Show the liboqs/OpenSSL integration at the application layer
+   - This is the MOST IMPORTANT figure — reviewers expect it
+   - Tool: draw.io, Inkscape, or TikZ
+
+2. IEEE 1609.2 SPDU STRUCTURE (Stacked Bar / Packet Diagram)
+   - Horizontal stacked bar showing byte-level breakdown:
+     [Header 28B | BSM 39B | Signature | Certificate/Digest]
+   - Three rows: ECDSA, Falcon-512, Dilithium-2
+   - Visually shows the size disparity at a glance
+   - Color-code: header=gray, BSM=blue, signature=orange, cert=red
+   - Tool: TikZ or PowerPoint
+
+3. C-V2X MODE 4 SPS FLOWCHART (Flowchart)
+   - Sensing window -> Candidate resource identification -> RSRP
+     exclusion -> Random selection -> Resource reservation ->
+     Reselection counter -> Keep/reselect decision
+   - Helps readers unfamiliar with Mode 4 understand the MAC process
+   - Tool: draw.io or TikZ
+
+
+===========================================================================
+SECTION: METHODOLOGY
+===========================================================================
+
+4. INTERSECTION SCENARIO LAYOUT (Screenshot + Annotation)
+   - SUMO GUI screenshot of the 4-leg intersection with vehicles
+   - Annotate: approach labels (N/S/E/W), lane configuration, signal
+   - Alternatively: a clean diagram showing the intersection geometry
+     with approach lengths, lane markings, and communication range circle
+   - Show three density variants side-by-side (10, 50, 100 veh/km)
+   - Tool: SUMO-GUI screenshot + annotation in Inkscape
+
+5. CHANNEL MODEL PATH LOSS CURVES (Line Plot)
+   - X-axis: distance (10-1000 m, log scale)
+   - Y-axis: path loss (dB)
+   - Two curves: LOS (Analytical) and NLOS (Urban Microcell)
+   - Mark the breakpoint distance
+   - Mark the typical V2X safety range (300 m)
+   - Tool: matplotlib or MATLAB
+
+6. TBS vs. SPDU SIZE FEASIBILITY CHART (Bar Chart or Heatmap)
+   - Bar chart: X-axis = MCS index (5,7,9,11), grouped bars for
+     max TBS at 10 subchannels
+   - Horizontal lines showing SPDU sizes for each algorithm
+   - Clearly shows Dilithium-2 exceeding all TBS limits
+   - Alternative: heatmap with MCS on Y-axis, num subchannels on
+     X-axis, color = fits/doesn't fit for each algorithm
+   - Tool: matplotlib or pgfplots
+
+7. SUBCHANNEL ALLOCATION VISUALIZATION (Resource Grid)
+   - Time-frequency grid showing one subframe
+   - X-axis: subchannels (1-10), Y-axis: subframe structure
+   - Show PSCCH (2 RBs) + PSSCH allocation for:
+     a) ECDSA (2 subchannels at MCS 11)
+     b) Falcon-512 digest (4 subchannels)
+     c) Falcon-512 cert (8 subchannels)
+   - Visually demonstrates the resource consumption difference
+   - Tool: TikZ (best) or PowerPoint
+
+
+===========================================================================
+SECTION: RESULTS
+===========================================================================
+
+8. PDR vs. DISTANCE (Line Plot) — PRIMARY RESULT FIGURE
+   - X-axis: TX-RX distance (0-500 m)
+   - Y-axis: PDR (0-1)
+   - Multiple curves: ECDSA, Falcon-512 (one per density)
+   - Mark 90% PDR threshold line (safety requirement)
+   - Separate subplot or figure for LOS vs NLOS
+   - Tool: matplotlib or pgfplots
+
+9. PDR vs. VEHICLE DENSITY (Line or Bar Plot)
+   - X-axis: density scenarios (10, 50, 100 veh/km)
+   - Y-axis: average PDR
+   - Grouped bars or lines: ECDSA vs Falcon-512
+   - Show LOS and NLOS as separate groups or subplots
+   - Tool: matplotlib or pgfplots
+
+10. END-TO-END LATENCY CDF (CDF Plot)
+    - X-axis: latency (ms), log scale if needed
+    - Y-axis: CDF (0-1)
+    - Curves for ECDSA and Falcon-512 at each density
+    - Mark 100 ms deadline (SAE J2945/1 requirement)
+    - Tool: matplotlib or pgfplots
+
+11. LATENCY BREAKDOWN (Stacked Bar Chart)
+    - For each algorithm: stacked bars showing
+      [Signing time | Queuing delay | TX time | Propagation | Verification]
+    - Shows WHERE the latency increase comes from with PQC
+    - Tool: matplotlib or pgfplots
+
+12. CBR TIME SERIES (Line Plot)
+    - X-axis: simulation time (0-60 s)
+    - Y-axis: CBR (0-1)
+    - Curves for ECDSA and Falcon-512 at high density
+    - Mark CBR thresholds that trigger congestion control
+    - Shows how Falcon-512 drives up channel occupancy
+    - Tool: matplotlib or pgfplots
+
+13. CBR vs. VEHICLE DENSITY (Bar or Line Plot)
+    - X-axis: density scenarios
+    - Y-axis: mean CBR
+    - ECDSA vs Falcon-512 comparison
+    - Tool: matplotlib or pgfplots
+
+14. SUBCHANNEL UTILIZATION DISTRIBUTION (Histogram or Box Plot)
+    - Distribution of subchannels used per transmission
+    - Side-by-side: ECDSA (mostly 1-2 SC) vs Falcon-512 (4-8 SC)
+    - Box plot variant: median, quartiles, outliers
+    - Tool: matplotlib or pgfplots
+
+15. SIGNING AND VERIFICATION TIME (Box Plot or Bar Chart)
+    - Algorithms on X-axis
+    - Time (microseconds) on Y-axis
+    - Box plots showing distribution from simulation measurements
+    - Include both signing and verification as grouped bars
+    - Tool: matplotlib or pgfplots
+
+
+===========================================================================
+SECTION: DISCUSSION
+===========================================================================
+
+16. RADAR/SPIDER CHART — MULTI-DIMENSIONAL COMPARISON
+    - Axes: PDR, Latency (inverse), CBR (inverse), Resource
+      efficiency, Quantum resistance, Signature size (inverse)
+    - Overlaid polygons for ECDSA and Falcon-512
+    - Quickly shows trade-offs between classical and PQC
+    - Tool: matplotlib (radar chart) or pgfplots
+
+17. OPERATING REGION DIAGRAM (2D Region Plot)
+    - X-axis: vehicle density
+    - Y-axis: MCS index
+    - Shaded regions showing where each algorithm is:
+      Green = feasible with good KPIs
+      Yellow = feasible but degraded
+      Red = infeasible (exceeds TBS)
+    - Shows the "operating envelope" for PQC on sidelink
+    - Tool: matplotlib contour/region plot
+
+
+===========================================================================
+PRIORITY RANKING (Must-Have vs Nice-to-Have)
+===========================================================================
+
+MUST-HAVE (expect these in any IEEE journal submission):
+  #1  System Architecture Diagram (Fig. 1)
+  #2  SPDU Packet Structure (Fig. 2)
+  #4  Intersection Layout (Fig. 3)
+  #8  PDR vs Distance (Fig. 4-5, LOS/NLOS)
+  #10 Latency CDF (Fig. 6)
+  #12 or #13 CBR comparison (Fig. 7)
+
+STRONGLY RECOMMENDED:
+  #6  TBS Feasibility Chart
+  #7  Subchannel Resource Grid
+  #9  PDR vs Density
+  #15 Signing/Verification Time
+
+NICE-TO-HAVE (if page budget allows):
+  #3  SPS Flowchart
+  #5  Path Loss Curves
+  #11 Latency Breakdown
+  #14 Subchannel Utilization Distribution
+  #16 Radar Chart
+  #17 Operating Region Diagram
+
+
+===========================================================================
+TOOLS RECOMMENDATION
+===========================================================================
+
+- draw.io (diagrams.net): Best for block diagrams, flowcharts (#1, #3)
+- TikZ/pgfplots (LaTeX native): Best for publication-quality plots,
+  packet diagrams, resource grids (#2, #5, #6, #7, #8-#15)
+- matplotlib (Python): Best for data-driven plots from simulation
+  results (#8-#15). Export as PDF for vector quality.
+- SUMO-GUI: Screenshot for intersection layout (#4), annotate in
+  Inkscape
+- Inkscape: Post-processing and annotation of any figure
+
+Tip: Use a consistent color scheme across ALL figures:
+  - ECDSA: blue
+  - Falcon-512: orange/red
+  - Dilithium-2: gray (shown as infeasible reference only)
+  - LOS: solid lines
+  - NLOS: dashed lines

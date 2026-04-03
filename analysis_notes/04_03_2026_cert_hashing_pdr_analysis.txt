@@ -1,0 +1,204 @@
+===========================================================================
+  WHY CERTIFICATE HASHING vs. NO HASHING SHOWS SIMILAR PDR
+===========================================================================
+
+YOUR OBSERVATION:
+  For both ECDSA and Falcon-512, across all scenarios, PDR is nearly
+  identical whether using certificate hashing (HashedId8 digest) or
+  full certificate inclusion in every packet.
+
+YOUR HYPOTHESIS:
+  Certificate hashing should reduce SPDU size, requiring fewer
+  subchannels, causing less channel congestion, and therefore
+  yielding better PDR.
+
+The hypothesis is logically sound, but there are several reasons why
+the PDR difference is negligible in practice.
+
+
+===========================================================================
+REASON 1: RESOURCE ALLOCATION IS DECIDED AT GRANT TIME, NOT PER-PACKET
+===========================================================================
+
+This is likely the PRIMARY reason.
+
+In Mode 4 SPS, the subchannel allocation (number of subchannels and
+MCS) is determined when the grant is created — at resource selection
+time — and remains FIXED for the entire duration of the grant (until
+the reselection counter expires).
+
+Looking at the code (LteMacVUeMode4.cc, lines 935-950):
+
+  mode4Grant->setMcs(maxMCSPSSCH_);          // MCS fixed at grant
+  tbsVect = itbs2tbs(mod, ..., maxMCSPSSCH_ - i);
+  maximumCapacity_ = tbsVect[totalGrantedBlocks-1];
+
+The grant is sized for the MAXIMUM possible packet (maxMCSPSSCH_ with
+all allocated subchannels). Once the grant is created:
+
+  - Certificate packet (larger): fills most of the transport block
+  - Digest packet (smaller): fits easily, but the SAME number of
+    subchannels are still RESERVED and transmitted
+
+The SPS grant does not shrink the subchannel allocation for smaller
+packets. The radio resources are reserved regardless of actual payload
+size. So from the channel's perspective, both hashing and no-hashing
+transmissions occupy the SAME number of subchannels in every subframe.
+
+This means:
+  - Same number of subchannels occupied per TX -> same CBR
+  - Same CBR -> same congestion control behavior
+  - Same resource contention -> same collision probability
+  - Same collision probability -> same PDR
+
+VERIFICATION: Check your CBR statistics. If CBR is identical between
+hashing and no-hashing scenarios, this confirms the explanation.
+
+
+===========================================================================
+REASON 2: THE CERT/DIGEST ALTERNATION ALREADY LIMITS CERT FREQUENCY
+===========================================================================
+
+Even in the "no hashing" (full cert every time) case vs. the "hashing"
+(cert every Nth, digest otherwise) case, the SPDU size difference only
+exists for (N-1)/N fraction of packets.
+
+In IEEE 1609.2 with typical cert inclusion (every 5th or 10th BSM):
+  - Hashing mode:  1 cert packet + 9 digest packets per cycle
+  - No-hashing mode: 10 cert packets per cycle
+
+But as explained in Reason 1, the SPS grant is sized for the LARGEST
+packet in either mode. So the grant must accommodate the full-cert
+SPDU regardless.
+
+The only scenario where hashing could help is if the system
+dynamically adjusted the grant size per-packet — which Mode 4 SPS
+does NOT do.
+
+
+===========================================================================
+REASON 3: TRANSPORT BLOCK PADDING
+===========================================================================
+
+When a smaller packet (digest mode) is placed into a transport block
+sized for a larger packet (cert mode), the remaining space is padded.
+The padded transport block is still transmitted over the air using the
+same modulation, coding, and subchannel allocation.
+
+From the receiver's perspective:
+  - A padded TB and a full TB look identical on the channel
+  - Both occupy the same time-frequency resources
+  - Both cause the same interference to other vehicles
+  - Both have the same probability of being decoded (same SNR/SINR)
+
+So PDR is unaffected by whether the useful payload fills the TB or not.
+
+
+===========================================================================
+REASON 4: PDR IS DOMINATED BY HALF-DUPLEX AND COLLISION EFFECTS
+===========================================================================
+
+In C-V2X Mode 4, the dominant PDR loss mechanisms are:
+
+  1. Half-duplex: A vehicle cannot receive while transmitting. If two
+     vehicles transmit in the same subframe, neither can receive the
+     other's packet. This is independent of packet size.
+
+  2. Persistent collisions: Two vehicles selecting the same resource
+     (same subchannel + same subframe) will collide for the entire
+     duration of their SPS reservation. This is also independent of
+     packet size — it depends on the number of candidate resources
+     and the number of competing vehicles.
+
+  3. Hidden terminal: Vehicles outside sensing range select the same
+     resources. Again, independent of packet size.
+
+  4. Propagation loss: Signal attenuation below the receiver
+     sensitivity threshold. This depends on distance and channel
+     model, not packet size.
+
+None of these mechanisms are affected by whether the SPDU contains
+a full certificate or a digest.
+
+The ONLY mechanism where packet size matters is subchannel contention:
+larger packets occupy more subchannels, reducing the pool of available
+resources for other vehicles. But as explained in Reason 1, the SPS
+grant allocates the same subchannels regardless of cert/digest mode.
+
+
+===========================================================================
+WHEN WOULD YOU SEE A DIFFERENCE?
+===========================================================================
+
+You WOULD observe a PDR difference between cert and digest if:
+
+  1. Dynamic grant sizing: If the MAC layer re-evaluated the number
+     of subchannels needed for each individual packet (not just at
+     grant creation) and released unused subchannels. Mode 4 SPS
+     does NOT do this.
+
+  2. Non-SPS scheduling: In Mode 3 (eNB-scheduled) or a hypothetical
+     dynamic scheduling mode, each transmission could be individually
+     sized. Digest packets would get smaller grants, freeing resources.
+
+  3. Extremely high density with marginal TBS: If the system were
+     operating at the exact boundary where cert packets require N
+     subchannels but digest packets require N-1, AND congestion
+     control dynamically reduced the allowed subchannels, then
+     cert packets might be dropped while digest packets succeed.
+     This is a very narrow operating point.
+
+  4. Application-layer segmentation: If cert packets were fragmented
+     across multiple subframes (requiring multiple successful
+     deliveries), the compound delivery probability would be lower
+     than for single-subframe digest packets. But your implementation
+     does NOT fragment — it fits everything in one subframe.
+
+
+===========================================================================
+WHAT THIS MEANS FOR THE PAPER
+===========================================================================
+
+This is actually a POSITIVE finding. You can frame it as:
+
+  "The certificate inclusion strategy (full certificate vs. HashedId8
+   digest alternation) has negligible impact on sidelink PDR under
+   Mode 4 SPS scheduling. This is because the SPS grant is sized at
+   resource selection time for the maximum expected SPDU and remains
+   fixed throughout the reservation period, causing identical channel
+   occupancy regardless of the per-packet SignerIdentifier choice.
+   This finding simplifies the PQC migration analysis: the dominant
+   factor is the algorithm's MAXIMUM SPDU size (with full certificate),
+   which determines the SPS grant size, rather than the average SPDU
+   size across cert/digest alternation."
+
+In other words: for PQC feasibility on Mode 4, what matters is whether
+the LARGEST packet (full cert) fits in the TBS. If it fits, the digest
+packets get a free ride on the same oversized grant. If it doesn't fit,
+no amount of digest alternation helps because the grant must be sized
+for the cert packet.
+
+This also reinforces why Dilithium-2 is infeasible: even if you send
+digest-only (never include the full certificate), the digest SPDU
+(2,495 B) still exceeds the max TBS (2,481 B). And if you never
+include the certificate, receivers cannot verify the sender's identity
+for the first time — breaking the IEEE 1609.2 trust model entirely.
+
+
+===========================================================================
+SUGGESTED ANALYSIS TO CONFIRM
+===========================================================================
+
+To verify this explanation, check the following from your simulation
+results:
+
+  1. Compare CBR between cert-hashing and no-hashing runs
+     -> Expect: identical or near-identical CBR
+
+  2. Compare the number of subchannels allocated per grant
+     -> Expect: same subchannel count in both modes
+
+  3. Compare resource reselection frequency
+     -> Expect: identical (same grant duration)
+
+If all three match, the explanation is confirmed.

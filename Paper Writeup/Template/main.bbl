@@ -172,4 +172,19 @@ D.~Stebila and M.~Mosca, ``{Post-quantum key exchange for the Internet and the
 ------, ``{On-Board System Requirements for V2V Safety Communications},'' SAE
   International, Standard SAE J2945/1, 2020.
 
+\bibitem{hcm2010}
+{Transportation Research Board}, \emph{{Highway Capacity Manual}},
+  5th~ed.\hskip 1em plus 0.5em minus 0.4em\relax Washington, DC: Transportation
+  Research Board, 2010.
+
+\bibitem{itur_m2135}
+{ITU-R}, ``{Guidelines for Evaluation of Radio Interface Technologies for
+  IMT-Advanced},'' International Telecommunication Union, Report ITU-R
+  M.2135-1, 2009.
+
+\bibitem{twardokus2025chasm}
+G.~Twardokus and H.~Rahbari, ``{Quantum-Resistant Safety Message Authentication
+  for NextG C-V2X},'' \emph{IEEE Transactions on Intelligent Transportation
+  Systems}, 2025, early Access.
+
 \end{thebibliography}
