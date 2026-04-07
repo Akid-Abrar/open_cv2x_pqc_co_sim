@@ -29,13 +29,15 @@
 
 \author{%
 Akid Abrar,~\IEEEmembership{Student Member,~IEEE},
-Sagar Dasgupta,
-Abdullah Al Mamun,
+Sagar Dasgupta,~\IEEEmembership{Senior Member,~IEEE},
+Abdullah Al Mamun,~\IEEEmembership{Student Member,~IEEE},
 Mizanur Rahman,~\IEEEmembership{Senior Member,~IEEE},
-Ahmad Alsharif,
-and Mashrur Chowdhury
+Ahmad Alsharif,~\IEEEmembership{Senior Member,~IEEE},
+and Mashrur Chowdhury~\IEEEmembership{Senior Member,~IEEE}
 
-\thanks{Akid Abrar, Sagar Dasgupta,Ahmad Alsharif and Mizanur Rahman are with the Department of Civil, Construction \& Environmental Engineering, The University of Alabama, Smart Communities and Innovation Building (SCIB), 28 Kirkbride Lane, Tuscaloosa, AL 35487-0288 USA (emails: aabrar@crimson.ua.edu; sdasgupta@ua.edu; mizan.rahman@ua.edu; aalsharif1@ua.edu.).}%
+\thanks{Akid Abrar, Sagar Dasgupta, and Mizanur Rahman are with the Department of Civil, Construction \& Environmental Engineering, The University of Alabama, Smart Communities and Innovation Building (SCIB), 28 Kirkbride Lane, Tuscaloosa, AL 35487-0288 USA (emails: aabrar@crimson.ua.edu; sdasgupta@ua.edu; mizan.rahman@ua.edu).}
+\thanks{AAhmad Alsharif is with the Department of Computer Science
+, The University of Alabama, 3016 Cyber Hall, Box: 870290, Tuscaloosa, AL 35487-0288 USA (email: aalsharif1@ua.edu.).}%
 \thanks{Abdullah Al Mamun and Mashrur Chowdhury are with the Glenn Department of Civil Engineering, Clemson University, Clemson, SC 29634 USA. (emails: abdullm@clemson.edu; mac@clemson.edu).}%
 \thanks{Copyright (c) 20xx IEEE. Personal use of this material is permitted. However, permission to use this material for any other purposes must be obtained from the IEEE by sending a request to pubs-permissions@ieee.org.}
 }
@@ -227,7 +229,9 @@ where $S_\text{hdr} = 28$~bytes is the IEEE~1609.2 header overhead, $S_\text{BSM
 \subsection{Traffic Scenario}
 \label{sec:traffic_scenario}
 
-The traffic scenario models a four-leg signalized urban intersection with two through lanes per approach, generated using SUMO~\cite{lopez2018sumo}. Vehicles follow the Krauss car-following model with an acceleration of 2.6~m/s\textsuperscript{2}, deceleration of 4.5~m/s\textsuperscript{2}, vehicle length of 5~m, and a free-flow speed of $v_f = 20.12$~m/s (72.4~km/h). Traffic is distributed with an 80/10/10 split among through, left-turn, and right-turn movements on each approach.
+The traffic scenario models a four-leg signalized urban intersection with two through lanes per approach, generated using SUMO~\cite{lopez2018sumo}. The four-leg signalized intersection is selected as the evaluation geometry for several reasons. First, it is the most common intersection configuration where two roads cross in the U.S. urban road network~\cite{fhwa_sig_guide}, representing the standard deployment environment for C-V2X V2V safety applications~\cite{sae_j3161}. Second, a four-leg intersection produces 32 potential vehicle-vehicle conflict points---16 of which are crossing conflicts where vehicle paths intersect at near-right angles---compared to only 9~conflict points at a three-leg intersection~\cite{fhwa_sig_guide}. These crossing conflicts are the primary target of V2X safety applications such as Intersection Movement Assist (IMA), making the four-leg geometry the most safety-critical intersection type for evaluating authentication reliability. Third, vehicles arriving from all four approaches converge within mutual communication range simultaneously, producing the highest concentration of concurrent sidelink transmitters and thereby the most demanding test of Mode~4 resource allocation under PQC-induced payload overhead. Additionally, vehicles on perpendicular approaches experience NLOS propagation conditions due to corner building obstruction, enabling evaluation under both LOS and NLOS channels within a single scenario. The two-lane-per-approach cross-section represents a typical urban minor arterial, with approach capacity aligned to the HCM saturation flow rate of 1{,}800~pc/h/ln~\cite{hcm2010}.
+
+Vehicles follow the Krauss car-following model with an acceleration of 2.6~m/s\textsuperscript{2}, deceleration of 4.5~m/s\textsuperscript{2}, vehicle length of 5~m, and a free-flow speed of $v_f = 20.12$~m/s (72.4~km/h). Traffic is distributed with an 80/10/10 split among through, left-turn, and right-turn movements on each approach.
 
 The traffic density on each approach determines the number of simultaneous C-V2X transmitters within communication range, directly influencing sidelink channel load. The fundamental relationship between traffic flow rate~$q$ (veh/h), density~$k$ (veh/km), and space mean speed~$v$ (km/h) is given by:
 \begin{equation}
@@ -271,21 +275,24 @@ The radio propagation environment significantly affects sidelink reception perfo
 The LOS configuration uses the Analytical path loss model, which provides a dual-slope distance-dependent attenuation. The path loss $\text{PL}_\text{LOS}$ (in dB) is computed as:
 \begin{equation}
     \text{PL}_\text{LOS}(d) \!=\! \begin{cases}
-    22.7 \log_{10}(d) + 27 + 20\log_{10}(f_c), & d < d_\text{BP} \\[4pt]
-    40\log_{10}(d) + 7.56 - 17.3\log_{10}(h_\text{TX}) & \\
-    \quad - 17.3\log_{10}(h_\text{RX}) + 2.7\log_{10}(f_c), & d \geq d_\text{BP}
+    22 \log_{10}(d) + 28 + 20\log_{10}(f_c), & d < d_\text{BP} \\[4pt]
+    40\log_{10}(d) + 7.8 - 18\log_{10}(h_\text{TX}) & \\
+    \quad - 18\log_{10}(h_\text{RX}) + 2\log_{10}(f_c), & d \geq d_\text{BP}
     \end{cases}
     \label{eq:pl_los}
+    % Source: src/stack/phy/ChannelModel/LteRealisticChannelModel.cc:1769-1773
 \end{equation}
 where $d$ is the transmitter--receiver distance (m), $f_c$ is the carrier frequency (GHz), $h_\text{TX}$ and $h_\text{RX}$ are the effective antenna heights (m), and $d_\text{BP}$ is the breakpoint distance:
 \begin{equation}
     d_\text{BP} = \frac{4 \, h_\text{TX} \, h_\text{RX} \, f_c}{c}
     \label{eq:breakpoint}
+    % Source: src/stack/phy/ChannelModel/LteRealisticChannelModel.cc:1763
 \end{equation}
 with $c = 3 \times 10^8$~m/s. The path loss is lower-bounded by the free-space path loss:
 \begin{equation}
     \text{PL}_\text{free}(d) = 20\log_{10}(d) + 46.4 + 20\log_{10}\!\left(\frac{f_c}{5}\right)
     \label{eq:pl_free}
+    % Source: src/stack/phy/ChannelModel/LteRealisticChannelModel.cc:1775
 \end{equation}
 
 \subsubsection{NLOS Propagation Model}
@@ -294,6 +301,7 @@ The NLOS configuration uses the ITU Urban Microcell (UMi) model~\cite{itur_m2135
 \begin{equation}
     \text{PL}_\text{NLOS}(d) = 36.7\log_{10}(d) + 22.7 + 26\log_{10}(f_c)
     \label{eq:pl_nlos}
+    % Source: src/stack/phy/ChannelModel/LteRealisticChannelModel.cc:2341
 \end{equation}
 valid for $10\text{~m} < d < 5000\text{~m}$. This model produces substantially higher attenuation than the LOS model at the same distance, reflecting the signal degradation caused by urban obstructions at intersection environments where buildings obscure cross-street visibility.
 
@@ -303,6 +311,7 @@ Both channel configurations employ Nakagami-$m$ fading to model small-scale mult
 \begin{equation}
     f(P) = \frac{m^m \, P^{m-1}}{\Gamma(m) \, \Omega^m} \exp\!\left(-\frac{m \, P}{\Omega}\right)
     \label{eq:nakagami}
+    % Source: inet/src/inet/physicallayer/pathloss/NakagamiFading.cc:53
 \end{equation}
 where $\Gamma(\cdot)$ is the Gamma function. A shape parameter of $m = 1$ is used, which reduces to Rayleigh fading and models a rich scattering environment. Log-normal shadowing with spatial correlation is also enabled.
 
@@ -316,6 +325,7 @@ The C-V2X sidelink transport block size (TBS) determines the maximum payload tha
 \begin{equation}
     N_\text{PRB}^\text{PSSCH} = N_\text{sc} \cdot N_\text{RB}^\text{sc} - 2
     \label{eq:nprb}
+    % Source: src/stack/mac/layer/LteMacVUeMode4.cc:918-922
 \end{equation}
 where 2~PRBs are reserved for the PSCCH carrying the Sidelink Control Information (SCI). The MCS index determines the transport block size index $I_\text{TBS}$ and the modulation order $Q_m$ through the MCS-to-TBS mapping table~\cite{3gpp_36213}. The TBS in bits is then obtained by looking up $I_\text{TBS}$ and $N_\text{PRB}^\text{PSSCH}$ in the TBS table.
 
@@ -348,10 +358,10 @@ Falcon-512 occupies a narrow but viable operating region. Certificate-bearing SP
 \subsubsection{Impact of Certificate Inclusion Strategy on SPS Grants}
 
 An important consequence of Mode~4 SPS scheduling is that the certificate inclusion strategy---whether every SPDU carries a full certificate or alternates between certificates and \texttt{HashedId8} digests---has negligible impact on sidelink PDR. This is because the SPS grant is sized at resource selection time for the maximum expected SPDU and remains fixed for the entire reservation period~\cite{3gpp_36321}. The number of subchannels allocated at grant creation is determined by the transport block capacity needed to accommodate the largest packet (i.e., the certificate-bearing SPDU):
-\begin{equation}
-    N_\text{sc}^\text{grant} = \min\!\left\{n \in \{1,\dots,N_\text{sc}^\text{max}\} \;\middle|\; \text{TBS}(n, I_\text{TBS}) \geq 8 \cdot S_\text{SPDU}^\text{cert}\right\}
-    \label{eq:grant_size}
-\end{equation}
+% \begin{equation}
+%     N_\text{sc}^\text{grant} = \min\!\left\{n \in \{1,\dots,N_\text{sc}^\text{max}\} \;\middle|\; \text{TBS}(n, I_\text{TBS}) \geq 8 \cdot S_\text{SPDU}^\text{cert}\right\}
+%     \label{eq:grant_size}
+% \end{equation}
 
 Once the grant is established, all subsequent transmissions within the reservation period---whether carrying a full certificate or a compact digest---occupy the same $N_\text{sc}^\text{grant}$ subchannels. Digest-mode SPDUs are simply padded within the oversized transport block. From the channel's perspective, both certificate and digest transmissions produce identical resource occupancy, resulting in the same CBR, the same interference pattern, and consequently the same collision probability and PDR.
 
@@ -406,7 +416,7 @@ The following KPIs are used to evaluate the impact of PQC on sidelink performanc
 
 
 \section*{Acknowledgments}
-
+This work is based upon the work supported by the National Center for Transportation Cybersecurity and Resiliency (TraCR), headquartered at Clemson University, Clemson, South Carolina, USA. Any opinions, findings, conclusions, and recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of TraCR, and the U.S. government assumes no liability for the contents or use thereof.
 
 \section*{Authors Contribution}
 
@@ -416,9 +426,20 @@ The following KPIs are used to evaluate the impact of PQC on sidelink performanc
 \bibliography{main}
 
 
-\newpage
+% \newpage
 \vspace{-33pt}
-\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/mizan.png}}]{Mizanur Rahman} (Senior Member, IEEE) received the B.Sc. degree in civil engineering from Bangladesh University of Engineering and Technology, Dhaka, Bangladesh, in 2008, and the M.Sc. and Ph.D. degrees in civil engineering (transportation systems) from Clemson University, Clemson, SC, USA, in 2013 and 2018, respectively. He is an Assistant Professor in the Department of Civil, Construction, and Environmental Engineering at The University of Alabama, Tuscaloosa, AL, USA. His research focuses on transportation cyber--physical systems/transportation digital twin, and transportation cybersecurity.
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/Akid.jpg}}]{Akid Abrar} (Student Member, IEEE) received his bachelor’s degree in Computer Science and Engineering from Bangladesh University of Engineering and Technology (BUET), Dhaka, Bangladesh, in 2022. He is currently pursuing his Ph.D. in the Department of Civil, Construction, and Environmental Engineering at The University of Alabama (UA). His research focuses on the security of safety-critical Vehicle-to-Everything (V2X) communications leveraging post-quantum cryptography (PQC).
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/Mamun.jpg}}]{Abdullah Al Mamun} (Student Member, IEEE) received the M.S. and Ph.D. degrees in Environmental Engineering and Earth Sciences from Clemson University, Clemson, SC, USA, in 2020 and 2022, respectively.
+He is currently pursuing his second Ph.D. in Civil Engineering at Clemson University, Clemson, SC, USA, funded by the USDOT-supported National Center for Transportation Cybersecurity and Resiliency (TraCR), Greenville, SC, USA. His research interests include cybersecurity and resiliency of Intelligent Transportation Systems (ITS), post-quantum cryptography, homomorphic encryption, connected and autonomous vehicle technologies, and high-performance computing for ITS applications.
+
+\end{IEEEbiography}
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/Dr Chowdhury.jpg}}]{Mizanur Rahman} (Senior Member, IEEE) ) received the Ph.D. degree in civil engineering from the University of Virginia, in 1995. Currently, he is the Eugene Douglas Mays Chair of transportation with the Glenn Department of Civil Engineering, Clemson University. He also holds a joint appointment with the School of Computing (courtesy appointment). He is the Founding Director of the USDOT-sponsored National Center for Transportation Cybersecurity and Resiliency (TraCR) and the Center for Connected Multimodal Mobility (C2M2). He is also the Director of the Complex Systems, Analytics, and Visualization Institute (CSAVI) and the Co-Associate Director of the USDOT-sponsored Center for Regional and Rural Connected Communities (CR2C2). His current research interests include evolving realms of sensing, communications, computing, cybersecurity, and cyber-resiliency, all with the goal of establishing a secure and resilient IoT environment for smart cities and regions.
+
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/mizan.png}}]{Mashrur Chowdhury} (Senior Member, IEEE) received the B.Sc. degree in civil engineering from Bangladesh University of Engineering and Technology, Dhaka, Bangladesh, in 2008, and the M.Sc. and Ph.D. degrees in civil engineering (transportation systems) from Clemson University, Clemson, SC, USA, in 2013 and 2018, respectively. He is an Assistant Professor in the Department of Civil, Construction, and Environmental Engineering at The University of Alabama, Tuscaloosa, AL, USA. His research focuses on transportation cyber--physical systems/transportation digital twin, and transportation cybersecurity.
 \end{IEEEbiography}
 
 \vfill
