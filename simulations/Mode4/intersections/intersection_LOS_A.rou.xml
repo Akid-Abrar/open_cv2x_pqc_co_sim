@@ -21,42 +21,35 @@
     <route id="route_W_N" edges="W_to_C C_to_N"/>
     <route id="route_W_S" edges="W_to_C C_to_S"/>
 
-    <!--
-        Target density: 10 veh/km (total across both lanes per approach)
-        Speed: 20.12 m/s = 72.43 km/h
-        Flow per approach: 10 * 72.43 = 724 veh/h
-        Split: 80% straight (580), 10% left (72), 10% right (72)
-    -->
-
+    <!-- LOS A: Free-flow — 10 veh/km, 724 veh/h per approach -->
+    <!-- 80/10/10 split: through=579, left=72, right=72 veh/h -->
     <!-- North approach: 724 veh/h -->
     <flow id="flow_N_S" type="car" route="route_N_S"
-          begin="0" end="900" vehsPerHour="580" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="579" departLane="random" departPos="random_free"/>
     <flow id="flow_N_E" type="car" route="route_N_E"
-          begin="0" end="900" vehsPerHour="72" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="72" departLane="random" departPos="random_free"/>
     <flow id="flow_N_W" type="car" route="route_N_W"
-          begin="0" end="900" vehsPerHour="72" departLane="random" departPos="random_free"/>
-
+          begin="0" end="400" vehsPerHour="72" departLane="random" departPos="random_free"/>
     <!-- South approach: 724 veh/h -->
     <flow id="flow_S_N" type="car" route="route_S_N"
-          begin="0" end="900" vehsPerHour="580" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="579" departLane="random" departPos="random_free"/>
     <flow id="flow_S_W" type="car" route="route_S_W"
-          begin="0" end="900" vehsPerHour="72" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="72" departLane="random" departPos="random_free"/>
     <flow id="flow_S_E" type="car" route="route_S_E"
-          begin="0" end="900" vehsPerHour="72" departLane="random" departPos="random_free"/>
-
+          begin="0" end="400" vehsPerHour="72" departLane="random" departPos="random_free"/>
     <!-- East approach: 724 veh/h -->
     <flow id="flow_E_W" type="car" route="route_E_W"
-          begin="0" end="900" vehsPerHour="580" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="579" departLane="random" departPos="random_free"/>
     <flow id="flow_E_S" type="car" route="route_E_S"
-          begin="0" end="900" vehsPerHour="72" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="72" departLane="random" departPos="random_free"/>
     <flow id="flow_E_N" type="car" route="route_E_N"
-          begin="0" end="900" vehsPerHour="72" departLane="random" departPos="random_free"/>
-
+          begin="0" end="400" vehsPerHour="72" departLane="random" departPos="random_free"/>
     <!-- West approach: 724 veh/h -->
     <flow id="flow_W_E" type="car" route="route_W_E"
-          begin="0" end="900" vehsPerHour="580" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="579" departLane="random" departPos="random_free"/>
     <flow id="flow_W_N" type="car" route="route_W_N"
-          begin="0" end="900" vehsPerHour="72" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="72" departLane="random" departPos="random_free"/>
     <flow id="flow_W_S" type="car" route="route_W_S"
-          begin="0" end="900" vehsPerHour="72" departLane="random" departPos="random_free"/>
+          begin="0" end="400" vehsPerHour="72" departLane="random" departPos="random_free"/>
+
 </routes>

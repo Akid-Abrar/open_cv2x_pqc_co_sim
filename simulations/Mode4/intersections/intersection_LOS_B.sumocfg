@@ -1,0 +1,19 @@
+<configuration>
+    <input>
+        <net-file value="intersection.net.xml"/>
+        <route-files value="intersection_LOS_B.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="500"/>
+        <step-length value="0.1"/>
+    </time>
+    <report>
+        <xml-validation value="never"/>
+        <xml-validation.net value="never"/>
+        <no-step-log value="true"/>
+    </report>
+    <gui_only>
+        <start value="false"/>
+    </gui_only>
+</configuration>

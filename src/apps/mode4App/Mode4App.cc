@@ -129,6 +129,9 @@ void Mode4App::initialize(int stage)
         binder_->setMacNodeId(nodeId_, nodeId_);
     } else if (stage==inet::INITSTAGE_APPLICATION_LAYER) {
 
+        std::string algo = par("cryptoAlgo").stdstringValue();
+        pqcdsa::setAlgorithm(algo);
+
         keyPair = pqcdsa::generateKeyPair();
 
         std::string tag   = pqcdsa::algoTagFromKey(keyPair.pubHex);
