@@ -37,9 +37,13 @@ static Alg algFromName(const std::string& nameIn) {
     return Alg::DILITHIUM_2;
 }
 
+static std::string g_algoOverride;
+
 static Alg getDefaultAlg() {
+    if (!g_algoOverride.empty())
+        return algFromName(g_algoOverride);
     const char* env = std::getenv("PQCDSA_ALGO");
-    return env ? algFromName(env) : Alg::ECDSA_P256; //Change Here
+    return env ? algFromName(env) : Alg::ECDSA_P256;
 }
 
 static const char* algTag(Alg a) {
@@ -331,6 +335,10 @@ std::string prettyNameFromTag(const std::string& tag) {
 
 std::string prefixKeyWithCertAlgo(const std::string& rawHex, const std::string& certAlgoName) {
     return std::string("ALG:") + algTag(algFromName(certAlgoName)) + ":" + rawHex;
+}
+
+void setAlgorithm(const std::string& name) {
+    g_algoOverride = name;
 }
 
 } // namespace pqcdsa

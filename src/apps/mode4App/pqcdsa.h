@@ -29,5 +29,7 @@ std::string prettyNameFromTag(const std::string& tag);
 
 std::string prefixKeyWithCertAlgo(const std::string& rawHex, const std::string& certAlgoName);
 
+void setAlgorithm(const std::string& name);
+
 } // namespace pqcdsa
 #endif

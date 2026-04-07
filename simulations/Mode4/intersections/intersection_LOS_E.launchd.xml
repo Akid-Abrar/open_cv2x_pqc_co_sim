@@ -1,6 +1,6 @@
 <launch>
    <basedir path="/home/veins/src/simulte/simulations/Mode4/intersections"/>
     <copy file="intersection.net.xml"/>
-    <copy file="intersection_stress.rou.xml"/>
-    <copy file="intersection_stress.sumocfg" type="config"/>
+    <copy file="intersection_LOS_E.rou.xml"/>
+    <copy file="intersection_LOS_E.sumocfg" type="config"/>
 </launch>
