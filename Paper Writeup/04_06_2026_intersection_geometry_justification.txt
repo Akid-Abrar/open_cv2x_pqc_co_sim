@@ -1,0 +1,232 @@
+===========================================================================
+  JUSTIFICATION FOR FOUR-LEG, TWO-LANE INTERSECTION GEOMETRY
+===========================================================================
+
+This document provides arguments and references to justify the choice
+of a 4-leg signalized intersection with 2 through lanes per approach
+as the simulation scenario.
+
+
+===========================================================================
+1. REPRESENTATIVENESS OF FOUR-LEG SIGNALIZED INTERSECTIONS
+===========================================================================
+
+Four-leg intersections are the most common intersection geometry where
+two roads cross. According to the FHWA Signalized Intersections
+Informational Guide (FHWA-HRT-04-091):
+
+  "The most common intersection where two highways cross
+   has four legs." (Chapter 3)
+
+The United States has approximately 330,000 signalized intersections
+(ITE estimate, 2018). FHWA reports that roughly 10% of all ~3 million
+U.S. intersections are signalized, and signalized intersections account
+for approximately one-third of all intersection-related fatalities.
+
+The four-leg signalized intersection is the standard configuration for
+urban arterial crossings — the exact deployment environment targeted
+by C-V2X V2V safety applications per SAE J3161 and J2945/1.
+
+
+===========================================================================
+2. SAFETY RELEVANCE: CONFLICT POINT DENSITY
+===========================================================================
+
+A key reason to focus on four-leg intersections is their high conflict
+point density. Per FHWA-HRT-04-091 (Chapter 3, Section 3.2):
+
+  - Three-leg intersection: 9 conflict points
+    (3 diverging + 3 merging + 3 crossing)
+
+  - Four-leg intersection: 32 conflict points
+    (8 diverging + 8 merging + 16 crossing)
+
+The jump from 9 to 32 conflict points represents a 3.6x increase in
+potential vehicle-vehicle conflicts. The 16 crossing conflicts (where
+vehicle paths intersect at near-right-angles) are the most severe
+collision type and are the primary target of V2X safety applications
+such as Intersection Movement Assist (IMA) and Red Light Violation
+Warning (RLVW).
+
+This makes the four-leg intersection a worst-case-representative
+scenario for evaluating V2X safety message reliability: if PQC
+authentication can maintain adequate PDR and latency at a geometry
+with 32 conflict points, it will perform at least as well at simpler
+three-leg intersections.
+
+
+===========================================================================
+3. MAXIMUM CONCURRENT TRANSMITTERS AND CHANNEL STRESS
+===========================================================================
+
+A four-leg intersection creates a unique stress condition for C-V2X
+Mode 4 sidelink: vehicles from ALL FOUR approaches converge within
+mutual communication range simultaneously. This produces the highest
+density of concurrent sidelink transmitters in a localized area.
+
+Compare with other geometries:
+  - Highway: Vehicles are distributed linearly; at any point, only
+    vehicles within ±300m compete for resources.
+  - T-intersection (3-leg): Only 3 approaches contribute transmitters.
+  - Four-leg intersection: 4 approach flows + 4 departure flows +
+    turning movements all share the same sidelink resource pool within
+    the intersection's communication footprint.
+
+For a study evaluating whether PQC's larger packets can coexist with
+Mode 4 resource allocation, the four-leg intersection provides the
+most challenging (and therefore most informative) test case.
+
+
+===========================================================================
+4. TWO THROUGH LANES PER APPROACH — JUSTIFICATION
+===========================================================================
+
+Two through lanes per approach is the standard urban arterial cross-
+section for minor-to-major arterials (FHWA Functional Classification
+Guidelines, 2013). This choice is justified by:
+
+(a) REPRESENTATIVENESS: Two-lane arterials (one lane per direction,
+    or two lanes per direction at intersections including turn pocket)
+    are the most common urban arterial type. Wider cross-sections
+    (3+ through lanes) are typically limited to major arterials and
+    expressways in large metropolitan areas.
+
+(b) MODERATE COMPLEXITY: One-lane approaches would produce too few
+    vehicles to stress the sidelink (unrealistically easy). Three-lane
+    or four-lane approaches would primarily increase vehicle counts
+    without introducing new Mode 4 dynamics. Two lanes provide enough
+    vehicles to generate meaningful sidelink contention while remaining
+    representative of typical urban intersections.
+
+(c) HCM CAPACITY ALIGNMENT: The HCM saturation flow rate of
+    1,800 pc/h/ln is calibrated for standard urban intersection lanes.
+    With 2 through lanes + signal timing, the approach capacity of
+    approximately 1,800 veh/h (at g/C ≈ 0.5) aligns with realistic
+    peak-hour volumes for minor arterials. This allows the LOS A-F
+    range to be explored with realistic flow rates.
+
+
+===========================================================================
+5. PRECEDENT IN V2X SIMULATION LITERATURE
+===========================================================================
+
+The four-leg signalized intersection is the de facto standard scenario
+in C-V2X and DSRC simulation studies:
+
+  - Gonzalez-Martin et al. (2019) evaluated Mode 4 PDR using a
+    Manhattan grid of four-leg intersections.
+  - Toghi et al. (2019) used four-leg intersections for congestion
+    analysis in Mode 4 networks.
+  - McCarthy et al. (2020) — the openCV2X paper — evaluated Mode 4
+    performance at intersections.
+  - Twardokus & Rahbari (2025) — the CHASM paper on PQC for C-V2X —
+    also used intersection scenarios.
+
+Using the same intersection geometry ensures comparability with the
+existing literature and allows direct benchmarking against published
+Mode 4 PDR results.
+
+
+===========================================================================
+6. NLOS PROPAGATION RELEVANCE
+===========================================================================
+
+The four-leg intersection is uniquely suited for evaluating NLOS
+channel conditions because vehicles on perpendicular approaches are
+in mutual NLOS until they reach the intersection itself. Buildings
+at the four corners block cross-street sightlines, creating the
+exact propagation scenario modeled by the ITU-R M.2135-1 Urban
+Microcell NLOS model.
+
+This geometry naturally creates a mix of:
+  - LOS conditions: vehicles on the same approach leg
+  - NLOS conditions: vehicles on perpendicular approach legs
+  - Transitioning conditions: vehicles entering/exiting the
+    intersection box
+
+This mixed LOS/NLOS environment is more representative of real urban
+V2X deployment than a pure highway scenario (predominantly LOS) and
+allows evaluation of PQC performance under both propagation conditions
+within a single scenario.
+
+
+===========================================================================
+7. SUGGESTED TEXT FOR THE PAPER
+===========================================================================
+
+Below is suggested text that can be added to the Traffic Scenario
+subsection (Section IV-C):
+
+--- BEGIN SUGGESTED TEXT ---
+
+The four-leg signalized intersection is selected as the evaluation
+scenario for three reasons. First, it is the most common intersection
+geometry where two roads cross in the U.S. urban road network, and it
+represents the standard deployment environment for C-V2X V2V safety
+applications~\cite{sae_j3161}. Second, a four-leg intersection
+produces 32 potential vehicle-vehicle conflict points (16 of which are
+crossing conflicts), compared to only 9 at a three-leg intersection,
+making it the most safety-critical intersection type for V2X
+applications such as Intersection Movement Assist
+(IMA)~\cite{fhwa_sig_guide}. Third, the four-leg geometry creates a
+high concentration of concurrent sidelink transmitters from all four
+approaches within mutual communication range, providing the most
+demanding test of Mode~4 resource allocation under PQC-induced payload
+overhead. The two-lane-per-approach cross-section represents a typical
+urban minor arterial, with approach capacity aligned to the HCM
+saturation flow rate of 1{,}800~pc/h/ln~\cite{hcm2010}. Additionally,
+vehicles on perpendicular approaches experience NLOS propagation
+conditions due to corner building obstruction, enabling evaluation of
+PQC performance under both LOS and NLOS channel conditions within a
+single intersection scenario.
+
+--- END SUGGESTED TEXT ---
+
+NOTE: This text references \cite{fhwa_sig_guide} which would need a
+new bib entry:
+
+@techreport{fhwa_sig_guide,
+  author       = {{Federal Highway Administration}},
+  title        = {{Signalized Intersections: Informational Guide}},
+  institution  = {U.S. Department of Transportation, FHWA},
+  number       = {FHWA-HRT-04-091},
+  year         = {2004},
+  edition      = {1st},
+  type         = {Report}
+}
+
+Or the 2nd edition:
+
+@techreport{fhwa_sig_guide,
+  author       = {{Federal Highway Administration}},
+  title        = {{Signalized Intersections: Informational Guide}},
+  institution  = {U.S. Department of Transportation, FHWA},
+  number       = {FHWA-SA-13-027},
+  year         = {2013},
+  edition      = {2nd},
+  type         = {Report}
+}
+
+
+===========================================================================
+REFERENCES
+===========================================================================
+
+[1] FHWA-HRT-04-091. "Signalized Intersections: Informational Guide."
+    Chapter 3 — Intersection geometry, conflict points.
+    https://www.fhwa.dot.gov/publications/research/safety/04091/03.cfm
+
+[2] FHWA. "About Intersection Safety."
+    https://highways.dot.gov/safety/intersection-safety/about
+    (Stat: ~50% of fatal+injury crashes at/near intersections;
+     ~10% of US intersections signalized; signalized account for
+     ~1/3 of intersection fatalities.)
+
+[3] HCM 2010 (5th Edition). Highway Capacity Manual.
+    Transportation Research Board.
+
+[4] SAE J3161/1 (2024). On-Board System Requirements for
+    LTE-V2X V2V Safety Communications.
+
+[5] FHWA Functional Classification Guidelines (2013).
+    Urban arterial cross-section standards.
