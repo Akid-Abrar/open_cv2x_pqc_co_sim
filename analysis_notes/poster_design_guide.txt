@@ -1,0 +1,267 @@
+================================================================================
+  POSTER DESIGN GUIDE
+  Topic: PQC Impact on LTE-V2X Mode 4 Sidelink Performance
+  Date: 2026-03-24
+================================================================================
+
+
+1. RECOMMENDED SECTIONS AND LAYOUT
+================================================================================
+
+A research poster is read in 2-3 minutes. Every element must earn its space.
+
+Suggested sections (in reading order, left-to-right or column flow):
+
+  +------------------------------------------------------------------+
+  |                     TITLE + AUTHORS + LOGO                        |
+  +------------------------------------------------------------------+
+  |  INTRODUCTION    |   METHODOLOGY     |   KEY RESULTS (largest)    |
+  |  + OBJECTIVE     |                   |                            |
+  |                  |                   |                            |
+  +------------------+-------------------+----------------------------+
+  |  SYSTEM MODEL    |   RESULTS (cont.) |   CONCLUSIONS +            |
+  |  (diagram)       |                   |   FUTURE WORK              |
+  +------------------+-------------------+----------------------------+
+  |                     REFERENCES + QR CODE                          |
+  +------------------------------------------------------------------+
+
+Section breakdown:
+
+
+TITLE BAR (top, full width)
+─────────────────────────────
+  Title: "Impact of Post-Quantum Cryptographic Signatures on
+          LTE-V2X Sidelink Performance for Connected Vehicle Safety Messaging"
+
+  Or shorter: "Can Post-Quantum Signatures Survive the V2X Radio Channel?"
+
+  Authors, affiliation, department, university logo.
+
+  TIP: The title should be readable from 5 feet away. Use 72-96pt font.
+
+
+SECTION 1: INTRODUCTION + OBJECTIVE (left column, top)
+─────────────────────────────────────────────────────────
+  Keep this to 4-5 bullet points maximum. No paragraphs.
+
+  INTRODUCTION:
+    - Connected vehicles broadcast Basic Safety Messages (BSMs) 10 times
+      per second, digitally signed per IEEE 1609.2
+    - Current standard uses ECDSA P-256 (~305 byte signed packets)
+    - Quantum computers will break ECDSA — NIST has standardized
+      post-quantum replacements (Falcon-512, Dilithium-2)
+    - PQC signatures are 10-38x larger — can the V2X radio channel
+      handle them?
+
+  OBJECTIVE:
+    - Evaluate the feasibility of deploying PQC signature algorithms
+      in LTE-V2X (C-V2X) Mode 4 sidelink through standards-compliant
+      simulation
+    - Measure impact on: Packet Delivery Ratio (PDR), end-to-end latency,
+      channel congestion (CBR), and radio resource utilization
+
+  VISUAL: A simple "problem statement" graphic:
+    [ECDSA: 305 bytes] --quantum threat--> [Falcon: 1,733 bytes]
+    "5.7x larger — does the radio break?"
+
+
+SECTION 2: SYSTEM MODEL / METHODOLOGY (left or center column)
+──────────────────────────────────────────────────────────────────
+  THIS IS WHERE A DIAGRAM DOES THE HEAVY LIFTING.
+
+  Include ONE system architecture diagram showing:
+    - SUMO (vehicle mobility) <-> OMNeT++/SimuLTE (network simulation)
+    - Application layer: BSM generation -> IEEE 1609.2 SPDU signing
+    - MAC layer: LTE-V2X Mode 4 SPS resource allocation
+    - PHY layer: Sidelink transmission on 10 MHz channel
+
+  Below the diagram, a small parameter table:
+
+    Parameter                   Value
+    ─────────────────────────   ──────────────
+    Scenario                    4-way signalized intersection
+    Channel bandwidth           10 MHz (100 RBs)
+    Subchannels                 10 (10 RBs each)
+    BSM rate                    10 Hz (100ms)
+    MCS range                   5-11 (per SAE J3161)
+    Congestion control          CBR-based DCC (enabled)
+    Vehicle densities tested    800 - 2000 veh/h/approach
+    Algorithms                  ECDSA P-256, Falcon-512, Dilithium-2
+    Simulation time             300s per run
+    Standards                   IEEE 1609.2, SAE J3161, SAE J2735
+
+  TIP: This section should be ~20% of poster area. Don't over-explain
+  methodology — the results are what people stop to look at.
+
+
+SECTION 3: KEY RESULTS (center + right columns — LARGEST section)
+──────────────────────────────────────────────────────────────────────
+  This should occupy 40-50% of the poster. Use FIGURES, not text.
+
+  FIGURE 1: SPDU Size Comparison (stacked bar chart)
+    Three bars: ECDSA, Falcon-512, Dilithium-2
+    Segments: BSM payload (43B), SPDU overhead (28B), signature,
+              public key, certificate metadata
+    Annotate total sizes. Show Dilithium exceeds max TBS with a
+    red dashed line at 2,481 bytes (max transport block size).
+
+    KEY TAKEAWAY CALLOUT BOX:
+    "Dilithium-2 SPDUs (3,908 bytes) exceed the maximum transport
+     block size — physically impossible to transmit on LTE-V2X sidelink"
+
+  FIGURE 2: PDR vs Vehicle Density (THE key figure)
+    Line plot: X = vehicle density, Y = PDR (%)
+    Two lines: ECDSA (blue), Falcon-512 (orange)
+    Error bars: 95% confidence intervals
+    Horizontal dashed line at 90% PDR threshold
+    Show where the lines diverge.
+
+  FIGURE 3: CBR vs Vehicle Density (bar or line chart)
+    Shows Falcon's 2.5x higher channel load
+    Mark the 0.30 and 0.65 DCC threshold lines
+    This explains WHY PDR drops for Falcon at high density.
+
+  FIGURE 4 (pick ONE of these):
+    Option A: Latency CDF — shows both algorithms meet 100ms deadline
+    Option B: Sign/Verify time comparison bar chart
+    Option C: Resource utilization (subchannels per TX)
+
+  TIP: Every figure needs a 1-line takeaway printed next to it.
+  Reviewers should understand each figure in 5 seconds.
+
+
+SECTION 4: CONCLUSIONS + FUTURE WORK (right column, bottom)
+──────────────────────────────────────────────────────────────
+  3-4 bullet conclusions. No hedging — state findings directly:
+
+    1. Dilithium-2 is INFEASIBLE for LTE-V2X: its signed packets
+       exceed the physical transmission capacity of the sidelink.
+
+    2. Falcon-512 is FEASIBLE at low-to-moderate vehicle densities
+       but consumes 3.5x more radio resources per BSM, causing
+       [X]% PDR reduction at [Y] vehicle density compared to ECDSA.
+
+    3. Channel congestion (CBR) is the primary bottleneck: Falcon's
+       larger packets push CBR past DCC thresholds sooner, triggering
+       packet drops at lower vehicle densities than ECDSA.
+
+    4. Certificate caching (digest mode) reduces Falcon overhead by
+       57% (1,733B -> 745B) and is essential for practical deployment.
+
+  FUTURE WORK (2 bullets max):
+    - Implement hybrid ECDSA+PQC schemes (cf. CHASM) to evaluate
+      transition strategies
+    - Evaluate Falcon-512 under NR-V2X (5G sidelink) with wider
+      bandwidth
+
+
+SECTION 5: REFERENCES + CONTACT (bottom strip, full width)
+──────────────────────────────────────────────────────────────
+  4-5 key references only:
+    [1] IEEE Std 1609.2-2022
+    [2] SAE J3161/1 (JUL 2024)
+    [3] Twardokus & Rahbari, "CHASM," NDSS 2025
+    [4] NIST FIPS 204 (ML-DSA / Dilithium)
+    [5] NIST FIPS 206 (FN-DSA / Falcon)
+
+  Add a QR code linking to your code repo or preprint (if available).
+
+
+================================================================================
+2. DESIGN TIPS
+================================================================================
+
+LAYOUT:
+  - Use 3-column layout (most readable for large posters)
+  - Standard poster size: 48" x 36" (landscape) or 36" x 48" (portrait)
+  - Check your competition's required dimensions
+  - White space is your friend — don't fill every inch
+
+FONTS:
+  - Title: 72-96pt, bold, sans-serif (Arial, Helvetica, Calibri)
+  - Section headers: 36-44pt, bold
+  - Body text: 24-28pt
+  - Figure captions: 20-24pt
+  - Rule of thumb: readable from 4-5 feet away
+
+COLORS:
+  - Pick 2-3 colors maximum for data (e.g., blue=ECDSA, orange=Falcon,
+    red=Dilithium)
+  - Use the same colors consistently across ALL figures
+  - Dark text on light background (never reverse for body text)
+  - Use your university's brand colors for the header/border
+
+FIGURES:
+  - Generate at 300 DPI minimum (use dpi=300 in matplotlib savefig)
+  - Large axis labels (16pt+ in matplotlib before export)
+  - Remove chart junk: no gridlines on bar charts, minimal tick marks
+  - Every figure should have a 1-line bold takeaway above or below it
+
+TEXT:
+  - NEVER use paragraphs on a poster. Bullet points only.
+  - Total word count: 300-500 words (excluding figure labels)
+  - If you can't explain it in a bullet, it doesn't belong on the poster
+
+TOOLS:
+  - PowerPoint: Easiest, most flexible. Set slide size to poster dimensions.
+  - LaTeX (beamerposter): Professional look, steep learning curve.
+    Overleaf template: search "beamerposter" on Overleaf.
+  - Canva: Good for non-LaTeX users who want modern design.
+  - Figma: Best for precise layout control.
+
+  Recommendation: PowerPoint is fine for a poster competition. Don't
+  overthink the tool — spend time on the CONTENT and FIGURES.
+
+
+================================================================================
+3. WHAT JUDGES LOOK FOR
+================================================================================
+
+  1. CLARITY: Can I understand the problem and result in 60 seconds?
+  2. VISUAL IMPACT: Do the figures tell the story without reading text?
+  3. NOVELTY: Is this solving a real problem? (Yes — quantum threat to V2X)
+  4. RIGOR: Are there error bars? Multiple scenarios? Standards references?
+  5. PRESENTATION: Is the layout clean, professional, not cluttered?
+
+  Common mistakes to avoid:
+    - Too much text (wall of text = nobody reads it)
+    - Tiny fonts (if they squint, you lose them)
+    - Too many figures (4-5 max, each one must be essential)
+    - No clear takeaway (every section needs a "so what?")
+    - Missing units on axes
+
+
+================================================================================
+4. SUGGESTED FLOW FOR YOUR POSTER TALK (2-3 MINUTE PITCH)
+================================================================================
+
+When someone stops at your poster, use this flow:
+
+  [10s] "Connected vehicles sign safety messages using ECDSA. Quantum
+         computers will break that. We need post-quantum replacements."
+
+  [10s] "The problem: PQC signatures are 5-10x larger. Can the V2X
+         radio channel handle them?"
+
+  [15s] Point to SPDU size figure: "Dilithium-2 packets are too large
+         to even transmit — they exceed the physical limit. Falcon-512
+         fits, but uses 3.5x more radio resources."
+
+  [20s] Point to PDR vs Density figure: "At low density both work fine.
+         But as we add more vehicles, Falcon's larger packets cause
+         channel congestion and packet drops start earlier."
+
+  [15s] Point to CBR figure: "This is why — Falcon pushes channel
+         load 2.5x higher, triggering congestion control sooner."
+
+  [10s] "Conclusion: Falcon-512 is feasible but requires careful
+         congestion management. Dilithium-2 is not viable for V2X.
+         Certificate caching cuts Falcon's overhead by 57%."
+
+  [10s] "Questions?"
+
+Total: ~90 seconds. Leave time for questions.
+
+================================================================================
+END
+================================================================================
