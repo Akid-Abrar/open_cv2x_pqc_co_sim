@@ -20,6 +20,7 @@ import lte.apps.mode4App.Mode4BaseApp;
 simple Mode4App like Mode4BaseApp
 {
     parameters:
+        string cryptoAlgo = default("ecdsa"); // "ecdsa", "falcon-512", or "dilithium-2"
         int packetSize = default(10); // Size of the actual packet itself
         int priority = default(3); // Priority of the packets sent
         int duration = default(1000); // MS before packet must be dropped
