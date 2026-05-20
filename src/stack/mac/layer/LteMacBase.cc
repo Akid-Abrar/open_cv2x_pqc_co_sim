@@ -129,6 +129,18 @@ void LteMacBase::fromPhy(cPacket *pkt)
         }
         else
         {
+            // Check if sender still exists before creating RX buffer
+            cModule* senderMac = getMacByMacNodeId(src);
+            if (senderMac == nullptr) {
+                // Sender has left simulation, drop packet
+                EV << "LteMacBase::macPduUnmake - sender node " << src
+                   << " has left simulation at t=" << NOW
+                   << ", dropping received packet of " << pdu->getByteLength() << " bytes" << endl;
+                delete pdu;
+                return;  // Exit the function early
+            }
+
+            // Sender exists, safe to create RX buffer
             // FIXME: possible memory leak
             LteHarqBufferRx *hrb;
             if (userInfo->getDirection() == DL || userInfo->getDirection() == UL)

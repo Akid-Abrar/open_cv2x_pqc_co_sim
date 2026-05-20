@@ -18,7 +18,18 @@ LteHarqBufferRxD2D::LteHarqBufferRxD2D(unsigned int num, LteMacBase *owner, MacN
 {
     macOwner_ = owner;
     nodeId_ = nodeId;
-    macUe_ = check_and_cast<LteMacBase*>(getMacByMacNodeId(nodeId_));
+
+    // Check if node still exists before casting (may have despawned)
+    cModule* nodeModule = getMacByMacNodeId(nodeId_);
+    if (nodeModule == nullptr) {
+        // Node has left simulation - use nullptr, some features won't work but won't crash
+        macUe_ = nullptr;
+        EV_WARN << "LteHarqBufferRxD2D: node " << nodeId
+                << " has left simulation, creating buffer with null macUe_" << endl;
+    } else {
+        macUe_ = check_and_cast<LteMacBase*>(nodeModule);
+    }
+
     numHarqProcesses_ = num;
     processes_.resize(numHarqProcesses_);
     totalRcvdBytes_ = 0;
@@ -43,7 +54,11 @@ LteHarqBufferRxD2D::LteHarqBufferRxD2D(unsigned int num, LteMacBase *owner, MacN
     {
         nodeB_ = macOwner_;
         macDelay_ = macOwner_->registerSignal("macDelayUl");
-        macThroughput_ = getMacByMacNodeId(nodeId_)->registerSignal("macThroughputUl");
+        if (macUe_ != nullptr) {
+            macThroughput_ = macUe_->registerSignal("macThroughputUl");
+        } else {
+            macThroughput_ = -1;  // Invalid signal ID
+        }
         macCellThroughput_ = macOwner_->registerSignal("macCellThroughputUl");
     }
     else if (macOwner_->getNodeType() == UE)
@@ -136,7 +151,8 @@ std::list<LteMacPdu *> LteHarqBufferRxD2D::extractCorrectPdus()
                 }
                 else
                 {
-                    macUe_->emit(macDelay_, (NOW - temp->getCreationTime()).dbl());
+                    if (macUe_ != nullptr)
+                        macUe_->emit(macDelay_, (NOW - temp->getCreationTime()).dbl());
                 }
 
                 // Calculate Throughput by sending the number of bits for this packet
@@ -164,7 +180,8 @@ std::list<LteMacPdu *> LteHarqBufferRxD2D::extractCorrectPdus()
                     }
                     else  // UL
                     {
-                        macUe_->emit(macThroughput_, tputSample);
+                        if (macUe_ != nullptr)
+                            macUe_->emit(macThroughput_, tputSample);
                     }
                 }
 

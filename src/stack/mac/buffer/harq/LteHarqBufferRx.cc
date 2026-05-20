@@ -21,7 +21,18 @@ LteHarqBufferRx::LteHarqBufferRx(unsigned int num, LteMacBase *owner,
 {
     macOwner_ = owner;
     nodeId_ = nodeId;
-    macUe_ = check_and_cast<LteMacBase*>(getMacByMacNodeId(nodeId_));
+
+    // Check if node still exists before casting (may have despawned)
+    cModule* nodeModule = getMacByMacNodeId(nodeId_);
+    if (nodeModule == nullptr) {
+        // Node has left simulation - use nullptr, some features won't work but won't crash
+        macUe_ = nullptr;
+        EV_WARN << "LteHarqBufferRx: node " << nodeId
+                << " has left simulation, creating buffer with null macUe_" << endl;
+    } else {
+        macUe_ = check_and_cast<LteMacBase*>(nodeModule);
+    }
+
     numHarqProcesses_ = num;
     processes_.resize(numHarqProcesses_);
     totalRcvdBytes_ = 0;
@@ -36,8 +47,13 @@ LteHarqBufferRx::LteHarqBufferRx(unsigned int num, LteMacBase *owner,
     if (macOwner_->getNodeType() == ENODEB)
     {
         nodeB_ = macOwner_;
-        macDelay_ = macUe_->registerSignal("macDelayUl");
-        macThroughput_ = getMacByMacNodeId(nodeId_)->registerSignal("macThroughputUl");
+        if (macUe_ != nullptr) {
+            macDelay_ = macUe_->registerSignal("macDelayUl");
+            macThroughput_ = macUe_->registerSignal("macThroughputUl");
+        } else {
+            macDelay_ = -1;  // Invalid signal ID, won't be used
+            macThroughput_ = -1;
+        }
         macCellThroughput_ = macOwner_->registerSignal("macCellThroughputUl");
     }
     else if (macOwner_->getNodeType() == UE)
@@ -132,7 +148,8 @@ std::list<LteMacPdu *> LteHarqBufferRx::extractCorrectPdus()
                 unsigned int size = temp->getByteLength();
 
                 // emit delay statistic
-                macUe_->emit(macDelay_, (NOW - temp->getCreationTime()).dbl());
+                if (macUe_ != nullptr)
+                    macUe_->emit(macDelay_, (NOW - temp->getCreationTime()).dbl());
 
                 // Calculate Throughput by sending the number of bits for this packet
                 totalCellRcvdBytes_ += size;
@@ -148,7 +165,8 @@ std::list<LteMacPdu *> LteHarqBufferRx::extractCorrectPdus()
                 }
                 else  // UL
                 {
-                    macUe_->emit(macThroughput_, tputSample);
+                    if (macUe_ != nullptr)
+                        macUe_->emit(macThroughput_, tputSample);
                 }
 
                 macOwner_->dropObj(temp);

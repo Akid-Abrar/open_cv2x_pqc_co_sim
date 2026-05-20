@@ -1,0 +1,231 @@
+================================================================================
+                    TRAFFIC SCENARIOS (SERVICE LEVELS A-F)
+                         SUMO Configuration Reference
+================================================================================
+
+This document explains the traffic density configurations for simulation
+scenarios A through F used in the PQC on C-V2X Mode 4 study.
+
+--------------------------------------------------------------------------------
+                              SCENARIO SUMMARY
+--------------------------------------------------------------------------------
+
++--------+----------+-------------+-------------+---------------------------+
+| Level  | Density  | Flow Rate   | Avg Speed   | Description               |
+|        | (veh/km) | (veh/h per  | (km/h)      |                           |
+|        |          |  approach)  |             |                           |
++--------+----------+-------------+-------------+---------------------------+
+|   A    |    10    |     724     |    72.4     | Free-flow                 |
+|   B    |    20    |    1,448    |    72.4     | Reasonably free flow      |
+|   C    |    30    |    2,172    |    72.4     | Stable flow               |
+|   D    |    40    |    2,896    |    72.4     | Approaching unstable      |
+|   E    |    50    |    3,620    |    72.4     | At capacity               |
+|   F    |   100    |    7,240    |    72.4     | Oversaturated/breakdown   |
++--------+----------+-------------+-------------+---------------------------+
+
+--------------------------------------------------------------------------------
+                        VALUES DEFINED vs CALCULATED
+--------------------------------------------------------------------------------
+
+DEFINED IN SUMO FILES (intersection_LOS_X.rou.xml):
+
+  ✓ Density (veh/km) - Explicitly stated in file comments
+  ✓ Flow Rate per approach (veh/h) - Explicitly stated in file comments
+  ✓ Maximum Speed (km/h) - Defined as maxSpeed="20.12" m/s (= 72.4 km/h)
+  ✓ Individual flow splits - Calculated from 80/10/10 ratio:
+      - Through movement: 80% of total flow
+      - Left turn:        10% of total flow
+      - Right turn:       10% of total flow
+
+CALCULATED (derived from defined values):
+
+  • None - All primary parameters are explicitly defined in SUMO configuration
+
+
+RELATIONSHIP:
+
+  Flow Rate (veh/h) = Density (veh/km) × Average Speed (km/h)
+
+  Verification example (Scenario C):
+    2,172 veh/h = 30 veh/km × 72.4 km/h ✓
+
+--------------------------------------------------------------------------------
+                           DETAILED BREAKDOWN
+--------------------------------------------------------------------------------
+
+SERVICE LEVEL A (Low Density)
+------------------------------
+  File:            intersection_LOS_A.rou.xml
+  Density:         10 veh/km (DEFINED)
+  Flow Rate:       724 veh/h per approach (DEFINED)
+  Speed:           72.4 km/h (DEFINED as maxSpeed 20.12 m/s)
+
+  Flow Split (80/10/10):
+    - Through:     579 veh/h
+    - Left turn:   72 veh/h
+    - Right turn:  72 veh/h
+
+  Traffic Condition: Free-flow, minimal congestion
+
+
+SERVICE LEVEL B (Moderate-Low Density)
+---------------------------------------
+  File:            intersection_LOS_B.rou.xml
+  Density:         20 veh/km (DEFINED)
+  Flow Rate:       1,448 veh/h per approach (DEFINED)
+  Speed:           72.4 km/h (DEFINED as maxSpeed 20.12 m/s)
+
+  Flow Split (80/10/10):
+    - Through:     1,158 veh/h
+    - Left turn:   145 veh/h
+    - Right turn:  145 veh/h
+
+  Traffic Condition: Reasonably free flow, light congestion
+
+  NOTE: Used in initial conference paper analysis (Scenario 3 vs 15)
+
+
+SERVICE LEVEL C (Moderate-High Density) ★ CURRENT ANALYSIS
+-----------------------------------------------------------
+  File:            intersection_LOS_C.rou.xml
+  Density:         30 veh/km (DEFINED)
+  Flow Rate:       2,172 veh/h per approach (DEFINED)
+  Speed:           72.4 km/h (DEFINED as maxSpeed 20.12 m/s)
+
+  Flow Split (80/10/10):
+    - Through:     1,738 veh/h
+    - Left turn:   217 veh/h
+    - Right turn:  217 veh/h
+
+  Traffic Condition: Stable flow, moderate congestion
+
+  NOTE: Currently used in conference paper (Scenario 5 vs 17)
+
+
+SERVICE LEVEL D (High Density)
+-------------------------------
+  File:            intersection_LOS_D.rou.xml
+  Density:         40 veh/km (DEFINED)
+  Flow Rate:       2,896 veh/h per approach (DEFINED)
+  Speed:           72.4 km/h (DEFINED as maxSpeed 20.12 m/s)
+
+  Flow Split (80/10/10):
+    - Through:     2,317 veh/h
+    - Left turn:   290 veh/h
+    - Right turn:  290 veh/h
+
+  Traffic Condition: Approaching unstable flow
+
+
+SERVICE LEVEL E (Very High Density)
+------------------------------------
+  File:            intersection_LOS_E.rou.xml
+  Density:         50 veh/km (DEFINED)
+  Flow Rate:       3,620 veh/h per approach (DEFINED)
+  Speed:           72.4 km/h (DEFINED as maxSpeed 20.12 m/s)
+
+  Flow Split (80/10/10):
+    - Through:     2,896 veh/h
+    - Left turn:   362 veh/h
+    - Right turn:  362 veh/h
+
+  Traffic Condition: At capacity, significant congestion
+
+
+SERVICE LEVEL F (Extreme Density)
+----------------------------------
+  File:            intersection_LOS_F.rou.xml
+  Density:         100 veh/km (DEFINED)
+  Flow Rate:       7,240 veh/h per approach (DEFINED)
+  Speed:           72.4 km/h (DEFINED as maxSpeed 20.12 m/s)
+
+  Flow Split (80/10/10):
+    - Through:     5,792 veh/h
+    - Left turn:   724 veh/h
+    - Right turn:  724 veh/h
+
+  Traffic Condition: Oversaturated, breakdown conditions
+
+--------------------------------------------------------------------------------
+                         SIMULATION CONFIGURATION
+--------------------------------------------------------------------------------
+
+Intersection Geometry:
+  - Four-leg intersection (North, South, East, West approaches)
+  - Each approach has 3 movement types: through, left turn, right turn
+  - All approaches configured identically
+
+Vehicle Type:
+  - Type ID:       "car"
+  - Acceleration:  2.6 m/s²
+  - Deceleration:  4.5 m/s²
+  - Length:        5 m
+  - Max Speed:     20.12 m/s (72.43 km/h)
+
+Simulation Duration:
+  - Begin:         0 seconds
+  - End:           400 seconds (configurable)
+
+Turn Movement Distribution:
+  - Through (straight):  80%
+  - Left turn:           10%
+  - Right turn:          10%
+
+--------------------------------------------------------------------------------
+                           SIMULATION SCENARIOS
+--------------------------------------------------------------------------------
+
+ECDSA Scenarios:
+  Scenario 1:  ECDSA + Service Level A + LOS
+  Scenario 2:  ECDSA + Service Level A + NLOS
+  Scenario 3:  ECDSA + Service Level B + LOS
+  Scenario 4:  ECDSA + Service Level B + NLOS
+  Scenario 5:  ECDSA + Service Level C + LOS  ★ Currently analyzed
+  Scenario 6:  ECDSA + Service Level C + NLOS
+  Scenario 7:  ECDSA + Service Level D + LOS
+  Scenario 8:  ECDSA + Service Level D + NLOS
+  Scenario 9:  ECDSA + Service Level E + LOS
+  Scenario 10: ECDSA + Service Level E + NLOS
+  Scenario 11: ECDSA + Service Level F + LOS
+  Scenario 12: ECDSA + Service Level F + NLOS
+
+Falcon-512 Scenarios:
+  Scenario 13: Falcon + Service Level A + LOS
+  Scenario 14: Falcon + Service Level A + NLOS
+  Scenario 15: Falcon + Service Level B + LOS
+  Scenario 16: Falcon + Service Level B + NLOS
+  Scenario 17: Falcon + Service Level C + LOS  ★ Currently analyzed
+  Scenario 18: Falcon + Service Level C + NLOS
+  Scenario 19: Falcon + Service Level D + LOS
+  Scenario 20: Falcon + Service Level D + NLOS
+  Scenario 21: Falcon + Service Level E + LOS
+  Scenario 22: Falcon + Service Level E + NLOS
+  Scenario 23: Falcon + Service Level F + LOS
+  Scenario 24: Falcon + Service Level F + NLOS
+
+--------------------------------------------------------------------------------
+                            ANALYSIS NOTES
+--------------------------------------------------------------------------------
+
+Current Focus:
+  Comparing Scenario 5 (ECDSA_C_LOS) vs Scenario 17 (Falcon_C_LOS)
+  - Traffic density: 30 veh/km
+  - Channel model: Line-of-sight (LOS)
+  - Analysis period: 0-200 seconds
+
+Key Finding:
+  Falcon-512 shows 41% relative PDR degradation at Service Level C
+  (18.48% PDR vs 31.32% for ECDSA) due to 470% packet size overhead.
+
+Future Work:
+  - Lower densities (A, B): Expected to show better Falcon performance
+  - Higher densities (D, E, F): Expected to show worse Falcon performance
+  - NLOS scenarios: Additional propagation challenges
+
+--------------------------------------------------------------------------------
+
+Created: May 4, 2026
+Location: /home/veins/src/simulte/Paper Writeup/
+Source: SUMO route configuration files in simulations/Mode4/intersections/
+
+================================================================================

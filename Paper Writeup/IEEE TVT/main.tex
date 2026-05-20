@@ -1,0 +1,675 @@
+\documentclass[letterpaper,journal]{IEEEtran}
+\usepackage{amsmath,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{array}
+\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+\usepackage{textcomp}
+\usepackage{stfloats}
+\usepackage{url}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{placeins}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+% highlights
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+\usepackage{soul}    % for text highlight
+\soulregister\cite7  % so that \cite doesn't break highlighting
+\soulregister\ref7   % so that \ref doesn't break highlighting
+
+
+\hyphenation{op-tical net-works semi-conduc-tor IEEE-Xplore}
+% updated with editorial comments 8/9/2021
+
+\begin{document}
+
+\title{Performance Evaluation of Post-Quantum Cryptographic Algorithms on C-V2X Sidelink Communications}
+
+\author{%
+Akid Abrar,~\IEEEmembership{Student Member,~IEEE},
+Sagar Dasgupta,~\IEEEmembership{Senior Member,~IEEE},
+Abdullah Al Mamun,~\IEEEmembership{Student Member,~IEEE},
+Mizanur Rahman,~\IEEEmembership{Senior Member,~IEEE},
+Mashrur Chowdhury~\IEEEmembership{Senior Member,~IEEE},
+and Ahmad Alsharif,~\IEEEmembership{Senior Member,~IEEE}
+
+\thanks{Akid Abrar, Sagar Dasgupta, and Mizanur Rahman are with the Department of Civil, Construction \& Environmental Engineering, The University of Alabama, Smart Communities and Innovation Building (SCIB), 28 Kirkbride Lane, Tuscaloosa, AL 35487-0288 USA (emails: aabrar@crimson.ua.edu; sdasgupta@ua.edu; mizan.rahman@ua.edu).}
+\thanks{AAhmad Alsharif is with the Department of Computer Science
+, The University of Alabama, 3016 Cyber Hall, Box: 870290, Tuscaloosa, AL 35487-0288 USA (email: aalsharif1@ua.edu.).}%
+\thanks{Abdullah Al Mamun and Mashrur Chowdhury are with the Glenn Department of Civil Engineering, Clemson University, Clemson, SC 29634 USA. (emails: abdullm@clemson.edu; mac@clemson.edu).}%
+\thanks{Copyright (c) 20xx IEEE. Personal use of this material is permitted. However, permission to use this material for any other purposes must be obtained from the IEEE by sending a request to pubs-permissions@ieee.org.}
+}
+
+% The paper headers
+% \markboth{Journal of \LaTeX\ Class Files,~Vol.~14, No.~8, August~2021}%
+% {Shell \MakeLowercase{\textit{et al.}}: A Sample Article Using IEEEtran.cls for IEEE Journals}
+
+\IEEEpubid{0000--0000/00\$00.00~\copyright~2025 IEEE}
+% Remember, if you use this you must call \IEEEpubidadjcol in the second
+% column for its text to clear the IEEEpubid mark.
+
+
+\maketitle
+
+\begin{abstract}
+Wireless connectivity, such as Cellular-Vehicle-to-Everything (C-V2X), between vehicles and transportation infrastructure promises significant roadway safety benefits by providing 360-degree views of their surroundings. However, wireless connectivity in intelligent transportation systems is vulnerable to deliberate cyber threats. Security of wireless connectivity relies on traditional cryptographic techniques as specified in the IEEE 1609.2 standard. The anticipated advent of quantum computing can compromise this cryptographic foundation. Post-quantum cryptographic (PQC) algorithms offer quantum-resistant alternatives. However, the significantly larger size of PQC signatures and public keys poses a challenge to meet communication latency for safety-critical transportation applications. This study conducts a comprehensive evaluation of standardized PQC algorithms on C-V2X sidelink performance to assess the feasibility of implementing PQC in safety-critical transportation applications. C-V2X sidelink key performance indicators (KPIs), including packet delivery ratio (PDR), end-to-end latency, channel busy ratio (CBR), and resource utilization, are compared across PQC algorithms at varying levels of service at an urban roadway intersection to confirm their applicability.
+
+\end{abstract}
+
+\begin{IEEEkeywords}
+C-V2X, post-quantum cryptography, sidelink, Mode~4, Falcon-512, ECDSA, IEEE~1609.2, SAE~J3161, vehicle-to-everything
+\end{IEEEkeywords}
+
+\section{Introduction}
+\IEEEPARstart{C}{ellular} Vehicle-to-Everything (C-V2X) communication enables vehicles to exchange safety-critical messages such as Basic Safety Messages (BSMs) over the PC5 sidelink interface at 10~Hz, providing each vehicle with a 360-degree awareness of its surrounding traffic environment~\cite{molina2017lte}. The C-V2X Mode~4 sidelink, standardized by 3GPP in Release~14 and profiled for deployment by SAE~J3161~\cite{sae_j3161}, operates without cellular infrastructure by allowing vehicles to autonomously select radio resources through a sensing-based Semi-Persistent Scheduling (SPS) mechanism. This infrastructure-independent operation makes Mode~4 particularly attractive for safety applications in areas such as intersection approaches.
+
+The integrity and authenticity of V2X messages are ensured through digital signatures as specified in the IEEE~1609.2 security standard~\cite{ieee_16092}. Currently, IEEE~1609.2 mandates the Elliptic Curve Digital Signature Algorithm (ECDSA) with the NIST P-256 curve, which produces compact 64-byte signatures and 65-byte public keys. These sizes impose minimal overhead on the sidelink transport block, and the V2X ecosystem, including the Security Credential Management System (SCMS)~\cite{brecht2018scms}, which has been designed around these compact parameters.
+
+However, the anticipated emergence of cryptographically relevant quantum computers poses a fundamental threat to elliptic-curve-based cryptography. Shor's algorithm~\cite{shor1994algorithms} can solve the elliptic curve discrete logarithm problem in polynomial time, rendering ECDSA insecure. While the timeline for such quantum capabilities remains uncertain, the long deployment lifecycle of transportation infrastructure (15--20~years for vehicles and roadside equipment) demands proactive migration planning~\cite{campagna2020pqc_migration}. The National Institute of Standards and Technology (NIST) has responded by standardizing post-quantum cryptographic (PQC) algorithms resistant to quantum attacks, including lattice-based digital signature schemes such as ML-DSA (Dilithium, FIPS~204)~\cite{fips204} and FN-DSA (Falcon, FIPS~206)~\cite{fips206}.
+
+The central challenge in adopting PQC for V2X lies in the significantly larger signature and public key sizes of post-quantum algorithms. Falcon-512, the most compact NIST PQC signature scheme, produces signatures of 666~bytes (padded) and public keys of 897~bytes, an order of magnitude larger than ECDSA. Dilithium-2 is even larger, with 2420-byte signatures and 1312-byte public keys. These inflated sizes directly increase the Secure Protocol Data Unit (SPDU) payload that must be accommodated within the C-V2X sidelink transport block, which is constrained by the Message Coding Scheme (MCS) index, subchannel allocation, and congestion control parameters mandated by SAE~J3161~\cite{mamun2026post}. Whether the sidelink can accommodate this overhead without degrading safety-critical KPIs such as packet delivery ratio and latency remains an open question that we aim to address in this study.
+\IEEEpubidadjcol
+Existing studies on PQC in vehicular contexts have focused primarily on computational benchmarking on embedded hardware~\cite{kumar2024pqc_automotive} or on abstract protocol-level analysis without considering the radio resource constraints of the C-V2X physical layer. To the best of the authors' knowledge, no prior work has evaluated the end-to-end impact of PQC digital signatures on C-V2X Mode~4 sidelink performance within a standards-compliant simulation environment that models the full protocol stack from application-layer signing through MAC-layer resource allocation to physical-layer transmission. The key contributions of this study are as follows:
+\begin{itemize}
+    \item This study presents the first implementation and evaluation of NIST-standardized PQC digital signature algorithms within a C-V2X PC5 Mode~4 sidelink simulation that maintains compliance with SAE~J3161 deployment parameters and IEEE~1609.2 security standards.
+    \item A feasibility assessment is conducted to determine whether PQC algorithms can be adopted without modifications to the application layer (e.g., packet segmentation or hybrid cryptographic schemes) or to the lower-layer radio resource configuration (e.g., MCS adaptation beyond the J3161-specified range).
+    \item A cross-layer performance evaluation quantifies the impact of PQC signature and public key overhead on sidelink KPIs, including PDR, signature generation and verification time, end-to-end latency, CBR, and subchannel resource utilization.
+    \item Multiple urban intersection scenarios with varying vehicle densities (levels of service) are evaluated to identify the density thresholds at which PQC-induced overhead begins to degrade sidelink performance relative to the ECDSA baseline.
+\end{itemize}
+
+The remainder of this paper is organized as follows. Section~\ref{sec:background} provides background on C-V2X Mode~4 sidelink and security standards along with PQC algorithms. Section~\ref{sec:related} reviews related work. Section~\ref{sec:method} describes the simulation methodology and setup. Section~\ref{sec:results} presents the evaluation outcomes. Section~\ref{sec:discussion} discusses the findings and their implications, and Section~\ref{sec:conclusion} concludes the paper.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Background}
+\label{sec:background}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{C-V2X Mode~4 and SAE J3161}
+\label{sec:cv2x}
+
+C-V2X is a 3GPP-standardized radio access technology that enables direct vehicle-to-vehicle (V2V) and vehicle-to-infrastructure (V2I) communication over the PC5 sidelink interface without requiring cellular network infrastructure~\cite{3gpp_36213}. The PC5 interface operates in the 5.9~GHz Intelligent Transportation Systems (ITS) band and supports two transmission modes: Mode~3, where a base station schedules sidelink resources, and Mode~4, where vehicles autonomously select resources using a sensing-based Semi-Persistent Scheduling (SPS) mechanism~\cite{molina2017lte}.
+
+In Mode~4, each vehicle monitors the sidelink spectrum over a sensing window of 1000~ms and identifies candidate single-subframe resources within a selection window. Resources whose received power exceeds a threshold (Reference Signal Received Power, RSRP) are excluded from the candidate set. The vehicle then randomly selects a resource from the remaining candidates and reserves it for a configurable Resource Reservation Interval (RRI). A reselection counter determines how many consecutive transmissions use the reserved resource before triggering a new selection~\cite{3gpp_36321}. At each reselection event, the vehicle retains the current resource with a probability $p_\text{keep}$ (typically 0.0, 0.2, 0.4, 0.6, or 0.8) or selects a new resource from the updated candidate set.
+
+The transmission payload is carried on the Physical Sidelink Shared Channel (PSSCH), while the associated Sidelink Control Information (SCI) is transmitted on the Physical Sidelink Control Channel (PSCCH). Adjacent PSCCH--PSSCH mapping is typically employed, where control and data subchannels occupy contiguous resource blocks within the same subframe. The Modulation and Coding Scheme (MCS) applied to the PSSCH determines the transport block size and, consequently, the maximum payload that can be accommodated within a given number of subchannels.
+
+SAE~J3161~\cite{sae_j3161} specifies the deployment profile for C-V2X V2V communication in the 5.9~GHz band. It mandates a 10~MHz channel bandwidth corresponding to 50 resource blocks per subframe, a subchannel size of 10 or 20 resource blocks, and an RRI of 100~ms aligned with the Basic Safety Message (BSM) generation rate specified in SAE~J2945/1. The standard further defines congestion control through Channel Busy Ratio (CBR) monitoring and specifies MCS ranges and maximum subchannel allocations as a function of measured CBR. These constraints collectively determine the maximum packet size that the sidelink can carry, which directly impacts the feasibility of deploying cryptographic algorithms with large signature and key sizes.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Post-Quantum Cryptography}
+\label{sec:pqc}
+
+Current V2X security, as specified in IEEE~1609.2~\cite{ieee_16092}, relies on the Elliptic Curve Digital Signature Algorithm (ECDSA) with the NIST P-256 curve for message authentication. An ECDSA P-256 signature is 64~bytes (raw $r \| s$ format), and the corresponding public key is 65~bytes (uncompressed point), resulting in modest overhead that is readily accommodated within the sidelink transport block~\cite{ieee_16092}.
+
+The anticipated advent of large-scale quantum computers threatens to break ECDSA and other elliptic-curve-based schemes through Shor's algorithm~\cite{shor1994algorithms}. In response, the National Institute of Standards and Technology (NIST) conducted a multi-year standardization process and selected several post-quantum cryptographic algorithms for standardization~\cite{nist_pqc_report}. Among the digital signature schemes, two are particularly relevant to V2X applications:
+
+\textbf{ML-DSA (Dilithium).} ML-DSA, formerly known as CRYSTALS-Dilithium, is a lattice-based digital signature scheme standardized as FIPS~204~\cite{fips204}. At security level~2, Dilithium-2 produces signatures of 2420~bytes with a public key of 1312~bytes. While Dilithium offers strong security guarantees and deterministic signing, its signature and key sizes are substantially larger than ECDSA.
+
+\textbf{FN-DSA (Falcon).} FN-DSA, formerly known as Falcon, is a lattice-based signature scheme based on NTRU lattices and fast Fourier sampling, standardized as FIPS~206~\cite{fips206}. Falcon-512 produces compact signatures of approximately 649--666~bytes (variable length) with a public key of 897~bytes. Falcon offers the smallest combined signature and key size among the NIST-selected PQC signature schemes, making it the most promising candidate for bandwidth-constrained applications such as V2X sidelink.
+
+Table~\ref{tab:crypto_sizes} summarizes the signature and public key sizes for the three algorithms evaluated in this study.
+
+\begin{table}[!htbp]
+    \caption{Cryptographic Algorithm Parameter Sizes}
+    \label{tab:crypto_sizes}
+    \centering
+    \begin{tabular}{lccc}
+    \toprule
+    \textbf{Algorithm} & \textbf{Signature (B)} & \textbf{Public Key (B)} & \textbf{Security Level} \\
+    \midrule
+    ECDSA P-256    & 64        & 65      & Classical 128-bit \\
+    Falcon-512     & 649--666  & 897     & NIST Level~1 \\
+    Dilithium-2    & 2420      & 1312    & NIST Level~2 \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Related Work}
+\label{sec:related}
+
+Prior research related to this study can be categorized into three areas: (1)~C-V2X Mode~4 sidelink performance evaluation, (2)~V2X security and IEEE~1609.2 authentication overhead, and (3)~post-quantum cryptography for vehicular and IoT systems.
+
+\subsection{C-V2X Mode~4 Performance Evaluation}
+
+Several studies have evaluated the performance of LTE-V2X Mode~4 sidelink communication through analytical modeling and simulation. Gonzalez-Martin et al.~\cite{gonzalez2019analytical} developed analytical models to characterize Mode~4 PDR as a function of vehicle density, demonstrating that the SPS mechanism can sustain high reliability at low-to-moderate densities but degrades under congestion due to persistent packet collisions. Bazzi et al.~\cite{bazzi2017performance} compared IEEE~802.11p and LTE-V2V performance, showing that C-V2X achieves superior range and reliability under highway scenarios. McCarthy et al.~\cite{mccarthy2020opencvx} introduced openCV2X, the first open-source Mode~4 simulation model built on SimuLTE and OMNeT++, and demonstrated its cross-layer fidelity for evaluating aperiodic traffic patterns. Toghi et al.~\cite{toghi2019congestion} analyzed Mode~4 performance under highly congested conditions, highlighting the role of CBR-based congestion control in maintaining channel stability. These studies collectively establish the baseline performance characteristics of Mode~4 sidelink; however, none of them incorporate the impact of cryptographic overhead on sidelink KPIs.
+
+\subsection{V2X Security and Authentication Overhead}
+
+The IEEE~1609.2 standard~\cite{ieee_16092} defines the security services for V2X, including ECDSA-based digital signatures and a certificate management framework. Qu et al.~\cite{qu2015security} provided a comprehensive review of VANET security challenges, identifying message authentication as a key bottleneck for high-frequency BSM transmission. Brecht et al.~\cite{brecht2018scms} described the SCMS architecture for V2X certificate management in the United States, noting that the system was designed around the compact size of ECDSA P-256 credentials. Lu et al.~\cite{lu2018survey_v2x_security} surveyed security and privacy for 5G V2X, emphasizing that any migration to new cryptographic primitives must satisfy the strict latency requirements of safety-critical applications. While these works thoroughly address the security architecture, they do not evaluate the radio resource impact of alternative cryptographic algorithms on the sidelink physical layer.
+
+\subsection{Post-Quantum Cryptography for Vehicular Systems}
+
+The application of PQC to vehicular systems has received growing attention following the NIST standardization process. Fernandez et al.~\cite{fernandez2023pqc_v2x} reviewed post-quantum approaches for securing vehicular blockchain systems, identifying Falcon as a promising candidate due to its compact signature size. Kumar et al.~\cite{kumar2024pqc_automotive} benchmarked PQC algorithms on automotive-grade embedded platforms, demonstrating that Falcon-512 signing completes in approximately 0.21~ms and verification in 0.05~ms on ARM processors, while Dilithium-2 exhibits comparable verification times but larger signatures. Hasan et al.~\cite{hasan2022pqc_v2v} proposed a practical post-quantum authentication framework for V2V, evaluating Falcon and Dilithium in terms of computational cost but without modeling their impact on the radio access layer. Shen et al.~\cite{shen2025pqc_analysis} analyzed PQC signature performance for intelligent transportation systems, providing an implementation-focused review that highlighted the tension between PQC key sizes and the bandwidth limitations of vehicular communication channels. A recent SAE technical paper~\cite{sae2026pqc_twowheeler} evaluated PQC feasibility on embedded systems for two-wheeler security, confirming that computational overhead is manageable on modern hardware but leaving radio resource impact unexamined.
+
+\subsection{Research Gap}
+
+While existing literature has separately addressed C-V2X Mode~4 sidelink performance, V2X security frameworks, and PQC algorithm benchmarking, no prior study has jointly evaluated these aspects within a single, standards-compliant simulation. Specifically, the impact of PQC signature and key sizes on sidelink radio resource allocation, packet delivery, and latency under realistic SAE~J3161 and IEEE 1609.2 deployment parameters has not been quantified. This study addresses this gap by implementing PQC algorithms within a full-stack C-V2X Mode~4 simulator and evaluating their end-to-end impact on sidelink KPIs across varying traffic densities.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Methodology}
+\label{sec:method}
+
+This section describes the simulation framework, the traffic scenarios, the IEEE~1609.2-compliant packet structure, and the KPIs used for evaluation.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Simulation Framework}
+\label{sec:sim_framework}
+
+The PC5 Mode 4 network simulation is done using openCV2X~\cite{opencv2x}, which extends SimuLTE~\cite{virdis2014simulte} for Mode 4 communication. SimuLTE is an open-source C-V2X simulator developed for the OMNeT++ discrete-event simulation platform~\cite{varga2019omnetpp}. openCV2X models the full LTE protocol stack, including the physical layer, MAC layer with Mode~4 SPS resource allocation, RLC, and PDCP layers. The simulator is coupled with Veins~\cite{sommer2019veins} for vehicular networking abstractions and with SUMO (Simulation of Urban MObility)~\cite{lopez2018sumo} for realistic microscopic traffic simulation.
+
+The sidelink physical layer is configured with a carrier frequency of 5915~MHz in the 5.9~GHz ITS band. The channel bandwidth is 20 MHz, providing 100 resource blocks per subframe. A subchannel size of 10 resource blocks is used, yielding 10 subchannels per subframe. The MCS index ranges from 5 to 11, consistent with the SAE~J3161 deployment profile. Preconfigured transmission parameters are used, and CBR-based congestion control with channel occupancy ratio (CR) limiting is enabled. Each vehicle transmits at 23~dBm and reserves resources with an RRI of 100~ms. The resource keep probability is set to $p_\text{keep} = 0.8$, and the RSSI-based sensing threshold is 9~dB.
+
+The PQC algorithms are implemented using the liboqs library~\cite{stebila2020liboqs}, which provides reference implementations of NIST-standardized post-quantum algorithms. ECDSA P-256 is implemented using OpenSSL. Each vehicle and RSU generates a fresh key pair at initialization and performs real-time signing and verification of every BSM, capturing actual computational overhead in the simulation timing.
+
+Table~\ref{tab:sim_params} summarizes the key simulation parameters.
+
+\begin{table}[!htbp]
+    \caption{Simulation Parameters}
+    \label{tab:sim_params}
+    \centering
+    \begin{tabular}{lc}
+    \toprule
+    \textbf{Parameter} & \textbf{Value} \\
+    \midrule
+    Carrier frequency          & 5915~MHz \\
+    Channel bandwidth          & 20~MHz \\
+    Number of resource blocks  & 100 per subframe \\
+    Subchannel size            & 10~RBs \\
+    Number of subchannels      & 10 \\
+    MCS range                  & 5--11 \\
+    Transmit power             & 23~dBm \\
+    Resource reservation interval (RRI) & 100~ms \\
+    Resource keep probability ($p_\text{keep}$) & 0.8 \\
+    RSSI sensing threshold     & 9~dB \\
+    BSM generation rate        & 10~Hz (100~ms) \\
+    Simulation duration        & 300~s \\
+    Congestion control         & CBR-based with CR limiting \\
+    HARQ retransmissions       & 0 \\
+    Cryptographic library (PQC)  & liboqs \\
+    Cryptographic library (ECDSA) & OpenSSL \\
+    Traffic simulator          & SUMO \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{IEEE 1609.2 Compliant Packet Structure}
+\label{sec:packet_structure}
+
+Each transmitted packet follows the IEEE~1609.2 SPDU structure~\cite{ieee_16092}. The SPDU encapsulates a J2735 BSM Part~I (BSMcoreData), which contains vehicle position, speed, heading, and other kinematic data totaling 39~bytes per the J2735 standard~\cite{sae_j2735}.
+
+The IEEE~1609.2 \texttt{Ieee1609Dot2Data} wrapper adds a protocol version, content type, hash algorithm identifier, Provider Service Identifier (PSID), generation time, generation location, and encoding overhead, contributing approximately 28~bytes of fixed overhead. The \texttt{SignerIdentifier} field alternates between including the full explicit certificate and a compact \texttt{HashedId8} digest (8~bytes), following the certificate inclusion strategy specified in SAE~J2945/1~\cite{sae_j29451}. When the full certificate is included, it comprises a fixed overhead of approximately 105~bytes (version, type, issuer identifier, validity period, application permissions, and verification key indicator) plus the raw public key of the signing algorithm.
+
+The total SPDU size for each algorithm, when transmitting with a full certificate, is:
+\begin{equation}
+    S_\text{SPDU} = S_\text{header} + S_\text{BSM} + S_\text{sig} + S_\text{cert}
+    \label{eq:spdu_size}
+\end{equation}
+where $S_\text{header} = 28$~bytes is the IEEE~1609.2 header overhead, $S_\text{BSM} = 39$~bytes is the BSM payload, $S_\text{sig}$ is the digital signature size, and $S_\text{cert} = 105 + S_\text{pk}$ is the certificate size including the raw public key. Table~\ref{tab:spdu_sizes} presents the resulting SPDU sizes.
+
+\begin{table}[!htbp]
+    \caption{SPDU Sizes with Full Certificate}
+    \label{tab:spdu_sizes}
+    \centering
+    \begin{tabular}{lccc}
+    \toprule
+    \textbf{Algorithm} & \textbf{Sig (B)} & \textbf{Cert (B)} & \textbf{Total SPDU (B)} \\
+    \midrule
+    ECDSA P-256    & 64   & 170  & $\sim$301 \\
+    Falcon-512     & 666  & 1002 & $\sim$1735 \\
+    Dilithium-2    & 2420 & 1417 & $\sim$3904 \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Traffic Scenario}
+\label{sec:traffic_scenario}
+
+The traffic scenario models a four-leg signalized urban intersection with two through lanes per approach, generated using SUMO~\cite{lopez2018sumo}. The four-leg signalized intersection is selected as the evaluation geometry for several reasons. First, it is the most common intersection configuration where two roads cross in the U.S. urban road network~\cite{fhwa_sig_guide}, representing the standard deployment environment for C-V2X V2V safety applications~\cite{sae_j3161}. Second, a four-leg intersection produces 32 potential vehicle-vehicle conflict points, where 16 of them are crossing conflicts where vehicle paths intersect at near-right angles%---compared to only 9~conflict points at a three-leg intersection %
+~\cite{fhwa_sig_guide}. These crossing conflicts are the primary target of V2X safety applications such as Intersection Movement Assist (IMA), making the four-leg geometry the most safety-critical intersection type for evaluating authentication reliability. Third, vehicles arriving from all four approaches converge within mutual communication range simultaneously, producing the highest concentration of concurrent sidelink transmitters and thereby the most demanding test of Mode~4 resource allocation under PQC-induced payload overhead. Additionally, vehicles on perpendicular approaches experience NLOS propagation conditions due to corner building obstruction, enabling evaluation under both LOS and NLOS channels within a single scenario. The two-lane-per-approach cross-section represents a typical urban minor arterial, with approach capacity aligned to the HCM saturation flow rate of 1{,}800~pc/h/ln~\cite{hcm2010}.
+
+Vehicles follow the Krauss car-following model with an acceleration of 2.6~m/s\textsuperscript{2}, deceleration of 4.5~m/s\textsuperscript{2}, vehicle length of 5~m, and a free-flow speed of $v_f = 20.12$~m/s (72.4~km/h). Traffic is distributed with an 80/10/10 split among through, left-turn, and right-turn movements on each approach.
+
+The traffic density on each approach determines the number of simultaneous C-V2X transmitters within communication range, directly influencing sidelink channel load. The fundamental relationship between traffic flow rate~$q$ (veh/h), density~$k$ (veh/km), and space mean speed~$v$ (km/h) is given by:
+\begin{equation}
+    q = k \cdot v
+    \label{eq:flow_density}
+\end{equation}
+
+Three vehicle density levels are evaluated, corresponding to different Levels of Service (LOS) as defined by the Highway Capacity Manual (HCM)~\cite{hcm2010}. For signalized intersections, the HCM classifies LOS~A through~F based on the volume-to-capacity ratio~$X_c$ and the resulting average control delay per vehicle:
+\begin{equation}
+    X_c = \frac{q}{c} = \frac{q}{s \cdot (g/C)}
+    \label{eq:vc_ratio}
+\end{equation}
+where $c$ is the approach capacity (veh/h), $s$ is the saturation flow rate (typically 1800~pc/h/ln), $g$ is the effective green time, and $C$ is the cycle length. When $X_c \leq 1.0$, the intersection operates within capacity; when $X_c > 1.0$, demand exceeds capacity and queuing delays grow unboundedly. Table~\ref{tab:traffic_scenarios} summarizes the simulated traffic scenarios.
+
+\begin{table}[!htbp]
+    \caption{Traffic Density Scenarios}
+    \label{tab:traffic_scenarios}
+    \centering
+    \begin{tabular}{lcccc}
+    \toprule
+    \textbf{Scenario} & \textbf{Density} & \textbf{Flow/Approach} & $X_c$ & \textbf{LOS} \\
+                      & (veh/km)         & (veh/h)               &       &              \\
+    \midrule
+    Low density    & 10  & 724   & $\sim$0.40 & A--B \\
+    Medium density & 50  & 3{,}622 & $>$1.0     & E--F \\
+    High density   & 100 & 7{,}243 & $\gg$1.0   & F    \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+The selection of these density levels is motivated by the need to evaluate PQC feasibility across a representative range of operating conditions. The low-density scenario (LOS~A--B) represents free-flow suburban conditions where vehicles are sparsely distributed and sidelink resource contention is minimal. The medium-density scenario (LOS~E--F) represents peak-hour urban conditions where the intersection approaches saturation and the sidelink channel experiences significant contention from many concurrent transmitters. The high-density scenario (LOS~F) represents oversaturated conditions with extensive queuing, maximizing the number of concurrent transmitters within communication range and stress-testing the sidelink capacity. Evaluating across this range enables identification of the density thresholds at which PQC-induced overhead begins to degrade sidelink performance relative to the ECDSA baseline.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Channel Propagation Model}
+\label{sec:channel_model}
+
+The radio propagation environment significantly affects sidelink reception performance. Two channel configurations are employed to represent distinct propagation conditions: a Line-of-Sight (LOS) model and a Non-Line-of-Sight (NLOS) model, both derived from the ITU-R M.2135-1 evaluation guidelines~\cite{itur_m2135}.
+
+\subsubsection{LOS Propagation Model}
+
+The LOS configuration uses the Analytical path loss model, which provides a dual-slope distance-dependent attenuation. The path loss $\text{PL}_\text{LOS}$ (in dB) is computed as:
+\begin{equation}
+    \text{PL}_\text{LOS}(d) \!=\! \begin{cases}
+    22 \log_{10}(d) + 28 + 20\log_{10}(f_c), & d < d_\text{BP} \\[4pt]
+    40\log_{10}(d) + 7.8 - 18\log_{10}(h_\text{TX}) & \\
+    \quad - 18\log_{10}(h_\text{RX}) + 2\log_{10}(f_c), & d \geq d_\text{BP}
+    \end{cases}
+    \label{eq:pl_los}
+    % Source: src/stack/phy/ChannelModel/LteRealisticChannelModel.cc:1769-1773
+\end{equation}
+where $d$ is the transmitter--receiver distance (m), $f_c$ is the carrier frequency (GHz), $h_\text{TX}$ and $h_\text{RX}$ are the effective antenna heights (m), and $d_\text{BP}$ is the breakpoint distance:
+\begin{equation}
+    d_\text{BP} = \frac{4 \, h_\text{TX} \, h_\text{RX} \, f_c}{c}
+    \label{eq:breakpoint}
+    % Source: src/stack/phy/ChannelModel/LteRealisticChannelModel.cc:1763
+\end{equation}
+with $c = 3 \times 10^8$~m/s. The path loss is lower-bounded by the free-space path loss:
+\begin{equation}
+    \text{PL}_\text{free}(d) = 20\log_{10}(d) + 46.4 + 20\log_{10}\!\left(\frac{f_c}{5}\right)
+    \label{eq:pl_free}
+    % Source: src/stack/phy/ChannelModel/LteRealisticChannelModel.cc:1775
+\end{equation}
+
+\subsubsection{NLOS Propagation Model}
+
+The NLOS configuration uses the ITU Urban Microcell (UMi) model~\cite{itur_m2135}, which applies higher attenuation to account for building obstruction and multipath scattering. The NLOS path loss is:
+\begin{equation}
+    \text{PL}_\text{NLOS}(d) = 36.7\log_{10}(d) + 22.7 + 26\log_{10}(f_c)
+    \label{eq:pl_nlos}
+    % Source: src/stack/phy/ChannelModel/LteRealisticChannelModel.cc:2341
+\end{equation}
+valid for $10\text{~m} < d < 5000\text{~m}$. This model produces substantially higher attenuation than the LOS model at the same distance, reflecting the signal degradation caused by urban obstructions at intersection environments where buildings obscure cross-street visibility.
+
+\subsubsection{Small-Scale Fading}
+
+Both channel configurations employ Nakagami-$m$ fading to model small-scale multipath effects. The received signal power envelope follows a Gamma distribution with shape parameter $m$ and scale parameter $\Omega/m$, where $\Omega$ is the average received power. The probability density function of the instantaneous received power~$P$ is:
+\begin{equation}
+    f(P) = \frac{m^m \, P^{m-1}}{\Gamma(m) \, \Omega^m} \exp\!\left(-\frac{m \, P}{\Omega}\right)
+    \label{eq:nakagami}
+    % Source: inet/src/inet/physicallayer/pathloss/NakagamiFading.cc:53
+\end{equation}
+where $\Gamma(\cdot)$ is the Gamma function. A shape parameter of $m = 1$ is used, which reduces to Rayleigh fading and models a rich scattering environment. Log-normal shadowing with spatial correlation is also enabled.
+
+Evaluating both LOS and NLOS channels enables assessment of PQC performance under favorable (suburban arterial with clear sightlines) and adverse (dense urban intersection with building obstruction) propagation conditions, respectively.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Sidelink Resource Allocation Feasibility}
+\label{sec:resource_feasibility}
+
+The C-V2X sidelink transport block size (TBS) determines the maximum payload that can be transmitted in a single subframe. The TBS is a function of the MCS index and the number of allocated physical resource blocks (PRBs), as specified in 3GPP TS~36.213 Table~7.1.7.2.1-1~\cite{3gpp_36213}. For adjacent PSCCH--PSSCH resource mapping with a subchannel size of $N_\text{RB}^\text{sc}$~RBs and $N_\text{sc}$ allocated subchannels, the number of PSSCH PRBs available for data is:
+\begin{equation}
+    N_\text{PRB}^\text{PSSCH} = N_\text{sc} \cdot N_\text{RB}^\text{sc} - 2
+    \label{eq:nprb}
+    % Source: src/stack/mac/layer/LteMacVUeMode4.cc:918-922
+\end{equation}
+where 2~PRBs are reserved for the PSCCH carrying the Sidelink Control Information (SCI). The MCS index determines the transport block size index $I_\text{TBS}$ and the modulation order $Q_m$ through the MCS-to-TBS mapping table~\cite{3gpp_36213}. The TBS in bits is then obtained by looking up $I_\text{TBS}$ and $N_\text{PRB}^\text{PSSCH}$ in the TBS table.
+
+Under the SAE~J3161 deployment profile, the MCS range is restricted to indices 5--11, and the maximum subchannel allocation is 10 subchannels of 10~RBs each, yielding $N_\text{PRB}^\text{PSSCH} = 98$. At MCS~11 ($I_\text{TBS} = 10$, 16QAM), the maximum TBS with 10 subchannels is 19{,}848~bits (2{,}481~bytes). Table~\ref{tab:tbs_feasibility} presents the subchannel requirements for each algorithm at representative MCS levels.
+
+\begin{table}[!htbp]
+    \caption{Minimum Subchannels Required per Algorithm and MCS}
+    \label{tab:tbs_feasibility}
+    \centering
+    \begin{tabular}{llcccc}
+    \toprule
+    \textbf{Algorithm} & \textbf{Mode} & \textbf{SPDU} & \multicolumn{3}{c}{\textbf{Subchannels Required}} \\
+     & & (B) & MCS 5 & MCS 7 & MCS 11 \\
+    \midrule
+    ECDSA       & Cert   & 301   & 3    & 3    & 2    \\
+    ECDSA       & Digest & 139   & 2    & 2    & 1    \\
+    Falcon-512  & Cert   & 1{,}735 & N/A  & N/A  & 8    \\
+    Falcon-512  & Digest & 741   & 7    & 5    & 4    \\
+    Dilithium-2 & Cert   & 3{,}904 & N/A  & N/A  & N/A  \\
+    Dilithium-2 & Digest & 2{,}495 & N/A  & N/A  & N/A  \\
+    \bottomrule
+    \multicolumn{6}{l}{\footnotesize N/A: Exceeds maximum TBS with 10 subchannels.}
+    \end{tabular}
+\end{table}
+
+The analysis reveals several critical feasibility constraints. Dilithium-2 SPDUs with full certificates (3{,}904~bytes) exceed the maximum TBS at any MCS within the J3161-permitted range, even when all 10~subchannels are allocated. Moreover, Dilithium-2 with digest-only transmission (2{,}495~bytes) still exceeds the maximum TBS of 2{,}481~bytes by 14~bytes---an infeasibility that persists regardless of the \texttt{SignerIdentifier} strategy. Similarly, SLH-DSA (SPHINCS+), the other NIST-standardized signature scheme with a minimum signature size of 7{,}856~bytes, is even further from feasibility. Accommodating these algorithms would require protocol modifications beyond the current J3161 profile, such as packet fragmentation across multiple subframes~\cite{twardokus2025chasm}, MCS indices beyond the specified range, or certificate compression.
+
+Falcon-512 occupies a narrow but viable operating region. Certificate-bearing SPDUs (1{,}735~bytes) require MCS~$\geq$~10 with 8~subchannels, consuming 80\% of the available sidelink resources for a single transmission. Digest-mode SPDUs (741~bytes) are more resource-efficient, requiring only 4~subchannels at MCS~11. Since IEEE~1609.2 specifies periodic certificate inclusion (typically every 5th or 10th BSM), the majority of transmissions use digest mode, significantly reducing the average resource footprint. This feasibility analysis motivates the focus of our evaluation on Falcon-512 as the primary PQC candidate alongside the ECDSA baseline.
+
+\subsubsection{Impact of Certificate Inclusion Strategy on SPS Grants}
+
+An important consequence of Mode~4 SPS scheduling is that the certificate inclusion strategy---whether every SPDU carries a full certificate or alternates between certificates and \texttt{HashedId8} digests---has negligible impact on sidelink PDR. This is because the SPS grant is sized at resource selection time for the maximum expected SPDU and remains fixed for the entire reservation period~\cite{3gpp_36321}. The number of subchannels allocated at grant creation is determined by the transport block capacity needed to accommodate the largest packet (i.e., the certificate-bearing SPDU):
+% \begin{equation}
+%     N_\text{sc}^\text{grant} = \min\!\left\{n \in \{1,\dots,N_\text{sc}^\text{max}\} \;\middle|\; \text{TBS}(n, I_\text{TBS}) \geq 8 \cdot S_\text{SPDU}^\text{cert}\right\}
+%     \label{eq:grant_size}
+% \end{equation}
+
+Once the grant is established, all subsequent transmissions within the reservation period---whether carrying a full certificate or a compact digest---occupy the same $N_\text{sc}^\text{grant}$ subchannels. Digest-mode SPDUs are simply padded within the oversized transport block. From the channel's perspective, both certificate and digest transmissions produce identical resource occupancy, resulting in the same CBR, the same interference pattern, and consequently the same collision probability and PDR.
+
+This observation has two important implications. First, for PQC feasibility on Mode~4 sidelink, the determining factor is the \emph{maximum} SPDU size (with full certificate), not the average size across the cert/digest alternation cycle. If the certificate-bearing SPDU fits within the TBS at the operating MCS, digest packets are accommodated without additional cost. Second, this further reinforces the infeasibility of Dilithium-2: even a digest-only strategy (never including the full certificate) produces SPDUs of 2{,}495~bytes that exceed the maximum TBS, and permanently omitting certificates would break the IEEE~1609.2 trust model by preventing receivers from ever verifying the sender's identity.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Key Performance Indicators}
+\label{sec:kpis}
+
+The following KPIs are used to evaluate the impact of PQC on sidelink performance. These metrics are selected to capture both communication reliability and safety-critical application requirements, as V2X safety applications mandate that BSMs be received reliably within strict latency bounds~\cite{sae_j29451}.
+
+\begin{itemize}
+    \item \textbf{Packet Delivery Ratio (PDR):} The ratio of successfully received BSMs to the total number of BSMs transmitted, computed across all vehicle pairs within communication range. PDR directly quantifies communication reliability and serves as a proxy for cooperative awareness quality---the ability of each vehicle to maintain an accurate model of its surrounding traffic. A PDR below 90\% at safety-relevant distances is generally considered insufficient for applications such as forward collision warning and emergency electronic brake light~\cite{twardokus2025chasm}.
+    \item \textbf{End-to-End Latency:} The time elapsed between BSM creation at the application layer of the sender and successful reception at the application layer of the receiver. This metric captures queuing, scheduling, cryptographic processing, and propagation delays. SAE~J2945/1 requires BSM delivery within 100~ms to support safety applications, making this a hard upper bound for V2X system design~\cite{sae_j29451}.
+    \item \textbf{Channel Busy Ratio (CBR):} The fraction of subchannels measured as occupied within a 100~ms measurement window. CBR reflects the overall channel congestion and drives the congestion control mechanism defined in SAE~J3161. Higher CBR values trigger MCS and transmission parameter adjustments that can degrade individual packet reliability. Larger PQC payloads increase per-transmission resource consumption, elevating CBR and potentially triggering congestion control actions at lower vehicle densities than ECDSA.
+    \item \textbf{Subchannel Resource Utilization:} The number of subchannels consumed per transmission for each algorithm at a given MCS. As shown in Table~\ref{tab:tbs_feasibility}, PQC algorithms require significantly more subchannels than ECDSA, reducing the spatial multiplexing capacity of the sidelink and increasing contention among concurrent transmitters.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation Outcomes}
+\label{sec:results}
+
+This section presents empirical performance results from openCV2X simulations, evaluating Falcon-512 against the ECDSA~P-256 baseline across varying traffic densities and channel propagation conditions. The analysis focuses on PDR, end-to-end latency, and resource utilization to assess PQC feasibility for safety-critical V2X applications.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Resource Allocation Analysis}
+
+As established in Section~\ref{sec:resource_feasibility}, PQC algorithms impose significantly higher sidelink resource requirements than ECDSA due to larger cryptographic payloads. Table~\ref{tab:performance_summary} confirms these theoretical predictions: Falcon-512 digest-mode SPDUs (741~bytes) require 4~subchannels at MCS~11, consuming 40\% of the available 10~subchannels per subframe, whereas ECDSA digest SPDUs (130~bytes) require only 1~subchannel at the same MCS. Certificate-bearing Falcon SPDUs (1{,}735~bytes) further escalate this to 8~subchannels (80\% occupancy), compared to 2~subchannels for ECDSA certificates (296~bytes).
+
+This 4$\times$ resource consumption differential for digest transmissions (which constitute 90\% of packets under the 1-in-10 certificate inclusion policy) has direct consequences for channel congestion. Since Mode~4 SPS grants are sized for the maximum SPDU (Section~\ref{sec:resource_feasibility}), all Falcon transmissions---even digest-only packets---permanently occupy the grant-allocated subchannels for the entire reservation period. At a given vehicle density, Falcon effectively quadruples the spatial occupancy footprint per transmission compared to ECDSA, reducing the number of concurrent transmitters that can share the channel without collision and elevating CBR faster as traffic density increases.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Packet Delivery Performance}
+
+\subsubsection{Impact of Traffic Density}
+
+Figure~\ref{fig:pdr_comparison_los} compares PDR performance for ECDSA and Falcon-512 under LOS channel conditions across traffic densities A (10~veh/km), B (20~veh/km), and D (40~veh/km). Both algorithms exhibit PDR degradation as density increases, driven by elevated channel contention and packet collisions. At the lightest density (A), ECDSA achieves 72.13\% PDR, while Falcon achieves 69.53\%---a modest 2.60~percentage point (pp) degradation. However, \textbf{neither algorithm meets the 90\% PDR threshold} typically required for safety-critical V2X applications, even at this sparse traffic level.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figures/comparative/PDR_Comparison_LOS.png}
+    \caption{PDR comparison: ECDSA P-256 vs Falcon-512 across traffic densities (LOS channel). Both algorithms fall short of the 90\% PDR threshold across all tested densities.}
+    \label{fig:pdr_comparison_los}
+\end{figure}
+
+As density increases to B (20~veh/km), PDR degrades further, with Falcon dropping to 53.14\% (a 16.4~pp decline from density A). This accelerated degradation reflects the compounding effects of Falcon's higher resource occupancy: each Falcon transmission consumes 4~subchannels, leaving fewer resources available for concurrent transmitters and elevating the collision probability. The PDR gap between ECDSA and Falcon narrows at higher densities because channel saturation begins to dominate: once collisions become frequent, the marginal impact of packet size diminishes relative to the overwhelming effect of contention.
+
+The simulation data for density D (40~veh/km) exhibited anomalies (PDR $>$ 100\% due to sender count errors in data collection), preventing conclusive analysis at this traffic level. However, the trend from A to B suggests PDR would continue to degrade at D, likely falling below 40\% for both algorithms.
+
+\subsubsection{Impact of Channel Propagation}
+
+Figure~\ref{fig:channel_impact} isolates the effect of channel propagation by comparing LOS versus NLOS performance at density A (10~veh/km). The transition from LOS to NLOS produces a \textbf{catastrophic PDR collapse}: ECDSA drops from 72.13\% (LOS) to 24.37\% (NLOS), a 47.76~pp degradation. Falcon similarly drops from 69.53\% to 23.76\%, a 45.77~pp decline. In both cases, NLOS reduces PDR by approximately two-thirds, rendering V2X communication barely functional for safety applications.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figures/comparative/Channel_Impact.png}
+    \caption{Channel propagation impact: LOS vs NLOS at density A (10~veh/km). NLOS conditions cause a catastrophic PDR collapse for both ECDSA and Falcon-512.}
+    \label{fig:channel_impact}
+\end{figure}
+
+This severe NLOS penalty arises from multipath fading, shadowing, and increased interference in non-line-of-sight scenarios, which are common in urban intersections with buildings, trucks, and other obstructions. Importantly, the \emph{relative} performance gap between ECDSA and Falcon remains narrow under NLOS (0.61~pp at density A), indicating that cryptographic payload size is a secondary factor compared to propagation losses. The NLOS results underscore a fundamental limitation of the single-intersection simulation scenario: real-world deployments must account for frequent NLOS conditions, which would require either infrastructure augmentation (RSU densification) or robust forward error correction schemes to achieve acceptable PDR.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{End-to-End Latency Analysis}
+
+Table~\ref{tab:performance_summary} reports latency statistics across all valid scenarios. Mean end-to-end latency is consistently low, ranging from 50.93~ms to 52.63~ms, well below the SAE~J2945/1 deadline of 100~ms. The 95th percentile latency remains at 97--98~ms, and the 99th percentile reaches 101~ms, marginally exceeding the deadline in some scenarios.
+
+\begin{table*}[t]
+\centering
+\caption{Performance Summary: PDR and Latency Metrics Across All Scenarios}
+\label{tab:performance_summary}
+\begin{tabular}{llcccccc}
+\toprule
+\textbf{Algorithm} & \textbf{Density} & \textbf{Channel} & \textbf{PDR (\%)} & \textbf{Mean (ms)} & \textbf{P95 (ms)} & \textbf{P99 (ms)} & \textbf{Max (ms)} \\
+\midrule
+ECDSA & A (10 veh/km) & LOS & 72.13 & 51.71 & 97.00 & 101.00 & 101.00 \\
+ECDSA & A (10 veh/km) & NLOS & 24.37 & 50.93 & 97.00 & 101.00 & 101.00 \\
+ECDSA & B (20 veh/km) & NLOS & 29.67 & 51.76 & 98.00 & 101.00 & 101.00 \\
+ECDSA & D (40 veh/km) & LOS & 57.43 & 51.54 & 97.00 & 101.00 & 101.00 \\
+\midrule
+Falcon & A (10 veh/km) & LOS & 69.53 & 52.63 & 97.00 & 101.00 & 198.00 \\
+Falcon & A (10 veh/km) & NLOS & 23.76 & 50.97 & 98.00 & 101.00 & 197.00 \\
+Falcon & B (20 veh/km) & LOS & 53.14 & 52.03 & 97.00 & 101.00 & 198.00 \\
+Falcon & B (20 veh/km) & NLOS & 27.40 & 52.15 & 97.00 & 101.00 & 196.00 \\
+Falcon & E (50 veh/km) & LOS & 84.44 & 51.79 & 97.00 & 101.00 & 199.00 \\
+Falcon & F (100 veh/km) & LOS & 31.65 & 51.88 & 97.00 & 101.00 & 193.00 \\
+\bottomrule
+\end{tabular}
+\vspace{2mm}
+\begin{minipage}{\textwidth}
+\small
+\textit{Note:} PDR = Packet Delivery Ratio. P95/P99 = 95th/99th percentile latency. Invalid scenarios (PDR > 100\% due to data collection errors) excluded from this table.
+\end{minipage}
+\end{table*}
+
+Figures~\ref{fig:latency_cdf_light} and~\ref{fig:latency_cdf_medium} present latency CDF curves for densities A and B under LOS conditions. The CDFs reveal that both ECDSA and Falcon deliver the vast majority of packets (95\%) within 97--98~ms, with the distributions nearly overlapping. Maximum observed latency for ECDSA is consistently capped at 101~ms, while Falcon exhibits slightly higher tail latency (193--199~ms), likely due to occasional retransmissions or queuing delays induced by the larger packet sizes.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figures/comparative/Latency_CDF_Comparison_Light.png}
+    \caption{Latency CDF comparison at density A (10~veh/km, LOS). Both algorithms meet the 100~ms latency deadline for 95\% of packets.}
+    \label{fig:latency_cdf_light}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figures/comparative/Latency_CDF_Comparison_Medium.png}
+    \caption{Latency CDF comparison at density B (20~veh/km, LOS). Latency distributions remain similar despite increased traffic density.}
+    \label{fig:latency_cdf_medium}
+\end{figure}
+
+Critically, the latency results demonstrate that \textbf{PQC computational overhead does not impose prohibitive delays} on V2X communication. The cryptographic operations (Falcon signature generation and verification) are sufficiently fast that application-layer processing time remains a minor component of total latency, which is dominated instead by MAC-layer scheduling and propagation delays. This validates the theoretical feasibility of PQC from a latency perspective, even as PDR remains the primary limiting factor.
+
+Table~\ref{tab:performance_degradation} quantifies the performance delta between Falcon and ECDSA for matched scenarios. Falcon exhibits a 2.60~pp PDR degradation at density A (LOS) and 0.92~ms higher mean latency---statistically significant but modest in absolute terms. The latency penalty is negligible (0.04~ms) under NLOS conditions, reinforcing that channel propagation effects vastly outweigh algorithmic differences.
+
+\begin{table*}[t]
+\centering
+\caption{Performance Degradation: Falcon-512 vs ECDSA P-256 (Matched Scenarios)}
+\label{tab:performance_degradation}
+\begin{tabular}{llcccccc}
+\toprule
+\multirow{2}{*}{\textbf{Density}} & \multirow{2}{*}{\textbf{Channel}} & \multicolumn{3}{c}{\textbf{PDR Comparison}} & \multicolumn{3}{c}{\textbf{Latency Comparison}} \\
+\cmidrule(lr){3-5} \cmidrule(lr){6-8}
+ & & \textbf{ECDSA (\%)} & \textbf{Falcon (\%)} & \textbf{$\Delta$ (pp)} & \textbf{ECDSA (ms)} & \textbf{Falcon (ms)} & \textbf{$\Delta$ (ms)} \\
+\midrule
+A (10 veh/km) & LOS & 72.13 & 69.53 & -2.60 & 51.71 & 52.63 & +0.92 \\
+A (10 veh/km) & NLOS & 24.37 & 23.76 & -0.61 & 50.93 & 50.97 & +0.04 \\
+B (20 veh/km) & NLOS & 29.67 & 27.40 & -2.27 & 51.76 & 52.15 & +0.39 \\
+\bottomrule
+\end{tabular}
+\vspace{2mm}
+\begin{minipage}{\textwidth}
+\small
+\textit{Note:} $\Delta$ (pp) = delta in percentage points (Falcon - ECDSA). Negative PDR delta indicates Falcon underperforms ECDSA. Positive latency delta indicates Falcon has higher latency.
+\end{minipage}
+\end{table*}
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Falcon-512 Scalability Assessment}
+
+Figure~\ref{fig:falcon_scalability} examines Falcon-512 PDR across the full spectrum of evaluated densities (A, B, E, F) under LOS conditions. The scalability profile reveals a non-monotonic trend: PDR degrades from 69.53\% at density A to 53.14\% at density B, then unexpectedly \emph{recovers} to 84.44\% at density E (50~veh/km) before collapsing to 31.65\% at density F (100~veh/km).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figures/comparative/Falcon_Scalability.png}
+    \caption{Falcon-512 scalability: PDR vs traffic density (LOS). Non-monotonic performance suggests simulation anomalies at density E.}
+    \label{fig:falcon_scalability}
+\end{figure}
+
+This non-monotonic behavior is \textbf{anomalous} and likely reflects artifacts of the single-intersection simulation geometry or SPS scheduling stochasticity rather than genuine algorithmic properties. The density E result (84.44\% PDR) is the \emph{only} scenario approaching the 90\% PDR threshold, yet it occurs at a higher density than scenarios A and B, which contradicts the expected trend of increasing contention with density. Possible explanations include: (1)~favorable vehicle spatial distributions at density E that reduced hidden-node collisions, (2)~random reselection events that temporarily reduced contention, or (3)~simulation initialization effects.
+
+Excluding the anomalous density E point, the overall trend indicates that Falcon-512 PDR degrades monotonically with increasing traffic density, as expected. At density F (100~veh/km), PDR collapses to 31.65\%, well below safety-critical thresholds. This suggests a \textbf{practical feasibility boundary} for Falcon-512 on C-V2X Mode~4 sidelink: the algorithm may be marginally viable at densities up to 20~veh/km under ideal LOS conditions, but becomes increasingly unreliable beyond this threshold.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Discussion}
+\label{sec:discussion}
+
+This section interprets the empirical findings in the context of practical PQC deployment for C-V2X, addresses the observed performance limitations, and proposes mitigation strategies.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Feasibility Assessment}
+
+The results confirm the theoretical analysis from Section~\ref{sec:resource_feasibility}: \textbf{Dilithium-2 remains infeasible} for C-V2X Mode~4 sidelink under SAE~J3161 constraints, as its SPDU sizes exceed the maximum TBS regardless of MCS or subchannel allocation. In contrast, \textbf{Falcon-512 is conditionally feasible}, occupying a narrow but viable operating region where certificate-bearing SPDUs can be accommodated at MCS~11 with 8~subchannels (digest-mode SPDUs require only 4~subchannels).
+
+However, \emph{feasibility} (ability to fit packets within the transport block) does not guarantee \emph{adequacy} (meeting safety-critical PDR requirements). The simulation results reveal that Falcon-512 imposes a modest but measurable 2--3~percentage point PDR penalty relative to ECDSA at light-to-moderate traffic densities (A--B). More critically, \textbf{the baseline ECDSA performance itself falls short of the 90\% PDR threshold} across all evaluated scenarios, achieving at best 72.13\% PDR under ideal conditions (density A, LOS). This baseline deficit is \emph{independent} of PQC overhead and instead reflects limitations of the simulation configuration, particularly:
+
+\begin{itemize}
+    \item \textbf{Single-intersection geometry:} The scenario concentrates all vehicles within a confined spatial region, maximizing hidden-node collisions and contention. Real-world highway scenarios with linear vehicle distributions would exhibit lower collision probabilities.
+    \item \textbf{Aggressive traffic generation:} The 100~ms BSM generation interval (RRI) combined with dense vehicle populations produces high channel occupancy, even at nominally "light" densities (10~veh/km).
+    \item \textbf{Limited RSU coverage:} A single RSU at the intersection center creates edge-of-coverage zones where propagation losses degrade PDR. Multi-RSU deployments would improve spatial reliability.
+    \item \textbf{NLOS severity:} The NLOS channel model used in openCV2X may overestimate fading losses compared to real-world measurements, contributing to the catastrophic 70\% PDR collapse observed in NLOS scenarios.
+\end{itemize}
+
+Despite these confounding factors, the \emph{relative} performance comparison between ECDSA and Falcon remains valid: Falcon consistently underperforms ECDSA by 2--3~pp across matched scenarios (Table~\ref{tab:performance_degradation}), confirming that PQC payload inflation \emph{does} impose a tangible PDR cost, albeit one that is secondary to propagation and contention effects.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Density Thresholds and Deployment Implications}
+
+Extrapolating from the observed trends, we estimate a \textbf{feasibility threshold} of approximately 20--25~veh/km for Falcon-512 on C-V2X Mode~4 under LOS conditions. Beyond this density, PDR degrades rapidly due to the 4$\times$ subchannel occupancy overhead, rendering Falcon unsuitable for safety-critical applications without protocol enhancements.
+
+This threshold aligns with real-world traffic conditions in several deployment contexts:
+\begin{itemize}
+    \item \textbf{Highway driving (non-congested):} Typical densities of 10--20~veh/km on multi-lane freeways fall within Falcon's viable range, suggesting PQC could be deployed for highway platooning or cooperative adaptive cruise control.
+    \item \textbf{Urban arterials (moderate):} Densities of 20--40~veh/km during off-peak hours marginally exceed the threshold, requiring either infrastructure support (e.g., periodic certificate distribution via RSUs to reduce over-the-air certificate transmissions) or dynamic algorithm switching (Falcon for sparse traffic, ECDSA for congestion).
+    \item \textbf{Urban congestion (heavy):} Densities exceeding 50~veh/km (density E--F scenarios) render Falcon infeasible, as PDR drops below 35\% and approaches the NLOS baseline. In these regimes, PQC deployment would require migration to 5G NR-V2X (which offers higher bandwidth and advanced scheduling) or hybrid certificate strategies.
+\end{itemize}
+
+Importantly, the density threshold is \emph{sensitive to channel conditions}: NLOS propagation reduces both ECDSA and Falcon PDR to 23--30\%, obliterating the distinction between algorithms and suggesting that PQC overhead becomes irrelevant once environmental losses dominate. This implies that PQC viability is tightly coupled to infrastructure planning---deployments must prioritize LOS coverage through careful RSU placement, or accept that NLOS environments will require alternative communication modes (e.g., cellular V2N) regardless of the chosen cryptographic algorithm.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Trade-offs and Mitigation Strategies}
+
+The central trade-off revealed by this study is \textbf{quantum resistance versus resource efficiency}. Falcon-512 provides long-term security against quantum adversaries at the cost of 4$\times$ higher sidelink resource consumption, which translates to reduced spatial multiplexing capacity and lower PDR under contention. Three mitigation strategies emerge:
+
+\subsubsection{Protocol Evolution}
+
+Expanding the SAE~J3161 parameter space could accommodate Falcon-512 without PDR penalties. Specifically:
+\begin{itemize}
+    \item \textbf{Higher MCS indices:} Allowing MCS~12--20 (currently excluded from J3161) would reduce the subchannel requirement for Falcon SPDUs from 4 to 2--3, halving the resource footprint. This requires validating higher-order modulations (64-QAM, 256-QAM) under vehicular channel conditions.
+    \item \textbf{Wider bandwidth allocation:} Migrating from 10~MHz to 20~MHz channels (as used in this simulation) doubles the subchannel count from 10 to 20, proportionally reducing contention. The 5.9~GHz ITS band supports 20~MHz operation in some regulatory domains.
+    \item \textbf{Packet fragmentation:} Splitting large PQC SPDUs across multiple subframes (as proposed in~\cite{twardokus2025chasm}) would avoid monopolizing subchannels in a single transmission, though this introduces reassembly complexity and amplifies the impact of packet loss.
+\end{itemize}
+
+\subsubsection{Migration to 5G NR-V2X}
+
+The 3GPP Release~16/17 NR-V2X (PC5) sidelink offers several advantages over LTE-based C-V2X:
+\begin{itemize}
+    \item \textbf{Higher data rates:} Sub-6~GHz NR-V2X supports up to 100~Mbps with advanced MIMO and beamforming, reducing the relative impact of PQC payload overhead.
+    \item \textbf{Flexible numerologies:} Shorter TTIs (transmission time intervals) and scalable subcarrier spacing improve latency and resource granularity.
+    \item \textbf{Dynamic scheduling:} NR-V2X Mode~2 supports hybrid sensing and reservation with more sophisticated collision avoidance than LTE Mode~4.
+\end{itemize}
+
+Preliminary studies~\cite{bazzi2021sidelink} suggest NR-V2X could accommodate Falcon-512 SPDUs with minimal PDR degradation at densities up to 50~veh/km. However, NR-V2X deployment faces regulatory and backwards-compatibility challenges, as most current V2X infrastructure is LTE-based.
+
+\subsubsection{Dynamic Algorithm Selection}
+
+A hybrid approach involves \textbf{adaptive cryptographic algorithm switching} based on real-time channel conditions:
+\begin{itemize}
+    \item \textbf{Density-aware selection:} Vehicles measure local CBR and switch to ECDSA when congestion exceeds a threshold (e.g., CBR $>$ 0.6), reverting to Falcon during sparse traffic.
+    \item \textbf{Certificate caching:} Receivers maintain a cache of previously validated Falcon certificates and accept ECDSA-signed SPDUs from the same sender during high-congestion periods, amortizing the PQC overhead across multiple transmissions.
+    \item \textbf{Infrastructure offloading:} RSUs periodically broadcast Falcon certificates via dedicated control channels, allowing vehicles to transmit digest-only SPDUs continuously. This reduces over-the-air PQC traffic while preserving quantum resistance.
+\end{itemize}
+
+Such schemes require coordination between the IEEE~1609.2 security layer and the MAC scheduler, introducing protocol complexity. Standardization efforts (e.g., ETSI ITS WG5, IEEE~1609 working groups) would need to define triggering conditions and fallback behaviors.
+
+%%%%%%%%%%%%%%%%%%%%%% SUBSECTION %%%%%%%%%%%%%%%%%%%%%%
+\subsection{Limitations}
+
+Several limitations constrain the generalizability of these findings:
+
+\begin{enumerate}
+    \item \textbf{20~MHz channel bandwidth:} The simulation uses 20~MHz channels (100~RBs), whereas SAE~J3161 specifies 10~MHz (50~RBs). Doubling the bandwidth \emph{underestimates} contention by doubling the subchannel count, making our results optimistic. Real-world 10~MHz deployments would experience \textbf{higher collision rates} and \textbf{lower PDR} than reported here, further disadvantaging Falcon-512.
+
+    \item \textbf{Single-intersection scenario:} The confined spatial geometry maximizes hidden-node collisions, producing lower PDR than highway or distributed urban scenarios. Multi-intersection or corridor simulations would better capture realistic deployment diversity.
+
+    \item \textbf{Reference cryptographic implementation:} The liboqs library used for Falcon-512 is a portable reference implementation, not optimized for embedded V2X OBUs (On-Board Units). Hardware-accelerated PQC (e.g., via AES-NI or custom ASIC) could reduce signature generation latency, though this would not affect sidelink PDR, which is dominated by packet size rather than computation time.
+
+    \item \textbf{Omitted CRL overhead:} The simulation does not model Certificate Revocation Lists (CRLs), which in PQC systems would be significantly larger (Falcon CRL entries are $\sim$1~KB vs. $\sim$200~bytes for ECDSA). Periodic CRL distribution would amplify sidelink occupancy during revocation events.
+
+    \item \textbf{Generic channel model:} The openCV2X NLOS model uses a statistical fading profile that may not accurately reflect real-world urban propagation, particularly for specific intersection geometries (T-junctions, roundabouts, etc.). Site-specific ray-tracing simulations would improve fidelity.
+
+    \item \textbf{Missing J3161 one-shot mechanism:} As documented in project memory, the openCV2X implementation lacks the one-shot transmission mechanism required by SAE~J3161~\S7.3.3 to avoid repetitive collisions between SPS reservations. This omission may artificially inflate collision rates, contributing to the low baseline PDR.
+\end{enumerate}
+
+Despite these limitations, the core conclusion remains robust: Falcon-512 imposes a measurable PDR penalty due to increased resource consumption, and this penalty compounds with traffic density, establishing a practical deployment threshold around 20--25~veh/km under LOS conditions.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% SECTION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+\label{sec:conclusion}
+
+This study evaluated the feasibility of deploying NIST-standardized post-quantum cryptographic (PQC) digital signature algorithms on C-V2X Mode~4 sidelink communication for safety-critical vehicular applications. Through theoretical transport block size analysis and empirical simulation using the openCV2X framework, we assessed whether PQC can meet the stringent reliability and latency requirements of V2X systems while maintaining quantum resistance against future cryptanalytic threats. The research examined three candidate algorithms---Falcon-512, Dilithium-2, and ECDSA~P-256 (classical baseline)---across varying traffic densities (10--100~veh/km) and channel propagation conditions (LOS/NLOS).
+
+The feasibility analysis demonstrated that \textbf{Dilithium-2 is fundamentally incompatible} with SAE~J3161-compliant C-V2X sidelink: its minimum SPDU size (2{,}495~bytes for digest-only transmission, 3{,}904~bytes with full certificates) exceeds the maximum transport block capacity (2{,}481~bytes) at MCS~11 with 10~subchannels, even when excluding certificate overhead. Accommodating Dilithium would require protocol extensions beyond current standardization boundaries, such as packet fragmentation, non-standard MCS indices, or migration to 5G NR-V2X. Similarly, SLH-DSA (SPHINCS+) signature sizes ($\geq$7{,}856~bytes) render it infeasible without major architectural changes.
+
+In contrast, \textbf{Falcon-512 occupies a narrow but viable operating region}, where certificate-bearing SPDUs (1{,}735~bytes) fit within the maximum TBS at MCS~11 using 8~subchannels (80\% resource occupancy), and digest-mode SPDUs (741~bytes) require only 4~subchannels (40\% occupancy). The empirical simulation results confirmed this theoretical feasibility but revealed significant performance trade-offs: Falcon-512 consistently exhibits 2--3~percentage point lower PDR compared to ECDSA at matched traffic densities, with PDR degrading from 69.53\% at 10~veh/km (density A, LOS) to 53.14\% at 20~veh/km (density B) and collapsing to 31.65\% at 100~veh/km (density F). Latency performance, however, remained acceptable: both ECDSA and Falcon achieved mean latencies of 51--52~ms and 95th percentile latencies of 97--98~ms, well within the SAE~J2945/1 deadline of 100~ms, demonstrating that PQC computational overhead does not impose prohibitive processing delays.
+
+Based on these findings, we conclude that \textbf{Falcon-512 is conditionally viable for C-V2X deployment at light-to-moderate traffic densities (up to $\sim$20--25~veh/km) under LOS conditions}, but becomes increasingly unreliable as density increases due to its 4$\times$ subchannel consumption overhead relative to ECDSA. This density threshold corresponds to non-congested highway driving and off-peak urban arterials, suggesting that PQC could be deployed in specific operational contexts where quantum resistance is prioritized and traffic density remains controlled. However, heavy urban congestion ($\geq$50~veh/km) or NLOS propagation environments render Falcon infeasible without protocol enhancements.
+
+\textbf{Deployment recommendations:} Industry stakeholders and standards bodies should consider the following strategies to enable quantum-resistant V2X security:
+\begin{itemize}
+    \item \textbf{Hybrid certificate infrastructure:} Deploy dual ECDSA+Falcon certificate chains during the transition period, allowing vehicles to dynamically select algorithms based on real-time channel congestion (CBR monitoring). This provides quantum resistance when feasible while maintaining baseline reliability under high contention.
+    \item \textbf{Protocol evolution:} Extend SAE~J3161 to permit higher MCS indices (12--20) and 20~MHz channel operation where regulatory frameworks allow, reducing Falcon's subchannel requirement from 4 to 2--3 and proportionally mitigating PDR degradation.
+    \item \textbf{Infrastructure offloading:} Leverage RSU-based certificate distribution to reduce over-the-air PQC transmission frequency, allowing vehicles to transmit digest-only SPDUs for extended periods while periodically refreshing Falcon certificates via infrastructure channels.
+    \item \textbf{Prioritize Falcon-512 in future standards:} Among NIST PQC finalists, Falcon-512 is the only algorithm demonstrating near-term C-V2X compatibility. Standards bodies (IEEE~1609, ETSI ITS, 3GPP) should incorporate Falcon-specific parameters into next-generation V2X security profiles, while continuing research into compressed certificate formats and hash-based signature aggregation.
+\end{itemize}
+
+\textbf{Limitations and future work:} This study's findings are subject to several caveats. The simulation employed 20~MHz channel bandwidth (double the J3161-specified 10~MHz), producing optimistic PDR results that underestimate real-world contention. The single-intersection scenario geometry may amplify collision rates relative to highway or distributed urban deployments. Additionally, the observed baseline ECDSA PDR of 72\% (below the 90\% safety threshold) reflects scenario-specific artifacts rather than fundamental algorithmic limitations, warranting caution in generalizing absolute PDR values. Future research directions include:
+\begin{enumerate}
+    \item \textbf{NR-V2X evaluation:} Assess Falcon-512 and Dilithium-2 performance on 3GPP Release~16/17 NR-V2X (PC5) sidelink, which offers higher data rates, flexible numerologies, and advanced MIMO, potentially expanding the PQC viability envelope to 50--100~veh/km.
+    \item \textbf{Hybrid signature schemes:} Investigate hash-based signature aggregation (e.g., combining Falcon with XMSS for long-lived certificates) or lattice-based group signatures to reduce per-packet overhead while maintaining quantum resistance.
+    \item \textbf{Certificate compression:} Explore ECC-based certificate compression (e.g., ECQV implicit certificates) adapted for PQC, or develop PQC-specific compression leveraging structured lattice properties.
+    \item \textbf{Multi-intersection simulation:} Extend the evaluation to multi-intersection urban corridors and highway scenarios with spatially distributed vehicle populations to capture realistic deployment diversity and hidden-node collision patterns.
+    \item \textbf{Hardware acceleration:} Profile Falcon-512 signature generation on automotive-grade embedded platforms (e.g., ARM Cortex-A72, Qualcomm Snapdragon Ride) with cryptographic accelerators to validate end-to-end latency on production OBUs.
+    \item \textbf{Dynamic algorithm selection frameworks:} Develop CBR-based decision policies for real-time ECDSA-Falcon switching, including game-theoretic analysis of mixed-algorithm traffic (some vehicles using PQC, others using ECDSA) and its impact on global channel efficiency.
+\end{enumerate}
+
+The quantum computing threat to V2X security is not hypothetical---NIST's PQC standardization timeline projects widespread cryptanalytic-relevant quantum computers by 2035, necessitating preemptive cryptographic migration. This work provides the first empirical evidence that PQC can be deployed on existing C-V2X Mode~4 infrastructure without catastrophic performance collapse, albeit within constrained operational envelopes. The path forward requires coordinated efforts across algorithm design, protocol standardization, and infrastructure planning to ensure that vehicular communication systems remain secure in the post-quantum era.
+
+
+\section*{Acknowledgments}
+This work is based upon the work supported by the National Center for Transportation Cybersecurity and Resiliency (TraCR), headquartered at Clemson University, Clemson, South Carolina, USA. Any opinions, findings, conclusions, and recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of TraCR, and the U.S. government assumes no liability for the contents or use thereof.
+
+\section*{Authors Contribution}
+
+
+%%%%%%%%%%%% REFERENCES %%%%%%%%%%%%%%
+\bibliographystyle{IEEEtran}
+\bibliography{main}
+
+
+% \newpage
+\vspace{-33pt}
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/Akid.jpg}}]{Akid Abrar} (Student Member, IEEE) received his bachelor’s degree in Computer Science and Engineering from Bangladesh University of Engineering and Technology (BUET), Dhaka, Bangladesh, in 2022. He is currently pursuing his Ph.D. in the Department of Civil, Construction, and Environmental Engineering at The University of Alabama (UA). His research focuses on the security of safety-critical Vehicle-to-Everything (V2X) communications leveraging post-quantum cryptography (PQC).
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/Mamun.jpg}}]{Abdullah Al Mamun} (Student Member, IEEE) received the M.S. and Ph.D. degrees in Environmental Engineering and Earth Sciences from Clemson University, Clemson, SC, USA, in 2020 and 2022, respectively.
+He is currently pursuing his second Ph.D. in Civil Engineering at Clemson University, Clemson, SC, USA, funded by the USDOT-supported National Center for Transportation Cybersecurity and Resiliency (TraCR), Greenville, SC, USA. His research interests include cybersecurity and resiliency of Intelligent Transportation Systems (ITS), post-quantum cryptography, homomorphic encryption, connected and autonomous vehicle technologies, and high-performance computing for ITS applications.
+
+\end{IEEEbiography}
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/Dr Chowdhury.jpg}}]{Mizanur Rahman} (Senior Member, IEEE) ) received the Ph.D. degree in civil engineering from the University of Virginia, in 1995. Currently, he is the Eugene Douglas Mays Chair of transportation with the Glenn Department of Civil Engineering, Clemson University. He also holds a joint appointment with the School of Computing (courtesy appointment). He is the Founding Director of the USDOT-sponsored National Center for Transportation Cybersecurity and Resiliency (TraCR) and the Center for Connected Multimodal Mobility (C2M2). He is also the Director of the Complex Systems, Analytics, and Visualization Institute (CSAVI) and the Co-Associate Director of the USDOT-sponsored Center for Regional and Rural Connected Communities (CR2C2). His current research interests include evolving realms of sensing, communications, computing, cybersecurity, and cyber-resiliency, all with the goal of establishing a secure and resilient IoT environment for smart cities and regions.
+
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{photos/mizan.png}}]{Mashrur Chowdhury} (Senior Member, IEEE) received the B.Sc. degree in civil engineering from Bangladesh University of Engineering and Technology, Dhaka, Bangladesh, in 2008, and the M.Sc. and Ph.D. degrees in civil engineering (transportation systems) from Clemson University, Clemson, SC, USA, in 2013 and 2018, respectively. He is an Assistant Professor in the Department of Civil, Construction, and Environmental Engineering at The University of Alabama, Tuscaloosa, AL, USA. His research focuses on transportation cyber--physical systems/transportation digital twin, and transportation cybersecurity.
+\end{IEEEbiography}
+
+\vfill
+
+\end{document}

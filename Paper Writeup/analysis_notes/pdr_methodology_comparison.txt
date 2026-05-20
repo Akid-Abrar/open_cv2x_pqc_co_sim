@@ -1,0 +1,132 @@
+PDR METHODOLOGY COMPARISON: BIN-FIRST (v2) vs 5GAA SLIDING WINDOW
+===================================================================
+Date: 2026-05-05
+
+
+DIFFERENCE BETWEEN THE TWO SCRIPTS
+====================================
+
+Script v2 (bin-first approach)
+--------------------------------
+1. Takes all received packets and immediately assigns each one to a distance
+   bin based on its dist_m value.
+2. Groups by (sender, receiver, bin_idx).
+3. For each group, computes span = max(msgId) - min(msgId) + 1 and
+   PDR = received / span.
+4. The denominator is estimated from however many packets happened to fall
+   inside that spatial slice.
+
+The core problem: a vehicle moving at 30-50 km/h crosses a 30m bin in roughly
+2-3 seconds, producing only 20-30 packets per bin in ideal conditions, and far
+fewer if the bin is at a boundary. Sparse bins produce unstable, noisy PDR
+estimates. A span=1 observation always yields 100% regardless of reality.
+
+
+Script 5GAA (time-window approach)
+------------------------------------
+1. For each (sender, receiver) pair, sorts packets by time.
+2. For each received packet at timestamp t and distance d:
+   - Opens a 5-second window [t - 2.5s, t + 2.5s] in time.
+   - Counts all received packets inside that window and computes their msgId span.
+   - PRR = received_in_window / span * 100.
+   - Records (d, PRR) as one scatter point.
+3. After collecting all scatter points across all pairs, bins them by distance
+   for plotting.
+
+The window always covers approximately 50 packets (5 seconds at 10 Hz), making
+every PRR estimate statistically stable before any binning happens. The distance
+bin is only used for aggregation at the end, not for computing the PRR itself.
+
+
+HOW THE 5GAA APPROACH WORKS IN DETAIL
+=======================================
+
+Step 1: Sort by time per link
+------------------------------
+For each (sender, receiver) pair, all received packets are sorted ascending by
+timestamp t. This gives a time series of receptions for that specific link.
+
+
+Step 2: Slide the window over every received packet
+----------------------------------------------------
+For each packet at position idx in the sorted series, the algorithm defines a
+centered 5-second observation window. The window boundaries are found using
+binary search (searchsorted), which is fast even for large arrays.
+
+    window = all packets where t_center - 2.5 <= t <= t_center + 2.5
+
+This window is time-continuous. It overlaps heavily with neighboring windows
+(the next packet is only 100ms later), so the PRR curve is smooth by
+construction.
+
+
+Step 3: Compute PRR inside the window
+---------------------------------------
+Inside the window there are approximately 50 received packets (at 10 Hz over
+5 seconds, assuming no loss). The msgId span of these 50 packets is
+approximately 50 as well, because msgId increments by 1 per transmission
+attempt at the sender, independent of whether the packet was received. This
+makes the span a reliable proxy for sent count over a 5-second window, unlike
+over a sparse spatial slice where it could be as small as 1.
+
+    span = max(msgId in window) - min(msgId in window) + 1   (approx 50)
+    PRR  = len(window) / span * 100
+
+If 45 of 50 packets were received, PRR = 90%. If 30 were received, PRR = 60%.
+The estimate is stable because the denominator is large and the numerator
+cannot exceed it.
+
+
+Step 4: Record the scatter point at the packet's distance
+----------------------------------------------------------
+The PRR just computed is tagged with the distance dist_m of the center packet,
+not the average distance of the window. This is exactly what the 5GAA report
+describes in Section 5.2.4 of 5GAA P-190033:
+
+    "Each PER value associated with a time window is plotted against the
+     distance of the vehicle at the center of that window."
+
+So every packet in the dataset generates one (dist_m, PRR) scatter point,
+provided the window had at least MIN_PKTS received packets.
+
+
+Step 5: Bin the scatter by distance
+-------------------------------------
+After collecting thousands of (dist_m, PRR) scatter points across all links
+and all time steps, the points are grouped into 30m distance bins. Within each
+bin, the mean, median, and full distribution of PRR values are computed and
+plotted as a box plot with lines.
+
+
+Why this produces the downward parabola
+----------------------------------------
+A vehicle near the RSU (say, at 50m) consistently experiences a strong signal
+throughout every 5-second window centered on its packets. Most windows produce
+PRR close to 100%. A vehicle at 400m consistently experiences weaker signal and
+more SPS collisions relative to its distance. Its windows produce lower PRR.
+
+Because each PRR estimate already integrates 5 seconds of physics before
+binning, the bin-level statistics reflect the true channel quality at that
+distance, not the noise of sparse spatial sampling. The result is a smooth,
+monotonically decreasing curve that matches the physics and the literature.
+
+
+THE ONE REMAINING DIFFERENCE FROM THE ORIGINAL 5GAA TEST
+==========================================================
+The 5GAA field test has a Tx log: the transmitting vehicle records every packet
+it queued for transmission, with its exact timestamp and sequence number. Their
+denominator is the true sent count, not the msgId span.
+
+We do not have a Tx log. We use the msgId span within the window as a proxy.
+Over 5 seconds at 10 Hz, this approximation introduces at most 2 packets of
+error at the window edges (one at the leading edge, one at the trailing edge),
+giving a denominator error of roughly 4% in the worst case. This is small
+enough to have negligible effect on the shape of the curve.
+
+
+REFERENCE
+==========
+5GAA P-190033: "V2X Functional and Performance Test Report; Test Procedures
+and Results", 5G Automotive Association.
+  - Section 5.1.1: Packet Error Rate (PER) sliding window definition (5s, n=50)
+  - Section 5.2.4: Plotting vs Distance methodology

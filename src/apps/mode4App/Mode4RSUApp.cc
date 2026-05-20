@@ -166,13 +166,23 @@ void Mode4RSUApp::openNonBlockingUdp_(int port)
     fcntl(sockFd_, F_SETFL, flags | O_NONBLOCK);
 }
 
+static std::string getLogDirectory()
+{
+    // Get configuration name from OMNeT++ to create scenario-specific log directory
+    const char* configName = cSimulation::getActiveSimulation()->getEnvir()->getConfigEx()->getActiveConfigName();
+    if (configName && strlen(configName) > 0) {
+        return std::string("simulation_logs_") + configName;
+    }
+    return "simulation_logs";
+}
+
 static void cleanSimulationLogs()
 {
     static bool cleaned = false;
     if (cleaned) return;
     cleaned = true;
 
-    const std::string dir = "simulation_logs";
+    const std::string dir = getLogDirectory();
     struct stat st;
     if (::stat(dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
         DIR* d = ::opendir(dir.c_str());
@@ -386,7 +396,8 @@ void Mode4RSUApp::handleLowerMessage(cMessage* msg)
     emit(rsuReceivedMsg, 1);
     const char* rsuName = getParentModule()->getFullName();     // rsu[0]
 //    std::string path = std::string("bsm_rx_") + rsuName + ".txt";
-    std::string path = std::string("simulation_logs/appl_logs") + ".csv";
+    const std::string logDir = getLogDirectory();
+    std::string path = logDir + "/appl_logs.csv";
 
     SPDU* spdu = dynamic_cast<SPDU*>(msg);
     if (!spdu) {

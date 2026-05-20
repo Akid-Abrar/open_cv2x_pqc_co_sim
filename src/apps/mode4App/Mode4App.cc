@@ -39,13 +39,23 @@ static std::array<uint8_t,8> computeHashedId8(const Certificate& c) {
     return id8;
 }
 
+static std::string getLogDirectory()
+{
+    // Get configuration name from OMNeT++ to create scenario-specific log directory
+    const char* configName = cSimulation::getActiveSimulation()->getEnvir()->getConfigEx()->getActiveConfigName();
+    if (configName && strlen(configName) > 0) {
+        return std::string("simulation_logs_") + configName;
+    }
+    return "simulation_logs";
+}
+
 static void ensureSimulationLogsClean()
 {
     static bool cleaned = false;
     if (cleaned) return;
     cleaned = true;
 
-    const std::string dir = "simulation_logs";
+    const std::string dir = getLogDirectory();
     struct stat st;
     if (::stat(dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
         DIR* d = ::opendir(dir.c_str());
@@ -294,7 +304,8 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         emit(warnReceived_, 1);
         const char* hostName = getParentModule()->getFullName();
         //std::string path = std::string("ica_rx_") + hostName + ".txt";
-        std::string path = std::string("ica_rx_") + hostName + ".csv";
+        const std::string logDir = getLogDirectory();
+        std::string path = logDir + "/ica_rx_" + std::string(hostName) + ".csv";
         const double delay_ms = (simTime() - s->getTimestamp()).dbl() * 1000.0;
 
         veins::Coord uePos(0,0,0);
@@ -453,6 +464,9 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         std::ostringstream os;
         os << b.getMsgId() << ',' << b.getLat() << ',' << b.getLon() << ',' << b.getHeading_j() << ',' << b.getSpeed_j();
         std::string bsmHex = pqcdsa::toHex(reinterpret_cast<const uint8_t*>(os.str().data()), os.str().size());
+
+        // Note: bsm_rx_*.csv logging is currently disabled (see commented code below line 522)
+        // If re-enabled, ensure it uses SIM_LOG_DIR like other log files
 
         // Check SignerIdentifier type (IEEE 1609.2)
         bool ok = false;
@@ -734,7 +748,8 @@ void Mode4App::finish()
     recordScalar("icaPDR", pdr);
 
     // Log total BSMs sent by this vehicle for ground-truth PDR calculation
-    const std::string summaryPath = "simulation_logs/sender_summary.csv";
+    const std::string logDir = getLogDirectory();
+    const std::string summaryPath = logDir + "/sender_summary.csv";
     const std::string summaryHeader = "sender,total_sent";
     appendCsv(summaryPath, summaryHeader, {
         std::string(getParentModule()->getFullName()),

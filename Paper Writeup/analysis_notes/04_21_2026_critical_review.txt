@@ -1,0 +1,525 @@
+================================================================================
+  CRITICAL REVIEW: "Performance Evaluation of Post-Quantum Cryptographic
+  Algorithms on C-V2X Sidelink Communications"
+  Date: 2026-04-21
+  Review Type: Pre-submission internal audit (adversarial reviewer perspective)
+================================================================================
+
+
+OVERALL VERDICT: REJECT (MAJOR REVISION REQUIRED)
+
+The paper addresses a timely and important problem---PQC migration for V2X
+safety communications. The theoretical TBS feasibility analysis (Section 4.6)
+is rigorous and constitutes a genuine contribution. However, the empirical
+evaluation (Sections 5-7) contains fundamental data integrity problems,
+methodological gaps, and unsupported claims that would not survive peer review
+at a reputable venue. The problems below are ordered by severity.
+
+
+================================================================================
+SECTION 1: FATAL FLAWS (Paper will be rejected on any one of these alone)
+================================================================================
+
+
+---------------------------------------------------------------------------
+F1: CORRUPTED/INCOMPARABLE SIMULATION DATA (SEVERITY: FATAL)
+---------------------------------------------------------------------------
+
+Raw data inspection reveals that several scenarios are fundamentally broken:
+
+  Scenario            | Unique Senders | Sim Duration | Total Sent | PDR%
+  --------------------|----------------|-------------|------------|------
+  ECDSA A-LOS         | 244            | 300s        | 202,631    | 72.13
+  ECDSA A-NLOS        | 244            | 300s        | 202,631    | 24.37
+  ECDSA B-LOS         | 45             | 124s*       | 37,870     | 233.65 (!!)
+  ECDSA B-NLOS        | 492            | 300s        | 455,861    | 29.67
+  ECDSA D-LOS         | 972            | 300s        | 1,123,320  | 57.43
+  Falcon A-LOS        | 244            | 300s        | 202,631    | 69.53
+  Falcon A-NLOS       | 244            | 300s        | 202,631    | 23.76
+  Falcon B-LOS        | 492            | 300s        | 455,861    | 53.14
+  Falcon B-NLOS       | 492            | 300s        | 455,861    | 27.40
+  Falcon D-LOS        | 67             | 125s*       | 58,751     | 173.68 (!!)
+  Falcon E-LOS        | 232            | 256s        | 305,537    | 84.44
+  Falcon F-LOS        | 420            | 81s*        | 229,489    | 31.65
+
+  * = Simulation terminated prematurely (crashed or stopped early)
+  (!!) = PDR > 100%, physically impossible, indicates broken data collection
+
+PROBLEMS:
+
+(a) THREE SCENARIOS HAVE PDR > 100%: ECDSA B-LOS (233.65%) and Falcon D-LOS
+    (173.68%) report more packets received than sent. This is impossible and
+    indicates a bug in the data collection pipeline (likely duplicate counting
+    of received packets, or the sender_summary.csv not capturing all senders).
+    The paper acknowledges this for Density D but silently excludes ECDSA B-LOS
+    without disclosing it.
+
+(b) THREE SIMULATIONS CRASHED BEFORE 300s: ECDSA B-LOS (124s), Falcon D-LOS
+    (125s), and Falcon F-LOS (81s) terminated early. Falcon F ran for only 27%
+    of the target duration. The paper does not disclose these crashes or discuss
+    how truncated data was handled.
+
+(c) VEHICLE COUNTS ARE WILDLY INCONSISTENT ACROSS "MATCHED" SCENARIOS:
+    - ECDSA D-LOS has 972 unique senders; Falcon D-LOS has 67. That's a 14.5x
+      difference for scenarios labeled "40 veh/km."
+    - ECDSA B-LOS has 45 senders; Falcon B-LOS has 492. An 11x difference.
+    - The paper presents ECDSA D-LOS (57.43% PDR) in Table III alongside
+      Falcon D-LOS data, implying they are comparable. They are not.
+
+(d) TOTAL_SENT MISMATCH BREAKS PDR COMPARISON: Valid matched comparisons
+    (identical Total_Sent) exist for ONLY 3 scenario pairs:
+    - A-LOS:  ECDSA=202,631 vs Falcon=202,631  (VALID)
+    - A-NLOS: ECDSA=202,631 vs Falcon=202,631  (VALID)
+    - B-NLOS: ECDSA=455,861 vs Falcon=455,861  (VALID)
+    Every other comparison in the paper compares different vehicle populations,
+    rendering the PDR delta meaningless.
+
+IMPACT: The paper's primary empirical claim --- that Falcon imposes a 2-3 pp
+PDR penalty --- rests on exactly 3 valid comparisons, all at low densities
+(A and B-NLOS). The density sweep, scalability assessment, and high-density
+conclusions are built on incomparable or corrupted data.
+
+FIX: Discard all crashed/corrupted scenarios. Re-run D, E, F with both
+algorithms using identical SUMO route files and verified sim-time-limit=300s.
+Until this is done, Table III and Figure 5 are unreliable.
+
+
+---------------------------------------------------------------------------
+F2: NO REPLICATIONS, NO CONFIDENCE INTERVALS (SEVERITY: FATAL)
+---------------------------------------------------------------------------
+
+Every scenario was run exactly once with a single random seed. There are no
+replications, no error bars, no confidence intervals, and no statistical
+significance tests anywhere in the paper.
+
+Wireless channel simulation is inherently stochastic: SPS scheduling, Rayleigh
+fading, vehicle arrival timing, and resource selection all involve randomness.
+A single run can produce atypical results due to:
+  - Favorable/unfavorable vehicle spatial distributions
+  - Lucky/unlucky SPS grant selections
+  - Transient warm-up effects dominating short simulations
+
+The "non-monotonic anomaly" at Density E (PDR jumping from 53% to 84%) is
+Exhibit A: a single-run artifact. Without replications, it's impossible to
+distinguish genuine algorithmic behavior from random fluctuation.
+
+MINIMUM STANDARD: Any reputable venue (IEEE TVT, TITS, VTC, VNC) requires:
+  - At minimum 5 independent replications per scenario (different random seeds)
+  - Mean +/- 95% confidence interval for every reported metric
+  - Statistical significance test (e.g., Welch's t-test) for PDR differences
+
+FIX: Run at least 5 replications per scenario with different seeds.
+Report mean +/- 95% CI. Apply paired t-tests to ECDSA vs Falcon PDR deltas.
+
+
+---------------------------------------------------------------------------
+F3: DATA ONLY CAPTURES RSU RECEPTION, NOT V2V (SEVERITY: FATAL)
+---------------------------------------------------------------------------
+
+The CSV "receiver" column contains only "rsu[0]" --- every logged packet was
+received by the roadside unit. There is NO vehicle-to-vehicle (V2V) reception
+data in the dataset.
+
+But the paper:
+  - Title says "C-V2X Sidelink Communications" (implies V2V)
+  - Claims PDR is "computed across all vehicle pairs within communication range"
+  - Evaluates "V2V safety applications" like forward collision warning
+  - References SAE J2945/1, which specifies V2V BSM delivery requirements
+
+What is actually measured is V2I (vehicle-to-infrastructure) PDR at a single
+RSU. V2I PDR is NOT the same as V2V PDR because:
+  - The RSU is at a fixed location (intersection center), not distributed
+  - Hidden-node effects differ for RSU vs distributed vehicle receivers
+  - V2V communication range and geometry differ from V2I
+
+The paper must either:
+(a) Acknowledge that only V2I reception is measured and reframe all claims
+    accordingly, OR
+(b) Modify the simulator to log V2V reception and re-run all scenarios.
+
+Option (a) is feasible but significantly weakens the paper's contribution,
+since V2V is the primary use case for Mode 4 sidelink.
+
+
+================================================================================
+SECTION 2: MAJOR WEAKNESSES (Each significantly weakens the paper)
+================================================================================
+
+
+---------------------------------------------------------------------------
+W1: CLAIMED KPI (CBR) NEVER ANALYZED (SEVERITY: HIGH)
+---------------------------------------------------------------------------
+
+Section 4.7 (KPIs) explicitly lists CBR as a key performance indicator and
+explains why it matters (congestion control triggering, DCC drops). The
+abstract promises CBR evaluation: "channel busy ratio (CBR), and resource
+utilization, are compared across PQC algorithms."
+
+But Sections 5-7 contain:
+  - Zero CBR figures
+  - Zero CBR tables
+  - Zero CBR numerical values
+  - Zero DCC analysis
+
+This is a broken promise to the reader. CBR is arguably the STRONGEST argument
+for PQC impact (the earlier review noted Falcon CBR ~2.5x higher than ECDSA),
+yet it's completely absent from results.
+
+FIX: Add CBR time-series plots, CBR vs density comparison, and DCC drop counts.
+This data may already exist in .sca/.vec files even if not in the CSV.
+
+
+---------------------------------------------------------------------------
+W2: PAPER TABLE II SAYS 60s SIMULATION, ACTUAL DATA IS 300s (SEVERITY: HIGH)
+---------------------------------------------------------------------------
+
+Table II (Simulation Parameters) states "Simulation duration: 60s". But the
+actual simulation data shows runs ending at 256-300s, and omnetpp.ini has
+sim-time-limit = 300s for all named configs.
+
+This is either:
+(a) A documentation error (Table II is outdated), or
+(b) The table is correct and some results used 60s while others used 300s
+
+Either way, the paper misrepresents its own experimental setup. If it's (a),
+fix the table. If it's (b), the inconsistency invalidates cross-scenario
+comparisons.
+
+
+---------------------------------------------------------------------------
+W3: NO DISTANCE-FILTERED PDR (SEVERITY: HIGH)
+---------------------------------------------------------------------------
+
+V2X performance is standardly evaluated at specific distances:
+  - SAE J2945/1: 300m communication range
+  - CHASM (Twardokus 2025): reports PDR at 100m, 300m, 500m intervals
+  - Most Mode 4 papers: PDR vs distance curves
+
+The paper reports only aggregate PDR across ALL distances. This masks the
+distance-dependent behavior (PDR degrades with distance) and makes results
+incomparable to the existing literature. The raw data contains a "dist_m"
+column that could support this analysis.
+
+FIX: Plot PDR vs distance in 50m bins. Report PDR at 300m specifically.
+The data already supports this; only the analysis script needs to be extended.
+
+
+---------------------------------------------------------------------------
+W4: NO QUANTITATIVE COMPARISON WITH CHASM (SEVERITY: HIGH)
+---------------------------------------------------------------------------
+
+The paper positions itself against CHASM (Twardokus & Rahbari, IEEE TITS
+2025), the closest related work. But the comparison remains qualitative only:
+  - No side-by-side PDR numbers at comparable densities
+  - No discussion of why PDR differs from CHASM's results
+  - The "first empirical evidence" claim in the conclusion directly conflicts
+    with CHASM's existence
+
+The related work section cites CHASM but doesn't engage with its findings.
+A reviewer from the CHASM group would be particularly hostile to this gap.
+
+FIX: Add a comparison table showing CHASM's reported metrics vs this study's,
+with clear explanation of scenario differences. Drop the "first" claim, or
+qualify it precisely (e.g., "first evaluation using openCV2X framework").
+
+
+---------------------------------------------------------------------------
+W5: 20 MHz BANDWIDTH UNDERMINES ALL QUANTITATIVE CLAIMS (SEVERITY: HIGH)
+---------------------------------------------------------------------------
+
+SAE J3161 specifies 10 MHz (50 RBs, 5 subchannels). The simulation uses
+20 MHz (100 RBs, 10 subchannels). This doubles available resources and halves
+contention. The paper acknowledges this as a limitation (Section 6.4) but
+does not quantify the impact.
+
+The consequences are severe:
+  - At 10 MHz, Falcon digest-mode requires 4 of 5 subchannels (80% occupancy),
+    not 4 of 10 (40%). This means a SINGLE Falcon transmission monopolizes
+    80% of the channel.
+  - Falcon cert-mode (8 subchannels) is physically IMPOSSIBLE at 10 MHz
+    (only 5 subchannels available), making Falcon infeasible for cert
+    transmissions under the actual J3161 spec!
+  - All PDR results are optimistic by roughly a factor that would push Falcon
+    into infeasible territory even at light densities.
+
+This isn't just a limitation --- it potentially invalidates the core conclusion
+that "Falcon-512 is conditionally viable." At 10 MHz, Falcon may not be viable
+at ANY density.
+
+FIX: Either (a) re-run critical scenarios at 10 MHz, or (b) add explicit
+analytical estimates of 10 MHz performance and acknowledge that Falcon cert
+mode is infeasible at 10 MHz. Option (b) is minimum; option (a) is preferred.
+
+
+---------------------------------------------------------------------------
+W6: SIGN/VERIFY TIME NOT REPORTED (SEVERITY: MEDIUM)
+---------------------------------------------------------------------------
+
+The paper claims "real-time signing and verification of every BSM, capturing
+actual computational overhead in the simulation timing." The data contains
+columns for these measurements, but ZERO sign/verify time data is presented
+in the results. This is a missed opportunity and a broken implicit promise.
+
+FIX: Add a table or figure showing mean sign/verify times per algorithm.
+The data is already captured; it just needs to be extracted and presented.
+
+
+---------------------------------------------------------------------------
+W7: DENSITY E "ANOMALY" IS EXPLAINABLE, NOT ANOMALOUS (SEVERITY: MEDIUM)
+---------------------------------------------------------------------------
+
+The paper labels Density E's 84.44% PDR as "anomalous" (Section 5.4). But
+data inspection reveals a simple explanation: Falcon E-LOS has only 232 unique
+senders vs Falcon B-LOS's 492 senders. Despite being labeled "50 veh/km" vs
+"20 veh/km", Density E actually had FEWER unique transmitting vehicles than
+Density B. The PDR is higher because there was less contention.
+
+Additionally, max concurrent vehicles at the end of Density E was 800, but
+with only 232 unique senders in total over the 256s duration, many of these
+vehicles may have entered and exited the simulation area, never all
+transmitting simultaneously.
+
+This suggests the SUMO route files for different densities are not properly
+calibrated to produce the labeled densities. The "density" labels in the paper
+may not reflect actual density in the simulation.
+
+FIX: Verify that SUMO actually produces the claimed densities. Report actual
+instantaneous vehicle counts over time, not just nominal labels.
+
+
+---------------------------------------------------------------------------
+W8: MISSING ECDSA DATA AT HIGH DENSITIES (SEVERITY: MEDIUM)
+---------------------------------------------------------------------------
+
+The scalability assessment (Section 5.4, Figure 5) shows Falcon-only PDR at
+densities A, B, E, F. But there is NO ECDSA baseline at densities E or F.
+Without an ECDSA comparison, the reader cannot distinguish:
+  - PDR degradation due to Falcon's overhead, vs
+  - PDR degradation that would occur with ANY algorithm at those densities
+
+The paper draws conclusions about Falcon's "infeasibility" at high densities
+without showing whether ECDSA also degrades. If ECDSA also drops to 30% PDR
+at density F, then the problem is congestion, not PQC overhead.
+
+FIX: Run ECDSA at densities E and F with the same SUMO configs used for
+Falcon. This is the most important missing comparison.
+
+
+================================================================================
+SECTION 3: MODERATE WEAKNESSES (Should be fixed before submission)
+================================================================================
+
+
+---------------------------------------------------------------------------
+M1: CERTIFICATE CACHING IMPACT NOT ANALYZED (SEVERITY: MEDIUM)
+---------------------------------------------------------------------------
+
+The data distinguishes signerType=0 (digest, 745B) vs signerType=1 (cert,
+1739B) for Falcon. Certificate caching is a crucial mitigation strategy ---
+if most transmissions use digest mode, the effective overhead is much lower.
+But the paper never analyzes:
+  - The actual cert-vs-digest split in practice
+  - Whether different cert inclusion intervals affect PDR
+  - What happens in a hypothetical "always digest" mode
+
+This would strengthen the feasibility argument considerably.
+
+
+---------------------------------------------------------------------------
+M2: ACTUAL SPDU SIZES DON'T MATCH PAPER CLAIMS (SEVERITY: LOW)
+---------------------------------------------------------------------------
+
+Table III (SPDU Sizes): ECDSA = ~301B, Falcon = ~1735B
+Actual logged data:      ECDSA = 305B (cert) / 143B (digest)
+                         Falcon = 1739B (cert) / 745B (digest)
+
+The 4B discrepancy (301 vs 305, 1735 vs 1739) is because the paper assumes
+BSM payload = 39B but the simulation uses bsm_data_size = 43B. Minor, but
+the paper should report actual sizes from the simulation, not theoretical.
+
+
+---------------------------------------------------------------------------
+M3: BASELINE ECDSA PDR IS SUSPICIOUSLY LOW (SEVERITY: MEDIUM)
+---------------------------------------------------------------------------
+
+ECDSA achieves only 72% PDR at 10 veh/km (LOS). In comparable literature:
+  - Gonzalez-Martin et al. (2019): >95% PDR at similar density
+  - McCarthy et al. (2020, openCV2X): ~90% PDR at 80 vehicles
+  - CHASM (2025): >85% PDR under similar conditions
+
+A 72% PDR at the lightest density suggests something is wrong with the
+simulation setup beyond PQC overhead. Possible causes:
+  - 20 MHz bandwidth (should help, not hurt) --- not the explanation
+  - Missing one-shot transmission (J3161 Section 7.3.3) --- acknowledged
+  - RSU-only reception capturing a subset of possible receptions
+  - Bug in the data collection pipeline
+  - Overly aggressive NLOS model being applied even in "LOS" scenarios
+
+If the baseline is broken, relative comparisons may still hold, but absolute
+PDR values cannot be trusted. The paper should explicitly benchmark ECDSA PDR
+against published openCV2X results to validate the baseline.
+
+
+---------------------------------------------------------------------------
+M4: SINGLE-INTERSECTION TOPOLOGY (SEVERITY: MEDIUM)
+---------------------------------------------------------------------------
+
+All results are from a single 4-leg intersection. This produces:
+  - Maximum spatial concentration of transmitters
+  - Worst-case hidden-node conditions
+  - No evaluation of highway scenarios (the primary Mode 4 use case)
+
+Highway configs exist in the simulation but were never run. At least one
+highway scenario would significantly broaden the paper's applicability.
+
+
+================================================================================
+SECTION 4: MINOR ISSUES (Polish before submission)
+================================================================================
+
+
+---------------------------------------------------------------------------
+m1: EMPTY "AUTHORS CONTRIBUTION" SECTION
+---------------------------------------------------------------------------
+Section "Authors Contribution" exists in the paper but contains no content.
+Either populate it or remove it.
+
+
+---------------------------------------------------------------------------
+m2: TYPOGRAPHICAL ERRORS
+---------------------------------------------------------------------------
+- Line 39: "AAhmad" (double A) should be "Ahmad"
+- Line 49: "2025" copyright year in a 2026 paper
+- Some biography photos may be swapped (Dr. Chowdhury photo filename is used
+  for Rahman's bio, and vice versa)
+- Missing biographies for 2 co-authors (Sagar Dasgupta, Ahmad Alsharif)
+
+
+---------------------------------------------------------------------------
+m3: "COMPREHENSIVE EVALUATION" CLAIM IS OVERSTATED
+---------------------------------------------------------------------------
+Abstract says "comprehensive evaluation of standardized PQC algorithms" but
+only 2 algorithms are simulated (ECDSA, Falcon). Dilithium is analytically
+excluded. SLH-DSA gets one sentence. This is a "focused evaluation" at best.
+Replace "comprehensive" with "targeted" or "focused."
+
+
+---------------------------------------------------------------------------
+m4: MULTIROW PACKAGE NOT LOADED
+---------------------------------------------------------------------------
+Table IV uses \multirow{} but \usepackage{multirow} is not in the preamble.
+This may cause compilation warnings or failures on some LaTeX installations.
+
+
+---------------------------------------------------------------------------
+m5: CONCLUSION REPEATS DISCUSSION EXCESSIVELY
+---------------------------------------------------------------------------
+Section 7 (Conclusion) is 640 words and substantially repeats Section 6
+content (feasibility thresholds, mitigation strategies, deployment
+recommendations). A 300-word conclusion summarizing key findings would be
+more appropriate for a journal paper. The 6-item future work list suggests
+the paper is incomplete.
+
+
+---------------------------------------------------------------------------
+m6: "FIRST EMPIRICAL EVIDENCE" CLAIM IS CONTESTABLE
+---------------------------------------------------------------------------
+The conclusion states: "This work provides the first empirical evidence that
+PQC can be deployed on existing C-V2X Mode 4 infrastructure." CHASM
+(Twardokus & Rahbari, 2025) also provides empirical PQC evaluation on C-V2X.
+This "first" claim will be challenged by reviewers. Qualify it precisely:
+"first evaluation using the openCV2X framework with real crypto operations"
+or similar.
+
+
+================================================================================
+SECTION 5: STRENGTHS (These should be preserved and emphasized)
+================================================================================
+
+
+S1: REAL CRYPTOGRAPHIC OPERATIONS
+    Unlike most V2X security studies that model crypto as fixed delays, this
+    work uses actual liboqs/OpenSSL signing and verification. This is a genuine
+    methodological contribution.
+
+S2: DILITHIUM-2 INFEASIBILITY PROOF
+    The TBS feasibility analysis (Section 4.6) rigorously proves Dilithium-2
+    is incompatible with SAE J3161 constraints. This analytical result is
+    independent of simulation quality and is worth publishing.
+
+S3: SPS GRANT SIZING ANALYSIS
+    The observation that SPS grants are sized for the maximum SPDU (cert mode)
+    and thus digest-only operation doesn't reduce channel occupancy is a novel
+    and important insight for PQC deployment planning.
+
+S4: COMPREHENSIVE METHODOLOGY DESCRIPTION
+    Sections 1-4 are well-written with clear problem formulation, thorough
+    background, and detailed methodology. The channel model equations, TBS
+    lookup procedure, and SPDU structure are precisely documented.
+
+S5: HONEST LIMITATION ACKNOWLEDGMENT
+    The paper candidly acknowledges 20 MHz bandwidth deviation, single
+    topology, missing one-shot mechanism, and other limitations. This honesty
+    is commendable but doesn't substitute for actually fixing the problems.
+
+
+================================================================================
+SECTION 6: PRIORITIZED FIX LIST (What to do before submission)
+================================================================================
+
+
+TIER 1 -- MUST FIX (paper cannot be submitted without these):
+
+  1. Re-run broken scenarios (D, E, F) with BOTH algorithms using identical,
+     verified SUMO configs. Ensure sim-time-limit=300s is reached.
+
+  2. Run 5+ replications per scenario with different random seeds. Report
+     mean +/- 95% confidence interval for all metrics.
+
+  3. Clarify V2V vs V2I: either add V2V reception logging or reframe
+     paper as V2I evaluation.
+
+  4. Fix Table II simulation duration (60s -> 300s).
+
+  5. Verify that SUMO configs produce the claimed vehicle densities.
+     Report actual instantaneous vehicle counts vs time.
+
+
+TIER 2 -- SHOULD FIX (significantly strengthens submission):
+
+  6. Add CBR analysis (time-series, density comparison, DCC drops).
+  7. Add distance-filtered PDR plots (especially at 300m per J2945/1).
+  8. Run ECDSA at densities E and F for matched comparison.
+  9. Add quantitative comparison table with CHASM results.
+  10. Address 10 MHz feasibility issue analytically (Falcon cert = infeasible).
+  11. Report actual sign/verify times from simulation data.
+
+
+TIER 3 -- NICE TO HAVE:
+
+  12. Run at least one highway scenario.
+  13. Analyze certificate caching (cert vs digest) impact on PDR.
+  14. Benchmark baseline ECDSA PDR against published openCV2X results.
+  15. Fix typos, add missing bios, populate Authors Contribution section.
+
+
+================================================================================
+SECTION 7: BOTTOM LINE
+================================================================================
+
+The paper has a STRONG analytical contribution (Sections 1-4) and a WEAK
+empirical contribution (Sections 5-7). The simulation data has integrity
+problems that make most quantitative claims unreliable. If the authors:
+
+  - Re-run with proper experimental design (matched configs, replications)
+  - Add CBR and distance-filtered PDR analysis
+  - Honestly reframe V2I vs V2V
+  - Address the 10 MHz feasibility gap
+
+...the paper would be a solid contribution to IEEE TVT or TITS. Without these
+fixes, it would likely receive "reject" or "major revision" at any reputable
+venue.
+
+================================================================================
+END OF REVIEW
+================================================================================

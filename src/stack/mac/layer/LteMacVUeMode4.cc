@@ -459,13 +459,26 @@ void LteMacVUeMode4::macPduMake()
         else
         {
             // The tx buffer does not exist yet for this mac node id, create one
+
+            // First check if destination still exists in simulation (may have despawned)
+            cModule* destMac = getMacByMacNodeId(destId);
+            if (destMac == nullptr) {
+                // Destination vehicle has left the simulation, cannot transmit
+                EV << "LteMacVUeMode4::macPduMake - destination node " << destId
+                   << " has left the simulation at t=" << NOW
+                   << ", dropping " << pit->second->getByteLength() << " byte packet" << endl;
+                delete pit->second;
+                continue;
+            }
+
+            // Destination exists, safe to create HARQ buffer
             LteHarqBufferTx* hb;
             // FIXME: hb is never deleted
             UserControlInfo* info = check_and_cast<UserControlInfo*>(pit->second->getControlInfo());
             if (info->getDirection() == UL)
-                hb = new LteHarqBufferTx((unsigned int) ENB_TX_HARQ_PROCESSES, this, (LteMacBase*) getMacByMacNodeId(destId));
+                hb = new LteHarqBufferTx((unsigned int) ENB_TX_HARQ_PROCESSES, this, (LteMacBase*) destMac);
             else // D2D or D2D_MULTI
-                hb = new LteHarqBufferTxD2D((unsigned int) ENB_TX_HARQ_PROCESSES, this, (LteMacBase*) getMacByMacNodeId(destId));
+                hb = new LteHarqBufferTxD2D((unsigned int) ENB_TX_HARQ_PROCESSES, this, (LteMacBase*) destMac);
             harqTxBuffers_[destId] = hb;
             txBuf = hb;
         }
@@ -1345,5 +1358,4 @@ void LteMacVUeMode4::finish()
     delete preconfiguredTxParams_;
     delete ueInfo_;
 }
-
 

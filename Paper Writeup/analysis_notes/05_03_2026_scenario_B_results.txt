@@ -1,0 +1,64 @@
+
+ECDSA P-256 Results:
+--------------------------------------------------
+Total Packets Received: 88,032
+Estimated Packets Sent: 240,560
+PDR: 36.59%
+
+Latency Statistics:
+  Mean: 52.22 ms
+  Median: 52.00 ms
+  Std Dev: 28.28 ms
+  95th Percentile: 96.00 ms
+  99th Percentile: 101.00 ms
+  Max: 101.00 ms
+
+Verification Success Rate: 100.00%
+
+Packet Sizes:
+  Mean SPDU Size: 176 bytes
+  With Certificate: 305 bytes
+  Digest Only: 143 bytes
+
+
+Falcon-512 Results:
+--------------------------------------------------
+Total Packets Received: 76,222
+Estimated Packets Sent: 234,360
+PDR: 32.52%
+
+Latency Statistics:
+  Mean: 52.05 ms
+  Median: 51.00 ms
+  Std Dev: 29.79 ms
+  95th Percentile: 97.00 ms
+  99th Percentile: 101.00 ms
+  Max: 198.00 ms
+
+Verification Success Rate: 100.00%
+
+Packet Sizes:
+  Mean SPDU Size: 947 bytes
+  With Certificate: 1739 bytes
+  Digest Only: 745 bytes
+
+
+Comparative Analysis:
+==================================================
+
+PDR Difference (Falcon - ECDSA): -4.07%
+Mean Latency Difference: -0.17 ms
+P95 Latency Difference: +1.00 ms
+
+Packet Size Overhead (with cert):
+  Falcon-512: 1739 bytes
+  ECDSA P-256: 305 bytes
+  Overhead: +1434 bytes (+470.2%)
+
+
+Key Findings for Conference Paper:
+==================================================
+1. ECDSA achieves 4.1% higher PDR than Falcon-512
+2. Mean latency is comparable (52.2ms vs 52.1ms)
+3. Falcon-512 packets are +470% larger (1434 bytes)
+4. Both algorithms achieve >98% verification success rate

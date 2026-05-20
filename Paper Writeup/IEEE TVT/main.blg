@@ -1,0 +1,59 @@
+This is BibTeX, Version 0.99d (TeX Live 2020/Debian)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: main.aux
+The style file: IEEEtran.bst
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Database file #1: main.bib
+Warning--I didn't find a database entry for "mamun2026post"
+Warning--I didn't find a database entry for "opencv2x"
+-- IEEEtran.bst version 1.14 (2015/08/26) by Michael Shell.
+-- http://www.michaelshell.org/tex/ieeetran/bibtex/
+-- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
+
+Done.
+You've used 33 entries,
+            4087 wiz_defined-function locations,
+            1004 strings with 13285 characters,
+and the built_in function-call counts, 21141 in all, are:
+= -- 1732
+> -- 443
+< -- 149
++ -- 245
+- -- 92
+* -- 961
+:= -- 3338
+add.period$ -- 71
+call.type$ -- 33
+change.case$ -- 35
+chr.to.int$ -- 324
+cite$ -- 33
+duplicate$ -- 1617
+empty$ -- 1733
+format.name$ -- 99
+if$ -- 4855
+int.to.chr$ -- 0
+int.to.str$ -- 33
+missing$ -- 307
+newline$ -- 122
+num.names$ -- 33
+pop$ -- 666
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 2
+skip$ -- 1621
+stack$ -- 0
+substring$ -- 824
+swap$ -- 1239
+text.length$ -- 41
+text.prefix$ -- 0
+top$ -- 5
+type$ -- 33
+warning$ -- 0
+while$ -- 91
+width$ -- 35
+write$ -- 328
+(There were 2 warnings)

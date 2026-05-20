@@ -1,0 +1,153 @@
+====================================================================
+CRITICAL REVIEW: IEEE CNS 2026 SUBMISSION
+"Comparative Performance Evaluation of Classical and Post-Quantum
+Digital Signatures on C-V2X Sidelink Communications"
+====================================================================
+
+
+--------------------------------------------------------------------
+PART 1: REDUNDANCIES
+--------------------------------------------------------------------
+
+R1. Spectrum-vs-computational bottleneck conclusion is stated four times
+    - Abstract (last two sentences)
+    - Section III-A, last paragraph (latency analysis)
+    - Section III-C, last paragraph ("Taken together, the PDR and
+      latency results establish...")
+    - Conclusion, first paragraph
+    One clear statement in the conclusion and a brief reference
+    in the abstract is sufficient. The two middle occurrences can be
+    condensed or removed.
+
+R2. SPS mechanism is described twice
+    - Method section, lines beginning "In Mode 4, vehicles autonomously
+      select transmission resources using sensing-based SPS..."
+    - Section III-A (Spectrum Resource Utilization), opening sentences
+      repeat the same sensing-window and threshold logic.
+    Section III-A should assume the reader has absorbed the Method
+    description and skip straight to its implication for Falcon-512.
+
+R3. Four-subchannel vs one-subchannel fact is stated four times
+    - Background paragraph 2 ("requires multiple subchannels")
+    - Method, size-inflation paragraph ("four subchannels for its
+      1,739-byte SPDU")
+    - Method, TB-size paragraph ("compared with the 305-byte ECDSA SPDU")
+    - Section III opening paragraph and Section III-A opening paragraph
+    State it once with the number in the Method section and use a
+    cross-reference ("the fourfold overhead established in Section II")
+    elsewhere instead of restating the value.
+
+R4. Packet sizes (1,739 B / 305 B / 745 B / 143 B) are repeated in
+    the Method, the Results opening paragraph, and Table I. The Results
+    paragraph before Figure 2 largely duplicates what Figure 2 and
+    Table I already show. That paragraph can be shortened to one or
+    two sentences that point to the figure and table rather than
+    restating every number.
+
+R5. Latency parity conclusion is stated in the abstract, Section III-A
+    last paragraph, Section III-C first paragraph, and the conclusion.
+    Three of the four occurrences are nearly verbatim. Consolidate to
+    the Results section and a single reference in the conclusion.
+
+R6. Safety-critical application requirements (collision avoidance,
+    platooning, cooperative awareness) are listed in Background
+    paragraph 4 and partially repeated in Section III-A last paragraph.
+    The second mention adds nothing new and can be removed.
+
+R7. Section III-A (Spectrum Resource Utilization Analysis) is largely
+    qualitative restatement of the Method section mechanism, without
+    introducing new quantitative results. Most of its content either
+    repeats the SPS description (R2) or anticipates conclusions
+    drawn in III-B. Consider collapsing III-A into the Method section
+    or merging it with III-B.
+
+
+--------------------------------------------------------------------
+PART 2: POSSIBLE REASONS FOR REJECTION
+--------------------------------------------------------------------
+
+P1. Single scenario — insufficient generalization
+    The entire quantitative evaluation rests on one traffic density
+    (30 veh/km) and one propagation condition (LOS). Both the abstract
+    and title use language implying a general comparative evaluation.
+    Reviewers are likely to argue that a single operating point does
+    not support broad conclusions about V2X feasibility, especially
+    since PDR is known to be strongly density-dependent. The future
+    work section acknowledges this, which may read as the authors
+    admitting the paper is incomplete.
+
+P2. No mitigation strategy evaluated
+    Three mitigation strategies (digest-based certificates, hybrid
+    schemes, infrastructure-assisted distribution) are proposed but
+    none is evaluated. A reviewer expecting a complete contribution
+    will note that the paper identifies a problem without offering
+    a tested solution, limiting its actionable value.
+
+P3. Digest-mode PDR is not reported
+    The paper shows SPDU sizes for both cert and digest modes and
+    notes that digest mode reduces overhead, but Figure 3 (PDR vs
+    distance) shows only the default cert-mode PDR curves. A natural
+    question the reviewer will ask is: does digest-mode operation
+    bring Falcon-512 above the 90% threshold? Not answering this
+    leaves a key result gap.
+
+P4. No statistical rigor on PDR results
+    PDR means are reported without confidence intervals, standard
+    deviations, or significance tests. With 200 s of simulation data
+    and a stochastic MAC scheduler, point estimates alone may not
+    convince reviewers that the 23.92 pp gap is statistically robust
+    rather than a simulation artifact.
+
+P5. Simulator not validated against reference data
+    The paper uses openCV2X, an academic simulator, without any
+    validation against hardware measurements or 3GPP reference
+    results. Reviewers familiar with C-V2X simulation will question
+    whether the PDR and latency numbers are simulator-specific
+    artifacts, particularly the counterintuitive result that
+    Falcon-512 has marginally lower mean latency (51.82 ms) than
+    ECDSA (51.92 ms). No explanation is offered for why the larger
+    packet would produce lower latency.
+
+P6. Claimed novelty is insufficiently differentiated from CHASM
+    The paper positions itself against Twardokus and Rahbari (CHASM,
+    2025), arguing that CHASM does not use a microscopic mobility
+    simulator or quantify direct ECDSA-to-Falcon replacement. However,
+    the distinction is made in a single sentence and the reviewer may
+    find the delta too narrow to constitute an independent contribution,
+    particularly since CHASM already validates a cross-layer approach
+    with density variation.
+
+P7. Title overstates scope
+    "Comparative Performance Evaluation" implies a systematic
+    comparison across multiple schemes, densities, or conditions.
+    The paper evaluates one pair of algorithms under one scenario.
+    A more accurate title would scope the contribution explicitly
+    (e.g., "...under Moderate Urban Traffic Density").
+
+P8. Section III-A adds no new data
+    The Spectrum Resource Utilization subsection is entirely
+    qualitative and restates mechanisms already explained in the
+    Method. In a page-limited conference paper it occupies space
+    that could hold the digest-mode PDR curve (P3) or a second
+    density scenario (P1). Reviewers may flag it as padding.
+
+P9. Falcon-512 lower latency is unexplained
+    The abstract and Section III-C both report Falcon-512 mean
+    latency (51.82 ms) as 0.10 ms lower than ECDSA (51.92 ms).
+    For a larger packet that requires more subchannels, lower
+    latency is counterintuitive. The paper does not explain this
+    and a reviewer will likely ask for justification or flag it
+    as a potential simulation artifact.
+
+P10. Infrastructure-assisted distribution is undefined at first use
+     in the conclusion (already flagged by reviewer; fix in progress).
+
+P11. Methodology flowchart (Fig. 1) consumes a full column
+     In a 6-page paper, a flowchart that largely restates the
+     Method section text is a costly use of space. Reviewers
+     may question whether the column would be better used for
+     additional results.
+
+====================================================================
+END OF REVIEW NOTES
+====================================================================
