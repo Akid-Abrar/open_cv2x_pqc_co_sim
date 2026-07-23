@@ -49,5 +49,14 @@ ui/com.simulte.configeditor/bin/
 /simulations/*/eval*/
 /simulations/*/.cmdenv-log
 
+# ignore simulation result/log folders (stored in cloud)
+simulations/Mode4/res_base_*/
+simulations/Mode4/res_ctac_*/
+simulations/Mode4/ctac_logs/
+
+# ignore large files
+*.vci
+v2v_logs.csv
+
 # ignore cLion editor
 .idea/
