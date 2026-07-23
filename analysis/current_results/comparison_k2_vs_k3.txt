@@ -1,0 +1,180 @@
+================================================================================
+COHORT COMPARISON: K=2 vs K=3 vs BASELINE (GRIDLOCK Scenario)
+================================================================================
+
+Scenario: 352 Vehicles Stopped at Intersection
+Baseline: DCC enabled (industry standard)
+CTAC K=2: 2 cohorts (180° sectors)
+CTAC K=3: 3 cohorts (120° sectors)
+
+================================================================================
+COHORT ASSIGNMENT LOGIC
+================================================================================
+
+K=2 (180° sectors):
+  Cohort 0: 0° - 180°   (North → East → South approaches)
+  Cohort 1: 180° - 360° (South → West → North approaches)
+
+K=3 (120° sectors):
+  Cohort 0: 0° - 120°   (North → East approaches)
+  Cohort 1: 120° - 240° (Southeast → Southwest approaches)
+  Cohort 2: 240° - 360° (West → Northwest approaches)
+
+Formula: Cohort_ID = floor(heading_degrees / (360 / K))
+
+================================================================================
+CHANNEL BUSY RATIO (CBR) - Congestion Control
+================================================================================
+
+Metric               Baseline        K=2 CTAC        K=3 CTAC
+--------------------------------------------------------------------------------
+Min                    47.54%         25.88%          25.39%
+Median                 57.56%         31.52%          31.73%
+Mean                   57.11%         31.16%          32.49%
+Max                    63.05%         33.78%          42.83%
+
+CBR Reduction (median):
+  K=2:  45.2% reduction (57.56% → 31.52%)
+  K=3:  46.4% reduction (57.56% → 31.73%)
+
+Winner: K=3 (slightly better, +1.2% more reduction)
+
+================================================================================
+AGE OF INFORMATION (AoI) - Information Freshness
+================================================================================
+
+Metric               Baseline        K=2 CTAC        K=3 CTAC
+--------------------------------------------------------------------------------
+Min                     3.0 ms          2.0 ms          2.0 ms
+Median                155.0 ms        251.0 ms        302.0 ms
+P95                   220.0 ms        298.0 ms        396.0 ms
+Mean                  160.6 ms        253.2 ms        255.2 ms
+Max                  6930.0 ms       6879.0 ms       6462.0 ms
+
+AoI Increase (median):
+  K=2:  +61.9% increase (155ms → 251ms, Δ=+96ms)
+  K=3:  +94.8% increase (155ms → 302ms, Δ=+147ms)
+
+Winner: K=2 (MUCH better, 33% less AoI increase!)
+
+================================================================================
+INTER-PACKET GAP (IPG) - Transmission Spacing
+================================================================================
+
+Metric               Baseline        K=2 CTAC        K=3 CTAC
+--------------------------------------------------------------------------------
+Median                100.0 ms        200.0 ms        248.0 ms
+P95                   200.0 ms        200.0 ms        300.0 ms
+Mean                  108.7 ms        202.2 ms        204.8 ms
+
+IPG Increase (median):
+  K=2:  +100.0% (100ms → 200ms)
+  K=3:  +148.0% (100ms → 248ms)
+
+Winner: K=2 (more frequent updates)
+
+================================================================================
+PACKET DELIVERY RATIO (PDR) - Reliability
+================================================================================
+
+Metric               Baseline        K=2 CTAC        K=3 CTAC
+--------------------------------------------------------------------------------
+Min                    0.0112         0.0222          0.0227
+Median                 1.0000         1.0000          1.0000
+Mean                   0.9093         0.9486          0.9390
+Max                    1.0000         1.0000          1.0000
+Active Links          79,269         79,269          79,264
+
+PDR Change:
+  K=2:  Median: 1.0000 (maintained), Mean: +4.3% improvement
+  K=3:  Median: 1.0000 (maintained), Mean: +3.3% improvement
+
+Winner: K=2 (better mean PDR improvement)
+
+================================================================================
+TRANSMISSION EFFICIENCY
+================================================================================
+
+Metric                     Baseline        K=2 CTAC        K=3 CTAC
+--------------------------------------------------------------------------------
+PHY Transmissions            25,576         13,302          13,123
+TX Reduction                   ---          48.0%           48.7%
+V2V Receptions            5,395,604      2,930,858       2,868,981
+SCI Failures                652,332        151,052         179,615
+SCI Failure Rate           2550.56%       1135.56%        1368.70%
+
+SCI Failure Reduction:
+  K=2:  55.5% lower failure rate (2550% → 1135%)
+  K=3:  46.3% lower failure rate (2550% → 1369%)
+
+Winner: K=2 (MUCH lower interference!)
+
+================================================================================
+PERFORMANCE SUMMARY - K=2 vs K=3
+================================================================================
+
+Metric                  K=2 CTAC        K=3 CTAC        Better
+--------------------------------------------------------------------------------
+CBR Reduction           45.2%           46.4%           K=3 (+1.2%)
+AoI Increase           +61.9%          +94.8%           K=2 (-33%)
+PDR Median              1.000           1.000           TIE
+PDR Mean                0.9486          0.9390          K=2 (+1.0%)
+SCI Failure Rate        1135%           1369%           K=2 (-17%)
+TX Reduction            48.0%           48.7%           K=3 (+0.7%)
+
+================================================================================
+KEY INSIGHTS
+================================================================================
+
+K=2 Advantages:
+  ✓ MUCH BETTER information freshness (AoI +62% vs +95%)
+  ✓ BETTER mean PDR (0.9486 vs 0.9390, +1% improvement)
+  ✓ LOWER interference (SCI failure rate 17% lower)
+  ✓ More frequent updates (IPG 200ms vs 248ms)
+  ⚠ Slightly worse CBR reduction (45.2% vs 46.4%, -1.2%)
+
+K=3 Advantages:
+  ✓ BEST CBR reduction (46.4% vs 45.2%, +1.2% better)
+  ✓ Slightly more TX reduction (48.7% vs 48.0%)
+  ⚠ Higher AoI penalty (+95% vs +62%)
+  ⚠ Higher interference (SCI failure rate 17% higher)
+
+================================================================================
+RECOMMENDATION
+================================================================================
+
+For V2X Safety Applications:
+
+CHOOSE K=2 if:
+  - Information freshness is critical (lower AoI priority)
+  - Need better reliability (higher mean PDR)
+  - Want lower interference levels
+  - Trade-off: Accept 1% less CBR reduction
+
+CHOOSE K=3 if:
+  - Maximum CBR reduction is priority
+  - Can tolerate higher AoI (still < 500ms threshold)
+  - Trade-off: Accept more interference and older information
+
+OPTIMAL CHOICE: K=2
+  - Better balance between congestion control and safety
+  - Lower AoI means fresher information for collision avoidance
+  - Higher mean PDR means better overall reliability
+  - Only 1% worse CBR reduction (still achieves 45% reduction!)
+
+================================================================================
+PATENT IMPLICATIONS
+================================================================================
+
+K=2 demonstrates BETTER OVERALL PERFORMANCE:
+  ✓ 45.2% CBR reduction (vs industry-standard DCC)
+  ✓ 100% median PDR maintained
+  ✓ 4.3% mean PDR improvement
+  ✓ 62% AoI increase (vs 95% for K=3) - more acceptable for safety
+  ✓ Lower interference (better spectrum utilization)
+
+This shows CTAC is tunable for different application requirements:
+  - K=2: Balanced performance (recommended for safety-critical V2X)
+  - K=3: Maximum congestion reduction (for extreme density scenarios)
+
+================================================================================

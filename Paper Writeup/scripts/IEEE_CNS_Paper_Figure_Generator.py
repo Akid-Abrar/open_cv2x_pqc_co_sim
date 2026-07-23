@@ -35,10 +35,10 @@ plt.rcParams['legend.fontsize'] = fontsize
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-BASE_DIR   = Path("Simulation Results/Simulation Logs Storage-selected")
-ECDSA_DIR  = BASE_DIR / "simulation_logs__5_ECDSA_C_LOS"  / "logs"
-FALCON_DIR = BASE_DIR / "simulation_logs__17_Falcon_C_LOS" / "logs"
-OUTPUT_DIR = Path("IEEE_CNS_2026/figures")
+BASE_DIR   = Path("Simulation Logs")
+ECDSA_DIR  = BASE_DIR / "5_ECDSA_C_LOS"  / "logs"
+FALCON_DIR = BASE_DIR / "17_Falcon_C_LOS" / "logs"
+OUTPUT_DIR = Path("IEEE_CNS_2026/figures_temp")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TIME_LIMIT  = 200.0   # seconds of simulation data to use

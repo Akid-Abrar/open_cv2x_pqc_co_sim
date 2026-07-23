@@ -41,6 +41,8 @@ class Mode4App : public Mode4BaseApp {
 public:
     ~Mode4App() override;
 
+    enum CtacDecision { CTAC_FULL, CTAC_COMPRESS, CTAC_DEFER };
+
 protected:
     //sender
     int size_;
@@ -91,6 +93,22 @@ protected:
     cMessage* sendEvt = nullptr;
     int       bsmSeq  = 0;
 
+    // CTAC state
+    bool      ctacEnabled_ = false;
+    int       ctacCohorts_ = 4;
+    simtime_t ctacEpoch_;
+    simtime_t ctacAoIBound_;
+    double    ctacCellSize_ = 60.0;
+    bool      ctacCompressMode_ = false;   // from ctacInactive == "compress"
+    bool      ctacSafetyOverride_ = true;
+    simtime_t lastFullTx_ = SIMTIME_ZERO;
+    long      numDeferred_ = 0;
+    bool      logV2vRx_ = true;
+
+    simsignal_t bsmOpportunitySignal_, ctacDeferredSignal_, ctacCompressedSignal_;
+    simsignal_t ctacOverrideAoISignal_, ctacOverrideSafetySignal_;
+    simsignal_t ctrlOverheadBytesSignal_, ctacCohortIdSignal_;
+
    int numInitStages() const { return inet::NUM_INIT_STAGES; }
 
    void initialize(int stage);
@@ -99,11 +117,17 @@ protected:
 
    void finish();
 
-   void handleSelfMessage(cMessage* msg);
+   void handleSelfMessage(cMessage* msg) override;
 
    void sendLowerPackets(cPacket* pkt);
 
    void generateAndSendSPDU();
+   void generateAndSendCompact();
+
+   CtacDecision ctacDecide();
+   int  myCohort();
+   bool safetyEventActive();
+   int  getNumVehicles() const;
 
 };
 

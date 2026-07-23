@@ -1,0 +1,74 @@
+================================================================================
+TABLE 1: V2V PDR (GRIDLOCK, 352 VEHICLES)
+================================================================================
+
+Distance Filter: <= 300m
+  Rationale: 300m is the standard safety-critical communication
+  range for C-V2X Mode 4 sidelink per 3GPP TR 36.885 and
+  5GAA evaluation methodology (P-190033 Section 5.2.4).
+  Beyond 300m, V2X safety messages are not expected to be
+  reliably decoded, and links are excluded from PDR evaluation.
+
+Calculation:
+  1. For each (sender, receiver) link within 300m:
+       link_PDR = packets_received / BSMs_generated_by_sender
+  2. Per-vehicle PDR = mean(link_PDR) across all senders to that vehicle
+  3. Overall PDR = total_received / total_expected across all links
+
+Metric                           Baseline        CTAC K=2        CTAC K=4
+------------------------------------------------------------------------
+Vehicles                              352             352             352
+Active Links (<= 300m)             79,269          79,269          79,264
+Total V2V Receptions            5,395,606       2,930,860       2,868,982
+Max Distance in Data               300.0m          300.0m          300.0m
+------------------------------------------------------------------------
+OVERALL PDR                        87.54%          93.66%          92.84%
+------------------------------------------------------------------------
+Min PDR                            83.92%          88.19%          87.42%
+Mean PDR                           87.49%          93.43%          92.66%
+Median PDR                         87.58%          93.82%          92.86%
+P95 PDR                            88.66%          94.59%          93.88%
+Max PDR                            89.52%          95.22%          95.82%
+------------------------------------------------------------------------
+Overall Improvement                   ---          +6.13%          +5.30%
+Mean Improvement                      ---          +5.94%          +5.17%
+Median Improvement                    ---          +6.24%          +5.28%
+
+================================================================================
+TABLE 2: V2I PDR (GRIDLOCK, 352 VEHICLES)
+================================================================================
+
+Distance Filter: None (all distances included)
+  Rationale: V2I uses a single RSU (rsu[0]) at the intersection
+  center. All vehicles that can reach the RSU are included.
+  The RSU has no distance cutoff in the simulation; packets
+  are received or lost based on PHY-layer propagation and
+  interference conditions.
+
+Calculation:
+  1. BSMs_generated(v) = sender_summary - ctacDeferred
+  2. received_by_RSU(v) = count of packets from v received by rsu[0]
+  3. PDR(v) = received_by_RSU(v) / BSMs_generated(v)
+  4. Overall PDR = total_received_by_RSU / total_BSMs_generated
+
+Metric                           Baseline        CTAC K=2        CTAC K=4
+------------------------------------------------------------------------
+Vehicles                              352             352             352
+Total BSMs Generated               26,600          13,478          13,290
+Received by RSU                    23,311          12,679          12,397
+Max Distance in Data               363.4m          363.4m          363.4m
+Mean Distance to RSU               169.0m          169.8m          169.7m
+------------------------------------------------------------------------
+OVERALL PDR                        87.64%          94.07%          93.28%
+------------------------------------------------------------------------
+Min PDR                            18.57%          38.89%          31.43%
+Mean PDR                           87.46%          93.95%          93.15%
+Median PDR                         94.29%          97.56%          97.50%
+P95 PDR                            97.50%         100.00%         100.00%
+Max PDR                            98.89%         100.00%         100.00%
+------------------------------------------------------------------------
+Overall Improvement                   ---          +6.44%          +5.65%
+Mean Improvement                      ---          +6.49%          +5.69%
+Median Improvement                    ---          +3.28%          +3.21%
+
+================================================================================

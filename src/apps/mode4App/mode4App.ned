@@ -27,7 +27,17 @@ simple Mode4App like Mode4BaseApp
         double period @unit("s") = default(0.1s);
         int certInterval = default(5); // Send full cert every N BSMs, digest otherwise (IEEE 1609.2 / J2945)
         int macNodeId = default(0);
-        
+
+        // ---- CTAC (Cooperative Transmission Authority Control) ----
+        bool   ctacEnabled   = default(false);   // master switch, off preserves legacy behaviour
+        int    ctacCohorts   = default(4);       // K, number of cohorts
+        double ctacEpoch @unit("s") = default(0.1s);   // epoch length
+        double ctacAoIBound @unit("s") = default(0.3s);// max time since own last full BSM
+        double ctacCellSize @unit("m") = default(60m); // spatial hash cell size
+        string ctacInactive  = default("defer"); // "defer" | "compress"
+        bool   ctacSafetyOverride = default(true);
+        bool   logV2vRx = default(true);         // log vehicle-to-vehicle receptions
+
         @signal[sentMsg];
         @statistic[sentMsg](title="Messages sent"; unit=""; source="sentMsg"; record=sum,vector);
         
@@ -35,7 +45,7 @@ simple Mode4App like Mode4BaseApp
         @statistic[delay](title="Message Delay"; unit="s"; source="delay"; record=mean,vector);    
         
         @signal[cbr];
-        @statistic[cbr](title="Channel Busy Ratio"; unit=""; source="cbr"; record=vector);         
+        @statistic[cbr](title="Channel Busy Ratio"; unit=""; source="cbr"; record=mean,max,timeavg,vector);         
         @display("i=block/source");
         
         @signal[lifetime]; 
@@ -76,6 +86,27 @@ simple Mode4App like Mode4BaseApp
 
         @signal[verifyTimeMs];
         @statistic[verifyTimeMs](title="BSM verify time"; unit="ms"; source="verifyTimeMs"; record=vector,mean);
+
+        @signal[bsmOpportunity];
+        @statistic[bsmOpportunity](title="BSM generation opportunities"; record=sum);
+
+        @signal[ctacDeferred];
+        @statistic[ctacDeferred](title="BSMs deferred by CTAC"; record=sum);
+
+        @signal[ctacCompressed];
+        @statistic[ctacCompressed](title="BSMs compressed by CTAC"; record=sum);
+
+        @signal[ctacOverrideAoI];
+        @statistic[ctacOverrideAoI](title="Freshness overrides"; record=sum);
+
+        @signal[ctacOverrideSafety];
+        @statistic[ctacOverrideSafety](title="Safety overrides"; record=sum);
+
+        @signal[ctrlOverheadBytes];
+        @statistic[ctrlOverheadBytes](title="CTAC control bytes"; unit="B"; record=sum);
+
+        @signal[ctacCohortId];
+        @statistic[ctacCohortId](title="Assigned cohort"; record=vector);
 
     gates:
         input lowerGateIn; // FROM NIC

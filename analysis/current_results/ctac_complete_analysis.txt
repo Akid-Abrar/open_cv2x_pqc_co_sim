@@ -1,0 +1,184 @@
+================================================================================
+CTAC PERFORMANCE ANALYSIS - COMPLETE RESULTS
+================================================================================
+
+Scenario: GRIDLOCK Intersection, 352 Vehicles Stopped
+Baseline: DCC enabled (industry standard congestion control)
+CTAC K=2: 2 cohorts (180 degree sectors), DCC disabled
+CTAC K=4: 4 cohorts (90 degree sectors), DCC disabled
+
+
+================================================================================
+TABLE 1: V2V PDR (GRIDLOCK, 352 VEHICLES)
+================================================================================
+
+Distance Filter: <= 300m
+  This filter was inherited from the openCV2X codebase analysis scripts.
+  It approximates the safety-critical communication range for C-V2X.
+  3GPP TS 22.185 specifies minimum required communication ranges per
+  use case (e.g., ~320m highway, ~150m urban), but does not prescribe
+  a specific evaluation cutoff. 300m is a practical engineering choice.
+
+  V2V data extends to 674m. Of total V2V receptions:
+    Baseline: 5.40M within 300m out of 8.01M total (67%)
+    CTAC K=2: 2.93M within 300m out of 4.37M total (67%)
+    CTAC K=4: 2.87M within 300m out of 4.28M total (67%)
+
+Calculation:
+  1. For each (sender, receiver) link within 300m:
+       link_PDR = packets_received / BSMs_generated_by_sender
+  2. Per-vehicle PDR = mean(link_PDR) across all senders to that vehicle
+  3. Overall PDR = total_received / total_expected across all links
+
+Metric                           Baseline        CTAC K=2        CTAC K=4
+------------------------------------------------------------------------
+Vehicles                              352             352             352
+Active Links (<= 300m)             79,269          79,269          79,264
+Total V2V Receptions            5,395,606       2,930,860       2,868,982
+------------------------------------------------------------------------
+OVERALL PDR                        87.54%          93.66%          92.84%
+------------------------------------------------------------------------
+Min PDR                            83.92%          88.19%          87.42%
+Mean PDR                           87.49%          93.43%          92.66%
+Median PDR                         87.58%          93.82%          92.86%
+P95 PDR                            88.66%          94.59%          93.88%
+Max PDR                            89.52%          95.22%          95.82%
+------------------------------------------------------------------------
+Overall Improvement                   ---          +6.13%          +5.30%
+Mean Improvement                      ---          +5.94%          +5.17%
+Median Improvement                    ---          +6.24%          +5.28%
+
+For reference, V2V PDR WITHOUT distance filter (all distances up to 674m):
+                                 Baseline        CTAC K=2        CTAC K=4
+------------------------------------------------------------------------
+Active Links (all)               123,449         123,353         123,365
+OVERALL PDR                        84.89%          91.16%          90.40%
+Mean PDR                           84.64%          90.94%          90.14%
+Median PDR                         85.90%          92.36%          91.44%
+------------------------------------------------------------------------
+Overall Improvement                   ---          +6.27%          +5.51%
+
+Note: CTAC improvement is consistent (~6%) regardless of distance filter.
+
+
+================================================================================
+TABLE 2: V2I PDR (GRIDLOCK, 352 VEHICLES)
+================================================================================
+
+Distance Filter: None (all distances included)
+  V2I uses a single RSU (rsu[0]) at the intersection center.
+  No distance cutoff is applied; packets are received or lost
+  based on PHY-layer propagation and interference conditions.
+  Max observed distance: 363.4m. Mean distance: ~170m.
+
+Calculation:
+  1. BSMs_generated(v) = sender_summary - ctacDeferred
+  2. received_by_RSU(v) = count of packets from v received by rsu[0]
+  3. PDR(v) = received_by_RSU(v) / BSMs_generated(v)
+  4. Overall PDR = total_received_by_RSU / total_BSMs_generated
+
+Metric                           Baseline        CTAC K=2        CTAC K=4
+------------------------------------------------------------------------
+Vehicles                              352             352             352
+Total BSMs Generated               26,600          13,478          13,290
+Received by RSU                    23,311          12,679          12,397
+Max Distance in Data               363.4m          363.4m          363.4m
+Mean Distance to RSU               169.0m          169.8m          169.7m
+------------------------------------------------------------------------
+OVERALL PDR                        87.64%          94.07%          93.28%
+------------------------------------------------------------------------
+Min PDR                            18.57%          38.89%          31.43%
+Mean PDR                           87.46%          93.95%          93.15%
+Median PDR                         94.29%          97.56%          97.50%
+P95 PDR                            97.50%         100.00%         100.00%
+Max PDR                            98.89%         100.00%         100.00%
+------------------------------------------------------------------------
+Overall Improvement                   ---          +6.44%          +5.65%
+Mean Improvement                      ---          +6.49%          +5.69%
+Median Improvement                    ---          +3.28%          +3.21%
+
+
+================================================================================
+TABLE 3: CHANNEL BUSY RATIO (CBR)
+================================================================================
+
+CBR measures the fraction of subchannels sensed as occupied.
+  Source: cbr:mean signal from .sca file, per vehicle.
+  704 samples (352 vehicles x 2 measurement instances).
+
+Metric                           Baseline        CTAC K=2        CTAC K=4
+------------------------------------------------------------------------
+Min CBR                            47.54%          25.88%          25.42%
+Mean CBR                           57.12%          31.17%          30.61%
+Median CBR                         57.64%          31.52%          30.93%
+P95 CBR                            61.69%          33.43%          32.93%
+Max CBR                            63.05%          33.78%          33.39%
+------------------------------------------------------------------------
+Mean Reduction                        ---         -25.95%         -26.51%
+Median Reduction                      ---         -26.12%         -26.71%
+% Reduction                          ---          -45.4%          -46.4%
+
+
+================================================================================
+TABLE 4: MAC LAYER DROP ANALYSIS
+================================================================================
+
+Calculation:
+  1. App BSMs Generated = sender_summary - ctacDeferred
+  2. PHY Transmitted = tbSent:sum from .sca file
+  3. Actual Drops = App BSMs Generated - PHY Transmitted
+  4. Drop Rate = Actual Drops / App BSMs Generated
+
+Metric                                Baseline        CTAC K=2        CTAC K=4
+--------------------------------------------------------------------------------
+Vehicles                                   352             352             352
+CTAC Deferred (gated)                        0          13,122          13,310
+App BSMs Generated                      26,600          13,478          13,290
+PHY TBs Transmitted                     25,576          13,302          13,123
+ACTUAL DROPS                             1,024             176             167
+DROP RATE                                3.85%           1.31%           1.26%
+--------------------------------------------------------------------------------
+Drop Reduction vs Baseline                 ---          -82.8%          -83.7%
+
+DCC Drops (packetDropDCC)                  677               0               0
+Other MAC Drops                            347             176             167
+Vehicles with Drops                        352             176             167
+
+Note on drop signals:
+  - packetDropDCC: Actual DCC-triggered drops (only confirmed drop signal)
+  - grantBreak: SPS grant expirations, triggers reselection (NOT a drop)
+  - missedTransmission: Missed TX slots, informational (NOT a drop)
+  - droppedTimeout: Commented out in code, always 0
+
+Drop pattern in CTAC scenarios:
+  - 176/167 vehicles dropped EXACTLY 1 packet each
+  - Likely caused by initial simulation startup transient
+  - After transient, CTAC achieves near-perfect delivery
+
+
+================================================================================
+SUMMARY OF KEY FINDINGS
+================================================================================
+
+                              Baseline        CTAC K=2        CTAC K=4
+------------------------------------------------------------------------
+V2V Overall PDR                87.54%          93.66%          92.84%
+V2I Overall PDR                87.64%          94.07%          93.28%
+CBR Mean                       57.12%          31.17%          30.61%
+MAC Drop Rate                   3.85%           1.31%           1.26%
+DCC Drops                         677               0               0
+------------------------------------------------------------------------
+V2V Improvement                   ---          +6.13%          +5.30%
+V2I Improvement                   ---          +6.44%          +5.65%
+CBR Reduction                     ---         -45.4%          -46.4%
+Drop Reduction                    ---         -82.8%          -83.7%
+
+CTAC K=2 delivers the best overall performance:
+  - 6.1% higher V2V PDR
+  - 6.4% higher V2I PDR
+  - 45.4% lower channel busy ratio
+  - 82.8% fewer MAC layer drops
+  - Eliminates all DCC drops
+  - 50% fewer transmissions (reduced channel load)
+
+================================================================================

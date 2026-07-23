@@ -1,0 +1,168 @@
+# Technical Analysis Summary: PQC (Falcon-512) on C-V2X Mode 4 Sidelink
+# Date: 06/09/2026
+
+## 1. Protocol Stack Context
+
+The layer immediately below the application layer is PDCP (Packet Data Convergence Protocol).
+Below PDCP sits RLC, then MAC, and finally PHY. This layering is critical to understanding
+the fragmentation behavior discovered throughout this analysis.
+
+---
+
+## 2. Subchannel Requirements for Falcon-512 Full Certificate at MCS 11
+
+System config: 20 MHz, 100 RBs, 10 subchannels x 10 RBs, MCS range 5-11, adjacent mode
+enabled (2 RBs deducted for SCI).
+
++-------------------------------+-----------+
+| Component                     | Size      |
++-------------------------------+-----------+
+| IEEE 1609.2 wrapper overhead  | 28 B      |
+| J2735 BSMcoreData             | 43 B      |
+| Certificate overhead          | 105 B     |
+| Falcon-512 public key         | 897 B     |
+| Falcon-512 signature (max)    | 666 B     |
+| TOTAL                         | 1,739 B   |
+|                               | 13,912 b  |
++-------------------------------+-----------+
+
+MCS 11 -> 16QAM, iTBS 2 (offset: MCS 11 - 9 = 2). 7 subchannels required (68 effective
+RBs -> TBS 14,112 bits), with only 200 bits of margin.
+
+MCS 7 (QPSK) CANNOT carry the full cert even with all 10 subchannels (max TBS 12,576 bits).
+
+---
+
+## 3. Why subchannelsUsed Mean = 4 (Not 7)
+
+Certificate interval (certInterval = 5): only every 5th BSM carries the full certificate.
+The other 4 use an 8-byte digest.
+
+- Digest SPDU: 745 B = 5,960 bits -> needs 4 subchannels at MCS 11 (TBS 7,736 bits)
+
+RLC-layer fragmentation (UmTxEntity::rlcPduMake) is the key mechanism: when a packet
+exceeds the grant's capacity, RLC sends what fits and holds the remainder in sduQueue_.
+A full cert arriving on a 4-subchannel grant does NOT cause a grant break -- it is silently
+fragmented.
+
+Grant lifecycle:
+  - First grant (bsmSeq=0, full cert) -> 7 subchannels
+  - Grant expires (reselection counter 5-15, probResourceKeep = 0.4) -> 80% chance next
+    packet is digest -> 4-subchannel grant
+  - Once at 4 subchannels, cert arrivals don't break the grant (RLC fragments)
+  - System settles into steady state of 4-subchannel grants
+
+subchannelsUsed is a RECEIVER-SIDE PHY stat decoded from received SCIs
+(LtePhyVUeMode4.cc:1512).
+
+---
+
+## 4. Why selectedMCS Averages ~6.5
+
+MCS is recalculated EVERY transmission (LteMacVUeMode4.cc:1239-1262), not fixed per grant.
+SAE J3161 skips MCS 8, 9, 10 -- only {5, 6, 7, 11} are available.
+
+On a 4-subchannel grant (38 effective RBs):
+  - Digest packets (5,960 bits) -> require MCS 11 (MCS 7 only gives 4,584 bits)
+  - Cert fragments (smaller, variable) -> can use MCS 5, 6, or 7
+
+The mix averages to ~6.5.
+
+---
+
+## 5. Subchannel vs MCS Behavior
+
+- Subchannels: FIXED per grant -- only change on grant regeneration
+- MCS: VARIABLE per transmission -- recalculated based on actual PDU size
+- Grant breaks due to size mismatch never trigger because RLC always fragments to fit
+
+---
+
+## 6. Fragmentation Mechanics
+
+- Fragmentation happens in the RLC layer (NOT PDCP), specifically UmTxEntity::rlcPduMake
+  (src/stack/rlc/um/entity/UmTxEntity.cc:85-112)
+- PHY sends each fragment in a separate subframe -- it has no knowledge of fragmentation
+- Receiver's RLC reassembles via UmRxEntity::reassemble
+- RLC UM has NO retransmission -- a lost fragment means the entire BSM is permanently lost
+
+---
+
+## 7. Cascading Fragmentation Effect
+
+On a 4-subchannel grant at MCS 11, capacity is ~963 bytes per period. Full cert SPDU
+(1,740 B with PDCP header) fragments into 2 pieces.
+
+The RLC while loop packs multiple items from sduQueue_ (FIFO), so a remaining cert
+fragment and part of the next BSM get packed into the same PDU. This creates cascading
+fragmentation lasting ~4-5 periods (400-500ms). Since certInterval = 5 (cert every 500ms),
+the queue barely recovers before the next cert arrives.
+
+Detailed cascade trace on a 4-subchannel grant (capacity ~963 B per period):
+
+  Period 0: Full cert SPDU arrives (1,740 B). First 963 B sent. 777 B remains.
+  Period 1: New BSM (746 B) arrives. Queue: [777 B, 746 B].
+            RLC sends: 777 B fragment + 186 B of BSM. 560 B BSM remains.
+  Period 2: New BSM (746 B). Queue: [560 B, 746 B].
+            RLC sends: 560 B + 403 B of BSM. 343 B remains.
+  Period 3: New BSM (746 B). Queue: [343 B, 746 B].
+            RLC sends: 343 B + 620 B of BSM. 126 B remains.
+  Period 4: New BSM (746 B). Queue: [126 B, 746 B].
+            RLC sends: 126 B + 746 B = 872 B. Queue empty. Back to normal.
+  Period 5: Normal operation resumes (until next cert).
+
+---
+
+## 8. interPacketDelay Analysis
+
+interPacketDelay measures time between consecutive successfully decoded TBs from the same
+sender at the receiver PHY. Expected: 100ms. Observed: 150-180ms.
+
+Using: Expected IPD = 100ms / (1 - loss_rate):
+
++---------------+--------------+
+| Observed IPD  | TB Loss Rate |
++---------------+--------------+
+| 150ms         | ~33%         |
+| 180ms         | ~44%         |
++---------------+--------------+
+
+---
+
+## 9. Compounding Loss Effect (Critical Finding)
+
+Because the full Falcon-512 cert is fragmented into 2 TBs, both must be received for
+reassembly. The probability compounds:
+
++--------------+------------------+---------------+----------------+
+| TB Loss Rate | P(cert received) | P(cert lost)  | P(digest lost) |
++--------------+------------------+---------------+----------------+
+| 33%          | 0.67^2 = 45%     | 55%           | 33%            |
+| 44%          | 0.56^2 = 31%     | 69%           | 44%            |
++--------------+------------------+---------------+----------------+
+
+Full cert BSMs are roughly TWICE as likely to be lost compared to digest BSMs.
+
+Implications:
+  - The intended 1-in-5 certificate distribution is effectively much lower at the receiver
+  - Receivers frequently lack valid certificates -> verification failures
+  - This degradation is SPECIFIC TO PQC (Falcon-512) -- ECDSA certs fit in a single TB
+    and do not suffer from this compounding loss
+  - This represents a fundamental challenge for deploying post-quantum cryptography on
+    C-V2X Mode 4 sidelink under current resource allocation parameters
+
+---
+
+## Key Source Files Referenced
+
+- src/apps/mode4App/Mode4App.cc (SPDU construction, cert interval, byte length calculation)
+- src/stack/pdcp_rrc/layer/LtePdcpRrcUeD2D.cc (PDCP header addition)
+- src/stack/rlc/um/LteRlcUmRealistic.cc (RLC packet handling)
+- src/stack/rlc/um/entity/UmTxEntity.cc (RLC fragmentation logic)
+- src/stack/rlc/um/entity/UmRxEntity.cc (RLC reassembly logic)
+- src/stack/mac/layer/LteMacVUeMode4.cc (grant generation, MCS selection, transmission)
+- src/stack/mac/amc/LteMcs.cc (TBS lookup tables)
+- src/stack/phy/layer/LtePhyVUeMode4.cc (SCI encoding/decoding, PHY stats)
+- src/common/LteCommon.h (header size constants)
+- simulations/Mode4/omnetpp.ini (simulation configuration)
+- simulations/Mode4/sidelink_configuration.xml (subchannel/MCS/CBR configuration)

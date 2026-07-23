@@ -204,6 +204,25 @@ void Mode4App::initialize(int stage)
 
         signatureTimeMs_  = registerSignal("signatureTimeMs");
         verifyTimeMs_      = registerSignal("verifyTimeMs");
+
+        // CTAC parameters and signals
+        ctacEnabled_ = par("ctacEnabled").boolValue();
+        ctacCohorts_ = par("ctacCohorts").intValue();
+        ctacEpoch_ = par("ctacEpoch");
+        ctacAoIBound_ = par("ctacAoIBound");
+        ctacCellSize_ = par("ctacCellSize").doubleValue();
+        std::string ctacInactive = par("ctacInactive").stdstringValue();
+        ctacCompressMode_ = (ctacInactive == "compress");
+        ctacSafetyOverride_ = par("ctacSafetyOverride").boolValue();
+        logV2vRx_ = par("logV2vRx").boolValue();
+
+        bsmOpportunitySignal_ = registerSignal("bsmOpportunity");
+        ctacDeferredSignal_ = registerSignal("ctacDeferred");
+        ctacCompressedSignal_ = registerSignal("ctacCompressed");
+        ctacOverrideAoISignal_ = registerSignal("ctacOverrideAoI");
+        ctacOverrideSafetySignal_ = registerSignal("ctacOverrideSafety");
+        ctrlOverheadBytesSignal_ = registerSignal("ctrlOverheadBytes");
+        ctacCohortIdSignal_ = registerSignal("ctacCohortId");
     }
 }
 
@@ -518,6 +537,87 @@ void Mode4App::handleLowerMessage(cMessage* msg)
         // Distance in meters
         double dist_m = rx.distance(tx);
 
+        // ============================================================================
+        // V2V Reception Logging (identical schema to RSU logging)
+        // ============================================================================
+        if (logV2vRx_) {
+            const std::string logDir = getLogDirectory();
+            const std::string v2vPath = logDir + "/v2v_logs.csv";
+
+            int sigSize  = spdu->getSignatureArraySize();
+            int spduSize = spdu->getByteLength();
+            int numberOfVehicles = getNumVehicles();
+
+            // Resolve algorithm and sender from cert (cached or included)
+            bool isDigestMode = (spdu->getSignerType() == 0);
+            std::string algoName = "unknown";
+            std::string senderStr = "unknown";
+            long pkSize = 0;
+            long certMetadata = 0;
+            long digestSize = 0;
+            long spduOverhead = 28;
+
+            if (useCert) {
+                algoName = useCert->getAlgoName();
+                senderStr = useCert->getSubjectId();
+            }
+
+            if (isDigestMode) {
+                digestSize = 8;  // HashedId8
+            } else if (useCert) {
+                // Full cert in packet
+                certMetadata = 105;  // cert fields excluding pubkey
+                long derPubKeySize = useCert->getPublicKeyArraySize();
+                bool isEcdsa = (algoName.find("ECDSA") != std::string::npos
+                             || algoName.find("ecdsa") != std::string::npos
+                             || algoName.find("P-256") != std::string::npos
+                             || algoName.find("P-384") != std::string::npos);
+                pkSize = isEcdsa ? (derPubKeySize - 26) : derPubKeySize;
+            }
+
+            long bsmDataSize = 1 + 4 + 4 + 2 + 4 + 4 + 2  // msgCnt+msgId+tempId+secMark+lat+lon+elev
+                             + 1 + 1 + 2                    // semiMajor+semiMinor+semiMajorOrient
+                             + 1 + 2 + 2 + 1                // transmission+speed_j+heading_j+angle
+                             + 2 + 2 + 1 + 2                // accelLong+accelLat+accelVert+yawRate
+                             + 2                             // brakes
+                             + 2 + 1;                        // vehWidth+vehLength = 43 bytes
+
+            // Note: header preserves the typo "Numer of Vehicles" for compatibility
+            const std::string header =
+                "t,receiver,sender,msgId,lat,lon,dist_m,delay_ms,Numer of Vehicles,verified,spdu_overhead,cert_metadata,digest_size,pk_size,sig_size,bsm_data_size,spdu_size,Algorithm,signerType";
+
+            std::ostringstream t;   t << std::fixed << std::setprecision(6) << simTime().dbl();
+            std::ostringstream lat; lat << std::fixed << std::setprecision(6) << b.getLat() / 1000.0;
+            std::ostringstream lon; lon << std::fixed << std::setprecision(6) << b.getLon() / 1000.0;
+            std::ostringstream dms; dms << std::fixed << std::setprecision(3) << delay_ms;
+            std::ostringstream dst; dst << std::fixed << std::setprecision(3) << dist_m;
+
+            appendCsv(v2vPath, header, {
+                t.str(),
+                std::string(getParentModule()->getFullName()),  // receiver = carNoIp[n]
+                senderStr,
+                std::to_string(b.getMsgId()),
+                lat.str(),
+                lon.str(),
+                dst.str(),
+                dms.str(),
+                std::to_string(numberOfVehicles),
+                (ok ? "1" : "0"),
+                std::to_string(spduOverhead),
+                std::to_string(certMetadata),
+                std::to_string(digestSize),
+                std::to_string(pkSize),
+                std::to_string(sigSize),
+                std::to_string(bsmDataSize),
+                std::to_string(spduSize),
+                algoName,
+                std::to_string((int)spdu->getSignerType())
+            });
+        }
+        // ============================================================================
+        // End V2V Reception Logging
+        // ============================================================================
+
         std::string algoName = useCert ? useCert->getAlgoName() : "unknown";
         int sigSize  = spdu->getSignatureArraySize();
         int spduSize = spdu->getByteLength();
@@ -561,8 +661,31 @@ void Mode4App::handleSelfMessage(cMessage* msg)
 {
     // This function now ONLY handles your PQC message timer
     if (msg == sendEvt) {
-        generateAndSendSPDU();
-        ++bsmSeq;
+        emit(bsmOpportunitySignal_, 1);          // ALWAYS, before the gate
+
+        if (!ctacEnabled_) {
+            ++bsmSeq;                            // Increment ONLY when BSM generated
+            generateAndSendSPDU();               // unchanged legacy path
+            lastFullTx_ = simTime();
+        } else {
+            switch (ctacDecide()) {
+                case CTAC_FULL:
+                    ++bsmSeq;                    // Increment ONLY when BSM generated
+                    generateAndSendSPDU();
+                    lastFullTx_ = simTime();
+                    break;
+                case CTAC_COMPRESS:
+                    ++bsmSeq;                    // Increment for compressed BSM too
+                    generateAndSendCompact();    // see implementation below
+                    emit(ctacCompressedSignal_, 1);
+                    break;
+                case CTAC_DEFER:
+                    numDeferred_++;              // Count deferred, but DON'T increment bsmSeq
+                    emit(ctacDeferredSignal_, 1);
+                    break;
+            }
+        }
+
 //        scheduleAt(simTime() + par("sendInterval").doubleValue(), sendEvt);
         scheduleAt(simTime() + 0.1, sendEvt);
     }
@@ -736,6 +859,138 @@ void Mode4App::generateAndSendSPDU()
     emit(sentMsg_, (long)1);
 }
 
+// ============================================================================
+// CTAC (Cooperative Transmission Authority Control) Implementation
+// ============================================================================
+
+Mode4App::CtacDecision Mode4App::ctacDecide()
+{
+    // 1. Safety override, highest priority
+    if (ctacSafetyOverride_ && safetyEventActive()) {
+        emit(ctacOverrideSafetySignal_, 1);
+        return CTAC_FULL;
+    }
+    // 2. Freshness (age-of-information) bound
+    if (simTime() - lastFullTx_ >= ctacAoIBound_) {
+        emit(ctacOverrideAoISignal_, 1);
+        return CTAC_FULL;
+    }
+    // 3. Scheduled cohort turn
+    long epoch = (long)floor(simTime().dbl() / ctacEpoch_.dbl());
+    if (myCohort() == (int)(epoch % ctacCohorts_))
+        return CTAC_FULL;
+
+    // 4. Otherwise defer or compress
+    return ctacCompressMode_ ? CTAC_COMPRESS : CTAC_DEFER;
+}
+
+int Mode4App::myCohort()
+{
+    // CTAC Cohort Assignment Strategy:
+    // For intersection/approach scenarios, use HEADING-BASED cohorts to ensure
+    // vehicles traveling in the same direction (platoon members) are in the same cohort.
+    // This is critical for safety: you need to hear BSMs from vehicles directly ahead/behind.
+
+    // Get velocity vector from TraCI mobility
+    double vx = 0.0;
+    double vy = 0.0;
+    bool hasVelocity = false;
+
+    for (cModule* m = this; m; m = m->getParentModule()) {
+        if (auto* mob = m->getSubmodule("veinsmobility")) {
+            if (auto* tm = dynamic_cast<veins::TraCIMobility*>(mob)) {
+                vx = tm->getSpeed() * cos(tm->getHeading().getRad());
+                vy = tm->getSpeed() * sin(tm->getHeading().getRad());
+                hasVelocity = true;
+                break;
+            }
+        }
+    }
+
+    int cohort = 0;
+
+    if (hasVelocity && (vx != 0.0 || vy != 0.0)) {
+        // Calculate heading in degrees (0° = East, 90° = North, 180° = West, 270° = South)
+        double heading_rad = atan2(vy, vx);
+        double heading_deg = heading_rad * 180.0 / M_PI;
+        if (heading_deg < 0) heading_deg += 360.0;
+
+        // Map to 4 cardinal directions (for K=4)
+        // This ensures all vehicles on same approach/direction are in same cohort
+        if (ctacCohorts_ == 4) {
+            // 315-45° = East (Cohort 0)
+            // 45-135° = North (Cohort 1)
+            // 135-225° = West (Cohort 2)
+            // 225-315° = South (Cohort 3)
+            if (heading_deg >= 315.0 || heading_deg < 45.0)
+                cohort = 0;  // Eastbound
+            else if (heading_deg < 135.0)
+                cohort = 1;  // Northbound
+            else if (heading_deg < 225.0)
+                cohort = 2;  // Westbound
+            else
+                cohort = 3;  // Southbound
+        } else {
+            // For other K values, distribute evenly by heading
+            int sector = (int)floor(heading_deg / (360.0 / ctacCohorts_));
+            cohort = sector % ctacCohorts_;
+        }
+    } else {
+        // Fallback for stopped vehicles: use spatial hash
+        veins::Coord p = getNodePositionNow(this, simTime());
+        int cx = (int)floor(p.x / ctacCellSize_);
+        int cy = (int)floor(p.y / ctacCellSize_);
+        unsigned int h = ((unsigned int)cx * 73856093u) ^ ((unsigned int)cy * 19349663u);
+        cohort = (int)(h % (unsigned int)ctacCohorts_);
+    }
+
+    emit(ctacCohortIdSignal_, cohort);
+    return cohort;
+}
+
+bool Mode4App::safetyEventActive()
+{
+    // TODO: Hook to hard-braking or ICA events. Stub for now.
+    // Future work: integrate with vehicle state (deceleration > threshold, etc.)
+    return false;
+}
+
+void Mode4App::generateAndSendCompact()
+{
+    // For v1: Implement as a minimal BSM with digest-only cert.
+    // This is a simplified version of generateAndSendSPDU that always uses digest
+    // and could optionally use a reduced payload.
+    // For now, defer to the standard path with certInterval forced to non-zero
+    // (digest-only) to avoid transmitting full certificate.
+    //
+    // TODO: Implement a truly reduced payload if needed for compress mode.
+    // For this version, we simply defer (no transmission).
+    // This is acceptable per spec: "If time is short, implement
+    // generateAndSendCompact() as a direct call to the deferral path"
+
+    // Do nothing - effectively defers the transmission
+    // In future versions, this could send a reduced BSM
+}
+
+int Mode4App::getNumVehicles() const
+{
+    auto ueList = binder_->getUeList();
+    if (!ueList) return 0;
+
+    int count = 0;
+    for (auto* info : *ueList) {
+        if (!info) continue;
+        // Skip our own node id (count only other vehicles)
+        if (info->id == nodeId_) continue;
+        ++count;
+    }
+    return count;
+}
+
+// ============================================================================
+// End CTAC Implementation
+// ============================================================================
+
 void Mode4App::finish()
 {
     simtime_t lifetime = simTime() - entryTime;
@@ -746,6 +1001,9 @@ void Mode4App::finish()
     recordScalar("icaExpected", icaExpected_);
     const double pdr = (icaExpected_ > 0) ? (double)icaReceived_ / (double)icaExpected_ : 0.0;
     recordScalar("icaPDR", pdr);
+
+    // CTAC control overhead (zero by design in this version - no coordination messages)
+    emit(ctrlOverheadBytesSignal_, 0);
 
     // Log total BSMs sent by this vehicle for ground-truth PDR calculation
     const std::string logDir = getLogDirectory();
